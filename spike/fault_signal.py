@@ -21,7 +21,7 @@ def top(d, n=4):
     return ", ".join(f"{k}={v:.3g}" for k, v in sorted(d.items(), key=lambda kv: -kv[1])[:n])
 
 
-def snapshot(label, w="2m"):
+def snapshot(label, w="3m"):
     err, p95 = by_service(prom(ERR_RATE.format(w=w))), by_service(prom(P95.format(w=w)))
     print(f"  [{label}] highest error rates: {top(err)}")
     print(f"  [{label}] highest p95 latency ms: {top(p95)}")
@@ -29,8 +29,7 @@ def snapshot(label, w="2m"):
 
 
 def memory(container):
-    q = f'max by (container_name) (container_memory_usage_bytes{{container_name="{container}"}})'
-    res = prom(q) or prom(f'max(container_memory_usage{{container_name="{container}"}})')
+    res = prom(f'max(container_memory_usage_total_bytes{{container_name="{container}"}})')
     return float(res[0]["value"][1]) / 1e6 if res else None
 
 
@@ -48,12 +47,13 @@ try:
         mem0 = memory(service)
         base_err, base_p95 = snapshot("before")
         set_flag(flag, variant)
-        wait(150, "fault active")
+        wait(180, "fault active")
         err, p95 = snapshot("during")
         mem1 = memory(service)
-        err_traces = jaeger_traces(service, lookback="3m", limit=50, tags={"error": "true"})
-        err_logs = logs(f'resource.service.name:"{service}" AND (severityText:ERROR OR severityText:error)', minutes=3)
-        print(f"  Jaeger error traces for {service} (3m): {len(err_traces)}")
+        err_spans = jaeger_traces(service, lookback_min=3, limit=50, errors_only=True)
+        err_logs = logs(f'resource.service.name:"{service}" AND severity.number:>=17', minutes=3)
+        msgs = sorted({f"{s['service']}:{s['name']}: {s['message'][:70]}" for s in err_spans})[:3]
+        print(f"  Jaeger error spans in {service} traces (3m, 50 traces): {len(err_spans)}  e.g. {msgs}")
         print(f"  OpenSearch ERROR logs for {service} (3m): {err_logs['total']['value']}")
         if mem0 is not None and mem1 is not None:
             print(f"  {service} memory: {mem0:.0f} MB -> {mem1:.0f} MB")

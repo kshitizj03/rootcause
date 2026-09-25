@@ -2,6 +2,7 @@
 import json
 import shutil
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -12,7 +13,7 @@ FLAGS = DEMO / "src/flagd/demo.flagd.json"
 FLAGS_BACKUP = ROOT / "spike/demo.flagd.json.orig"
 
 PROM = "http://localhost:9090"
-JAEGER = "http://localhost:16686/jaeger/ui/api"
+JAEGER = "http://localhost:16686/jaeger/ui/api/v3"  # Jaeger v2 only serves the v3 API (OTLP JSON)
 OPENSEARCH = "http://localhost:9200"
 
 
@@ -23,14 +24,32 @@ def prom(query):
 
 
 def jaeger_services():
-    return requests.get(f"{JAEGER}/services", timeout=20).json()["data"] or []
+    return requests.get(f"{JAEGER}/services", timeout=20).json().get("services", [])
 
 
-def jaeger_traces(service, lookback="5m", limit=50, tags=None):
-    params = {"service": service, "lookback": lookback, "limit": limit}
-    if tags:
-        params["tags"] = json.dumps(tags)
-    return requests.get(f"{JAEGER}/traces", params=params, timeout=30).json()["data"] or []
+def jaeger_traces(service, lookback_min=5, limit=50, errors_only=False):
+    """Recent spans for a service, flattened from OTLP JSON: [{trace_id, service, name, ms, error, message}]."""
+    now = datetime.now(timezone.utc)
+    params = {"query.service_name": service, "query.num_traces": limit,
+              "query.start_time_min": (now - timedelta(minutes=lookback_min)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "query.start_time_max": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
+    r = requests.get(f"{JAEGER}/traces", params=params, timeout=60)
+    if r.status_code == 404:  # v3 API returns 404 when no traces match
+        return []
+    r.raise_for_status()
+    spans = []
+    for rs in r.json()["result"]["resourceSpans"]:
+        svc = next((a["value"].get("stringValue") for a in rs["resource"]["attributes"] if a["key"] == "service.name"), "?")
+        for ss in rs["scopeSpans"]:
+            for sp in ss["spans"]:
+                st = sp.get("status", {})
+                err = st.get("code") in (2, "STATUS_CODE_ERROR")
+                if errors_only and not err:
+                    continue
+                spans.append({"trace_id": sp["traceId"], "service": svc, "name": sp["name"], "error": err,
+                              "message": st.get("message", ""),
+                              "ms": (int(sp["endTimeUnixNano"]) - int(sp["startTimeUnixNano"])) / 1e6})
+    return spans
 
 
 def logs(query, minutes=5, size=20):

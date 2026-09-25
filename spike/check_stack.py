@@ -14,8 +14,8 @@ def check(name, fn):
         print(f"FAIL  {name}: {type(e).__name__}: {e}")
 
 
-check("Prometheus span metrics", lambda: f"{len(prom('sum by (service_name) (rate(traces_span_metrics_calls_total[2m]))'))} services with traffic")
+check("Prometheus span metrics", lambda: f"{len(prom('sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))'))} services with traffic")
 check("Jaeger services", lambda: sorted(jaeger_services()))
-check("Jaeger traces (checkout)", lambda: f"{len(jaeger_traces('checkout', limit=20))} traces in last 5m")
+check("Jaeger traces (checkout)", lambda: f"{len(jaeger_traces('checkout', limit=20))} spans from 20 traces in last 5m")
 check("OpenSearch logs", lambda: f"{logs('*', size=1)['total']['value']} log records in last 5m")
 print("\nALL BACKENDS REACHABLE" if ok else "\nSOME CHECKS FAILED")
