@@ -138,7 +138,7 @@ def chat(models, **kw):
     raise last
 
 
-def investigate(label, models, alert, max_steps=10):
+def investigate(label, models, alert, max_steps=15):
     print(f"\n### {label}")
     msgs = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": f"ALERT: {alert}"}]
     t0, calls, used = time.time(), 0, set()
@@ -179,4 +179,8 @@ if __name__ == "__main__":
                 print(f"  {label} failed: {type(e).__name__}: {str(e)[:300]}")
     finally:
         reset_flags()
-        print("\nflags restored")
+        out_dir = ROOT / "runs"
+        out_dir.mkdir(exist_ok=True)
+        f = out_dir / f"spike_{flag}_{int(time.time())}.json"
+        f.write_text(json.dumps(TRANSCRIPT, indent=1, default=str))
+        print(f"\nflags restored; transcript -> {f}")
