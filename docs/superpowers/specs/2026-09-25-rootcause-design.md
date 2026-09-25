@@ -29,6 +29,18 @@ real evidence. It is scored on a benchmark of injected faults.
 - The harness needs a cool-down (≥18 min) and must validate each scenario's signal.
 - LLM calls need retry and model fallback.
 
+### Spike round 2 (hard case re-run, with transcript)
+- **The tools missed the leak, not just the model.** The leak grows to the 500 MB limit, the container is killed, and memory resets (8+ restarts). A point-in-time snapshot caught it at 77 MB. → Tools must use **peak over window** (`max_over_time`) and **restart counts**, not the current value.
+- **Inconsistent units mislead the model.** product-catalog CPU reads ~85 (always) while other services read ~0.4, and the model called it "extremely high". → Normalise CPU per core and only flag real changes vs. baseline.
+- **Free-tier budget (verified via 429 errors):** each Flash model allows **20 requests/day**, resetting at midnight Pacific (12:30 IST). One investigation takes 8–15 requests. Flash-Lite still answered after about 40 requests today; its exact limit is shown in the AI Studio dashboard.
+
+### LLM budget plan (follows from the above)
+- **Flash-Lite is the primary model** for development and the full benchmark.
+- Flash is used only for a **small comparison subset**, spread over several days.
+- **Fewer steps per investigation** is a design goal and a reported metric: the better tools should get there in fewer calls.
+- Development iterations reuse **recorded tool outputs** (saved transcripts) where possible, so quota is spent only on real evaluation runs.
+- Optional: a local open model through Ollama (no quota) as the second model to compare, if Flash's quota is too tight.
+
 ## What gets built (fixed feature list)
 1. **Environment scripts.** Pinned OTel Demo plus a port override, with `up`/`down`/`status` commands.
 2. **Scenario library (~10–12 scenarios).** Each is YAML: flag, severity, symptom-only alert text, expected root-cause service and fault type, and a signal check that must pass before the scenario counts. It also includes **one "no fault" control** to catch false alarms.
@@ -55,7 +67,7 @@ Auto-fixing incidents · Kubernetes · Slack/PagerDuty bots · paid models · fi
 | Risk | Mitigation |
 |---|---|
 | Hard faults stay unsolved | That's what the evaluation measures. Report per-scenario results honestly; tool/prompt improvements are the lever |
-| Gemini free-tier 503s and daily limits | Retry and fallback; Flash-Lite as the reliable default; run evaluations off-peak; ~12 scenarios × 3 runs keeps the call count modest |
+| Gemini free-tier limits (**Flash: 20 requests/day/model, verified**) and 503s | Flash-Lite primary; Flash on a small subset over several days; fewer steps per investigation; reuse recorded transcripts during development; optional local model via Ollama |
 | Scenarios with weak signal | A scenario only counts if its signal check passes |
 | Laptop resources | 3.4 GB measured; stop the demo when not working (`down`) |
 
