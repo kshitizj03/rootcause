@@ -98,6 +98,15 @@ is static (GitHub Pages) and designed with care, plus a short demo video.
 ### 12. Agent self-tracing (last, quick)
 OTel GenAI spans for the agent's LLM and tool calls, sent to the same Jaeger.
 
+## Planned extension (only after the core works): cheap triage layer
+Symptom → a small **decision model** scores "which service is the root cause?" over the compressed
+telemetry summary → if confident, answer (with evidence checked); otherwise hand off to the Gemini
+agent, which keeps full tool access and gets the suspects only as hints.
+- **Candidate: Hunch** (Antares Labs; Apache-2.0; 0.6B/1.7B, runs locally on the RTX 3060; free, no quota).
+- Jev (TypeSafe AI) was tested on 2026-09-26: Vercel AI Gateway returned 403 "requires a valid credit card on file", so it is dropped unless a card is added.
+- **Entry test (~30 min, on the saved snapshots):** does it beat the heuristic? Known risks from its own documentation: trained on intent/moderation data (not ops), and input wording moved ~33% of its answers (the anchoring risk).
+- If it earns a place: report heuristic vs decision model vs agent vs cascade (accuracy, cost, latency, % escalated), with the confidence threshold calibrated on held-out incidents.
+
 ## Out of scope
 Auto-fixing · Kubernetes · Slack/PagerDuty bots · paid models · fine-tuning · live hosting · running OpenRCA/AIOpsLab (cited only).
 
