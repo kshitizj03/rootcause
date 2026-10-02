@@ -88,9 +88,50 @@ def test_scan_snapshot_raises_filenotfound_for_missing_files(tmp_path):
 
 
 def test_find_leaks_separator_tolerant_flag_matching():
-    text = "kafka_queue_problems kafka-queue-problems kafka queue problems kafka.queue.problems KAFKA_QUEUE_PROBLEMS"
+    text = "kafka_queue_problems kafka-queue-problems kafka.queue.problems KAFKA_QUEUE_PROBLEMS"
     hits = sanitize.find_leaks(text, NAMES)
     assert any("kafka" in h for h in hits), f"Should detect kafka variations in {hits}"
+    # Spaces are NOT separators in flag patterns - ordinary English shouldn't match
+    text_with_spaces = "kafka queue problems some payment failure text"
+    hits_spaces = sanitize.find_leaks(text_with_spaces, NAMES)
+    assert not any("kafka" in h for h in hits_spaces), "Space-separated words should not be leaks"
+
+
+def test_logs_payment_failure_text_unchanged():
+    logs = [{"ts": "t", "service": "payment", "severity": "ERROR", "severity_number": 17,
+             "body": "Payment failure: card declined", "trace_id": "x"}]
+    out = sanitize.sanitize_logs(logs, NAMES)
+    assert len(out) == 1
+    assert out[0]["body"] == "Payment failure: card declined"
+
+
+def test_span_charge_card_and_payment_failure_unchanged():
+    spans = [
+        flat_span(service="payment", span_id="s1", name="charge card", message="payment failure")
+    ]
+    out = sanitize.sanitize_spans(spans, NAMES)
+    assert len(out) == 1
+    assert out[0]["name"] == "charge card"
+    assert out[0]["message"] == "payment failure"
+
+
+def test_redact_unicode_soft_hyphen_unchanged_and_json_safe():
+    # Body with soft hyphen U+00AD followed by HighCpu: the flag "adHighCpu" is NOT present
+    # (U+00AD is a single character, not the letters "ad")
+    logs = [{"service": "x", "body": "­HighCpu"}]
+    out = sanitize.sanitize_logs(logs, NAMES)
+    assert len(out) == 1
+    assert out[0]["body"] == "­HighCpu", "Soft hyphen body unchanged"
+    assert json.dumps(out)  # Must be serializable
+
+
+def test_redact_form_feed_with_flagd_unchanged():
+    # Form-feed character \f followed by "lagd": doesn't contain "flagd"
+    logs = [{"service": "x", "body": "\flagd"}]
+    out = sanitize.sanitize_logs(logs, NAMES)
+    assert len(out) == 1
+    assert out[0]["body"] == "\flagd", "Form-feed flagd unchanged (form-feed is not 'f')"
+    assert json.dumps(out)
 
 
 def test_hidden_services_case_insensitive_and_span_name_matching():

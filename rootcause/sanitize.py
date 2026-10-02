@@ -21,8 +21,8 @@ def leak_pattern(names):
         # Split camelCase: "kafkaQueueProblems" -> ["kafka", "Queue", "Problems"]
         words = re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+", n)
         if words:
-            # Join with optional separators: kafka[\s_\-.]?queue[\s_\-.]?problems
-            pattern = r"[\s_\-.]?".join(re.escape(w) for w in words)
+            # Join with optional separators (no space): kafka[_\-.]?queue[_\-.]?problems
+            pattern = r"[_\-.]?".join(re.escape(w) for w in words)
             sep_names.append(pattern)
         else:
             sep_names.append(re.escape(n))
