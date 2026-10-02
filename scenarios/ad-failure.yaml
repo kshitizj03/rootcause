@@ -1,0 +1,6 @@
+category: easy
+alert: "Sponsored banners intermittently fail to show on the storefront."
+inject: {flags: {adFailure: "on"}}
+truth: {causes: [{accept: [ad], fault_type: errors}]}
+checks:
+  - {service: ad, signal: error_ratio, at_least: 0.03}

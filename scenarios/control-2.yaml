@@ -1,0 +1,5 @@
+category: control
+alert: "Someone reported seeing an error once at checkout."
+truth: {causes: []}
+checks:
+  - {service: "*", signal: error_ratio, at_most: 0.15}

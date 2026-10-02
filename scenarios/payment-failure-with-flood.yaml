@@ -1,0 +1,7 @@
+category: hard-noisy
+alert: "Some orders are failing while the site is under unusually heavy traffic."
+inject: {flags: {paymentFailure: "50%", loadGeneratorFloodHomepage: "on"}}
+truth: {causes: [{accept: [payment], fault_type: errors}]}
+checks:
+  - {service: payment, signal: error_ratio, at_least: 0.2}
+  - {service: frontend, signal: rps, ratio_at_least: 1.5}

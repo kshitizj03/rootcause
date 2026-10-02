@@ -1,0 +1,6 @@
+category: hard-silent
+alert: "Users say product pages have become slow over the last few minutes."
+inject: {flags: {recommendationCacheFailure: "on"}}
+truth: {causes: [{accept: [recommendation], fault_type: resource}]}
+checks:
+  - {service: recommendation, signal: mem_mb, stat: max, ratio_at_least: 2}

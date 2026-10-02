@@ -1,0 +1,6 @@
+category: hard-cross-service
+alert: "Every checkout attempt is failing right now."
+inject: {flags: {paymentUnreachable: "on"}}
+truth: {causes: [{accept: [payment], fault_type: errors}]}
+checks:
+  - {service: checkout, signal: error_ratio, at_least: 0.1}

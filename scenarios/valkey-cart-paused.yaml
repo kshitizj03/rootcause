@@ -1,0 +1,6 @@
+category: hard-cross-service
+alert: "Adding items to the basket fails."
+inject: {docker: [{action: pause, container: valkey-cart}]}
+truth: {causes: [{accept: [valkey-cart], fault_type: errors}]}
+checks:
+  - {service: cart, signal: error_ratio, at_least: 0.1}

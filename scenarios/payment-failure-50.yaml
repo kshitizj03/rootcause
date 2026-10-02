@@ -1,0 +1,6 @@
+category: easy
+alert: "Customers report that some orders are failing at checkout."
+inject: {flags: {paymentFailure: "50%"}}
+truth: {causes: [{accept: [payment], fault_type: errors}]}
+checks:
+  - {service: payment, signal: error_ratio, at_least: 0.2}

@@ -1,0 +1,10 @@
+category: hard-two-faults
+alert: "Some orders fail, and the whole site is getting slower."
+inject: {flags: {paymentFailure: "50%", recommendationCacheFailure: "on"}}
+truth:
+  causes:
+    - {accept: [payment], fault_type: errors}
+    - {accept: [recommendation], fault_type: resource}
+checks:
+  - {service: payment, signal: error_ratio, at_least: 0.2}
+  - {service: recommendation, signal: mem_mb, stat: max, ratio_at_least: 2}

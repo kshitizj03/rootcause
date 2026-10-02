@@ -1,0 +1,7 @@
+category: hard-noisy
+alert: "The site has become slow during a traffic surge."
+inject: {flags: {productCatalogLockContention: "on", loadGeneratorFloodHomepage: "on"}}
+truth: {causes: [{accept: [product-catalog], fault_type: latency}]}
+checks:
+  - {service: product-catalog, signal: p95_ms, ratio_at_least: 2}
+  - {service: frontend, signal: rps, ratio_at_least: 1.5}

@@ -1,0 +1,6 @@
+category: hard-cross-service
+alert: "Order processing downstream of purchases is falling behind."
+inject: {flags: {kafkaQueueProblems: "on"}}
+truth: {causes: [{accept: [kafka, checkout, fraud-detection], fault_type: latency}]}
+checks:
+  - {service: fraud-detection, signal: p95_ms, ratio_at_least: 2}

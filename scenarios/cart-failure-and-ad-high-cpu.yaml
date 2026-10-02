@@ -1,0 +1,10 @@
+category: hard-two-faults
+alert: "Some customers see basket errors and pages feel slow."
+inject: {flags: {cartFailure: "50%", adHighCpu: "on"}}
+truth:
+  causes:
+    - {accept: [cart], fault_type: errors}
+    - {accept: [ad], fault_type: resource}
+checks:
+  - {service: cart, signal: error_ratio, at_least: 0.02}
+  - {service: ad, signal: cpu_cores, ratio_at_least: 2}

@@ -1,0 +1,6 @@
+category: hard-silent
+alert: "Product pictures load very slowly."
+inject: {flags: {imageSlowLoad: "5sec"}}
+truth: {causes: [{accept: [frontend-proxy, image-provider], fault_type: latency}]}
+checks:
+  - {service: frontend-proxy, signal: p95_ms, ratio_at_least: 1.5}
