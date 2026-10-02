@@ -18,6 +18,9 @@ def test_restarts_counts_uptime_drops():
     pts = [[0, 100], [10, 110], [20, 5], [30, 15], [40, 2]]
     assert signals.restarts(pts, 0, 40) == 2
     assert signals.restarts(pts, 0, 10) == 0
+    assert signals.restarts(pts, 30, 40) == 1  # drop at window start counts
+    assert signals.restarts(pts, 20, 40) == 2  # drop exactly at start + drop before end
+    assert signals.restarts(pts, 100, 150) is None  # no in-window points
 
 
 def test_evaluate_absolute_ratio_and_star_checks():
@@ -60,3 +63,24 @@ def test_fetch_series_filters_hidden_unknown_and_nan():
     assert set(out) == set(signals.SIGNALS)
     assert out["rps"] == {"payment": [[1.0, 0.5]]}
     assert out["mem_mb"] == {"payment": [[1.0, 0.5]]}
+
+
+def test_wildcard_empty_source_fails_with_reason():
+    res = signals.evaluate([{"service": "*", "signal": "error_ratio", "at_most": 0.1}], {}, BASE, FAULT)
+    assert len(res) == 1
+    assert res[0]["target"] == "*"
+    assert res[0]["passed"] is False
+    assert res[0]["reason"] == "no data"
+
+
+def test_restarts_no_inwindow_points_returns_none():
+    metrics = {"uptime_s": {"app": [[0, 100], [10, 110], [20, 5]]}}
+    res = signals.evaluate([{"service": "app", "signal": "restarts", "at_most": 0}], metrics, BASE, FAULT)
+    assert res[0]["passed"] is False and res[0]["reason"] == "no data"
+
+
+def test_ratio_at_least_with_no_baseline_fails():
+    # Series with no data in baseline window [0, 100] but data in fault window [200, 300]
+    metrics = {"rps": {"web": [[200, 0.5], [220, 0.5], [240, 0.5]]}}
+    res = signals.evaluate([{"service": "web", "signal": "rps", "ratio_at_least": 2}], metrics, BASE, FAULT)
+    assert res[0]["passed"] is False and res[0]["reason"] == "no baseline"
