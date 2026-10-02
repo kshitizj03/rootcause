@@ -10,6 +10,21 @@ from helpers import FLAGS
 from rootcause.inject import Injector, flag_variants
 
 
+INFO = ["docker", "info", "--format", "{{.NCPU}}"]
+
+
+def fake_run(calls, fail=None, ncpu="16\n"):
+    """Runner fake: records commands, answers `docker info` with ncpu, optionally fails some commands."""
+    def run(cmd):
+        calls.append(cmd)
+        if cmd == INFO:
+            return ncpu
+        if fail:
+            fail(cmd)
+        return ""
+    return run
+
+
 @pytest.fixture
 def flags_file(tmp_path):
     f = tmp_path / "demo.flagd.json"
@@ -42,25 +57,36 @@ def test_unknown_variant_is_rejected_before_any_change(flags_file):
 
 def test_docker_actions_are_undone_in_reverse(flags_file):
     calls = []
-    inj = Injector(flags_file=flags_file, run=calls.append)
+    inj = Injector(flags_file=flags_file, run=fake_run(calls))
     inj.apply({"docker": [{"action": "pause", "container": "valkey-cart"},
                           {"action": "cpus", "container": "currency", "value": 0.05}]})
     inj.restore()
-    assert calls == [["docker", "pause", "valkey-cart"],
+    # `--cpus 0` does not remove a limit; undo sets the limit to the host's CPU count
+    assert calls == [INFO,
+                     ["docker", "pause", "valkey-cart"],
                      ["docker", "update", "--cpus", "0.05", "currency"],
-                     ["docker", "update", "--cpus", "0", "currency"],
+                     ["docker", "update", "--cpus", "16", "currency"],
                      ["docker", "unpause", "valkey-cart"]]
+
+
+@pytest.mark.parametrize("bad", ["", "abc\n", "0\n", "-2\n"])
+def test_invalid_ncpu_rejected_before_any_docker_change(flags_file, bad):
+    calls = []
+    inj = Injector(flags_file=flags_file, run=fake_run(calls, ncpu=bad))
+    with pytest.raises(ValueError):
+        inj.apply({"docker": [{"action": "pause", "container": "valkey-cart"},
+                              {"action": "cpus", "container": "currency", "value": 0.05}]})
+    assert calls == [INFO]
 
 
 def test_restore_runs_every_undo_even_if_one_fails(flags_file):
     calls = []
 
-    def run(cmd):
-        calls.append(cmd)
-        if cmd[1] == "update" and cmd[3] == "0":
+    def fail(cmd):
+        if cmd[1] == "update" and cmd[3] == "16":
             raise RuntimeError("update failed")
 
-    inj = Injector(flags_file=flags_file, run=run)
+    inj = Injector(flags_file=flags_file, run=fake_run(calls, fail))
     inj.apply({"flags": {"paymentFailure": "50%"},
                "docker": [{"action": "pause", "container": "valkey-cart"},
                           {"action": "cpus", "container": "currency", "value": 0.05}]})
@@ -145,12 +171,11 @@ def test_partial_docker_failure_during_apply_undoes_prior_action_only():
 
         calls = []
 
-        def run(cmd):
-            calls.append(cmd)
+        def fail(cmd):
             if cmd[1] == "update" and cmd[3] == "0.05":
                 raise RuntimeError("cpu update failed")
 
-        inj = Injector(flags_file=flags_file, run=run)
+        inj = Injector(flags_file=flags_file, run=fake_run(calls, fail))
 
         # Second docker action should fail during apply
         with pytest.raises(RuntimeError):

@@ -34,7 +34,7 @@ def wait_cooldown(now=time.time, sleep=time.sleep, state_file=config.STATE_FILE)
             state = json.loads(state_file.read_text(encoding="utf-8"))
             # Check if state is dirty (truthy "dirty" field)
             if state.get("dirty"):
-                raise DirtyStateError(f"State is dirty (restore failed): {state.get('error', 'unknown error')}. Run `reset` to recover.")
+                raise DirtyStateError(f"State is dirty (restore failed): {state.get('error', 'unknown error')}. Run `python -m rootcause reset-flags` to recover.")
             # Calculate remaining cooldown
             remaining = config.COOLDOWN_S - (t_now - state.get("last_restore", t_now))
         except (json.JSONDecodeError, ValueError, TypeError, AttributeError, UnicodeDecodeError):

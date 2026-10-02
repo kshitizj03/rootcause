@@ -2,6 +2,7 @@
 import argparse
 import json
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -29,18 +30,36 @@ def reset_stack(injector=None, run=inject._run):
         injector.restore()
     except Exception as e:
         errors.append(str(e))
-    undo = {(a["action"], a["container"])
-            for s in scenarios.load_all() for a in s.inject.get("docker") or []}
-    for action, container in sorted(undo):
+    undo = sorted({(a["action"], a["container"])
+                   for s in scenarios.load_all() for a in s.inject.get("docker") or []})
+    ncpu = None
+    if any(action == "cpus" for action, _ in undo):
         try:
-            run(["docker", "unpause", container] if action == "pause"
-                else ["docker", "update", "--cpus", "0", container])
-        except subprocess.CalledProcessError as e:
-            if action == "cpus":  # unpause errors just mean "wasn't paused"
-                errors.append(f"cpus undo {container}: {e}")
+            ncpu = inject.host_cpus(run)
+        except (ValueError, subprocess.CalledProcessError, OSError) as e:
+            errors.append(f"NCPU: {e}")
+    for action, container in undo:
+        if action == "cpus" and ncpu is None:
+            continue
+        cmd = (["docker", "update", "--cpus", ncpu, container] if action == "cpus"
+               else ["docker", "unpause", container])
+        try:
+            run(cmd)
+        except (subprocess.CalledProcessError, OSError) as e:
+            stderr = str(getattr(e, "stderr", "") or "")
+            if action == "pause" and "is not paused" in stderr.lower():
+                continue
+            errors.append(f"{' '.join(cmd)}: {e} {stderr}".strip())
     if errors:
         raise RuntimeError("reset incomplete: " + "; ".join(errors))
     harness.mark_restored(time.time(), config.STATE_FILE)
+
+
+def _is_dirty():
+    try:
+        return bool(json.loads(Path(config.STATE_FILE).read_text(encoding="utf-8")).get("dirty"))
+    except (OSError, ValueError, AttributeError):
+        return False
 
 
 def _record(args):
@@ -62,18 +81,39 @@ def _record(args):
 
 
 def _leak_check(args):
-    paths = [Path(p) for p in args.paths] or sorted(p for p in config.SNAPSHOTS.glob("*__*") if p.is_dir())
+    paths = [Path(p) for p in args.paths] or sorted(p for p in config.SNAPSHOTS.glob("incident__*") if p.is_dir())
+    if not paths:
+        print("no snapshots found: nothing was scanned")
+        return 1
     names = sanitize.flag_names()
-    found = {str(p): sanitize.scan_snapshot(p, names) for p in paths}
-    found = {k: v for k, v in found.items() if v}
+    found = {}
+    for p in paths:
+        try:
+            hits = sanitize.scan_snapshot(p, names)
+        except (OSError, ValueError) as e:  # partial or unreadable snapshot: a problem, keep scanning the rest
+            hits = {"error": f"{type(e).__name__}: {e}"}
+        if hits:
+            found[str(p)] = hits
     print(f"scanned {len(paths)} snapshots; leaks: {json.dumps(found, indent=1) if found else 'none'}")
     return 1 if found else 0
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    try:
+        return _dispatch(args)
+    except RuntimeError as e:  # includes harness.DirtyStateError / RestoreError
+        print(f"error: {e} -- run `python -m rootcause reset-flags` to reset the stack", file=sys.stderr)
+        return 3
+
+
+def _dispatch(args):
     if args.cmd == "up":
         env.compose("up", "-d", "--quiet-pull")
+        if _is_dirty():
+            print("state is dirty (a previous restore failed): run `python -m rootcause reset-flags` first",
+                  file=sys.stderr)
+            return 3
         # a fresh stack has no clean 15-minute baseline yet: the first record waits the full cool-down
         harness.mark_restored(time.time(), config.STATE_FILE)
     elif args.cmd == "down":

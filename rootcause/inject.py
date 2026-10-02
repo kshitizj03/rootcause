@@ -8,7 +8,20 @@ from rootcause import config
 
 
 def _run(cmd):
-    subprocess.run(cmd, check=True, capture_output=True, text=True)
+    return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+
+
+def host_cpus(run=_run):
+    """Docker host CPU count. `docker update --cpus 0` does NOT lift a limit (verified live), so the
+    undo sets the limit to this count, which docker accepts as the maximum and which is effectively unlimited."""
+    out = (run(["docker", "info", "--format", "{{.NCPU}}"]) or "").strip()
+    try:
+        n = float(out)
+    except ValueError:
+        n = 0
+    if n <= 0:
+        raise ValueError(f"cannot read docker NCPU (got {out!r})")
+    return str(int(n)) if n == int(n) else str(n)
 
 
 def flag_variants(flags_file=config.FLAGS_FILE):
@@ -49,6 +62,8 @@ class Injector:
         if errs:
             raise ValueError("; ".join(errs))
 
+        ncpu = host_cpus(self.run) if any(a["action"] == "cpus" for a in docker_actions) else None
+
         # Reset from backup upfront if one exists, before flag or docker operations
         if self.backup.exists():
             shutil.copy(self.backup, self.flags_file)
@@ -71,7 +86,7 @@ class Injector:
                 self._undo.append(["docker", "unpause", c])
             elif act["action"] == "cpus":
                 self.run(["docker", "update", "--cpus", str(act["value"]), c])
-                self._undo.append(["docker", "update", "--cpus", "0", c])  # 0 = no CPU limit
+                self._undo.append(["docker", "update", "--cpus", ncpu, c])  # back to "all CPUs" (see host_cpus)
 
     def restore(self):
         errors = []
