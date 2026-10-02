@@ -29,6 +29,7 @@ KNOWN_TARGETS = APP_SERVICES + INFRA_CONTAINERS
 COOLDOWN_S = 18 * 60        # the 15-minute baseline before an injection must be fault-free
 BASELINE_S = 15 * 60
 SETTLE_S = 180              # fault runs this long before capture
+INGEST_LAG_S = 60           # metrics pushed ~once a minute; wait before capture to get last minute
 RAMP_S = 60                 # skip the first minute of the fault when judging its signal
 STEP_S = 15                 # metric resolution in snapshots
 CAPTURE_LOOKBACK_S = 300    # spans/logs captured from 5 minutes before injection
