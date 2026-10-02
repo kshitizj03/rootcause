@@ -6,27 +6,46 @@ from pathlib import Path
 
 from rootcause import config
 
-PHRASES = [r"feature[\s_\-]?flags?", r"flagd", r"openfeature"]
+PHRASES = [r"feature[\s_\-.]?flags?", r"flagd", r"openfeature", r"ofrep"]
 SNAPSHOT_TOOL_FILES = ("metrics.json", "spans.jsonl.gz", "logs.jsonl.gz")  # what agent tools can read
 
 
 def flag_names(flags_file=config.FLAGS_FILE):
-    return sorted(json.loads(Path(flags_file).read_text())["flags"])
+    return sorted(json.loads(Path(flags_file).read_text(encoding="utf-8"))["flags"])
 
 
 def leak_pattern(names):
-    return re.compile("|".join([re.escape(n) for n in names] + PHRASES), re.IGNORECASE)
+    # Convert camelCase flag names to separator-tolerant patterns
+    sep_names = []
+    for n in names:
+        # Split camelCase: "kafkaQueueProblems" -> ["kafka", "Queue", "Problems"]
+        words = re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+", n)
+        if words:
+            # Join with optional separators: kafka[\s_\-.]?queue[\s_\-.]?problems
+            pattern = r"[\s_\-.]?".join(re.escape(w) for w in words)
+            sep_names.append(pattern)
+        else:
+            sep_names.append(re.escape(n))
+    return re.compile("|".join(sep_names + PHRASES), re.IGNORECASE)
 
 
 def _redact(obj, pat):
-    return json.loads(pat.sub("[redacted]", json.dumps(obj)))
+    if isinstance(obj, str):
+        return pat.sub("[redacted]", obj)
+    if isinstance(obj, list):
+        return [_redact(v, pat) for v in obj]
+    if isinstance(obj, dict):
+        return {_redact(k, pat): _redact(v, pat) for k, v in obj.items()}
+    return obj
 
 
 def sanitize_spans(spans, names):
     pat = leak_pattern(names)
     kept = []
     for sp in spans:
-        if sp["service"] in config.HIDDEN_SERVICES:
+        if sp["service"].lower() in config.HIDDEN_SERVICES:
+            continue
+        if pat.search(sp["name"]):
             continue
         attrs = {k: v for k, v in sp["attributes"].items() if not k.startswith("feature_flag")}
         # ponytail: drops whole spans that call the flag service; their children lose a parent, fine for diagnosis
@@ -39,7 +58,7 @@ def sanitize_spans(spans, names):
 
 def sanitize_logs(logs, names):
     pat = leak_pattern(names)
-    return [_redact(lg, pat) for lg in logs if lg["service"] not in config.HIDDEN_SERVICES]
+    return [_redact(lg, pat) for lg in logs if lg["service"].lower() not in config.HIDDEN_SERVICES]
 
 
 def find_leaks(text, names):
@@ -51,7 +70,7 @@ def scan_snapshot(path, names):
     for name in SNAPSHOT_TOOL_FILES:
         p = path / name
         if not p.exists():
-            continue
+            raise FileNotFoundError(f"Required snapshot file missing: {name}")
         if name.endswith(".gz"):
             with gzip.open(p, "rt", encoding="utf-8") as f:
                 text = f.read()

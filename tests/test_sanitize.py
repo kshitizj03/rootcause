@@ -52,3 +52,52 @@ def test_scan_snapshot_reads_plain_and_gz_files(tmp_path):
     with gzip.open(tmp_path / "spans.jsonl.gz", "wt", encoding="utf-8") as f:
         f.write(json.dumps({"name": "clean"}) + "\n")
     assert sanitize.scan_snapshot(tmp_path, NAMES) == {"logs.jsonl.gz": ["adhighcpu"]}
+
+
+def test_redact_handles_unicode_escapes_without_breakage():
+    logs = [{"service": "x", "body": "­HighCpu"}]
+    out = sanitize.sanitize_logs(logs, NAMES)
+    assert len(out) == 1
+    # Verify it doesn't crash and can be serialized (the key issue with json-based redaction)
+    assert json.dumps(out)
+
+
+def test_redact_span_content_name_message_and_event_attributes():
+    spans = [
+        flat_span(service="payment", span_id="s1",
+                  message="adHighCpu occurred",
+                  events=[{"name": "log", "attributes": {"msg": "adHighCpu triggered"}}])
+    ]
+    out = sanitize.sanitize_spans(spans, NAMES)
+    assert len(out) == 1
+    kept = out[0]
+    assert "adHighCpu" not in kept["message"]
+    assert "adHighCpu" not in kept["events"][0]["attributes"]["msg"]
+    assert sanitize.find_leaks(json.dumps(out), NAMES) == []
+
+
+def test_scan_snapshot_raises_filenotfound_for_missing_files(tmp_path):
+    (tmp_path / "metrics.json").write_text(json.dumps({}))
+    # logs.jsonl.gz is missing
+    (tmp_path / "spans.jsonl.gz").write_text("")
+    try:
+        sanitize.scan_snapshot(tmp_path, NAMES)
+        assert False, "Should have raised FileNotFoundError"
+    except FileNotFoundError as e:
+        assert "logs.jsonl.gz" in str(e)
+
+
+def test_find_leaks_separator_tolerant_flag_matching():
+    text = "kafka_queue_problems kafka-queue-problems kafka queue problems kafka.queue.problems KAFKA_QUEUE_PROBLEMS"
+    hits = sanitize.find_leaks(text, NAMES)
+    assert any("kafka" in h for h in hits), f"Should detect kafka variations in {hits}"
+
+
+def test_hidden_services_case_insensitive_and_span_name_matching():
+    spans = [
+        flat_span(service="FLAGD", span_id="hidden1"),
+        flat_span(service="Flagd", span_id="hidden2"),
+        flat_span(name="flagd.evaluation.v1.Service/ResolveBoolean", span_id="hidden3"),
+    ]
+    out = sanitize.sanitize_spans(spans, NAMES)
+    assert [s["span_id"] for s in out] == [], "Should filter all flagd service/name spans"
