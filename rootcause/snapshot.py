@@ -22,17 +22,21 @@ def capture(scenario, t_inject, t_end, names, fetch=backends, out_dir=config.SNA
     baseline_start = t_inject - config.BASELINE_S
     metrics = signals.fetch_series(fetch.prom_range, baseline_start, t_end, config.STEP_S)
 
-    since = t_inject - config.CAPTURE_LOOKBACK_S
+    # Backends return newest-first and cap per call, so a chatty service would fill the cap with
+    # post-fault items only. Fetch pre-fault and fault windows separately, each with the full cap.
+    windows = [(t_inject - config.CAPTURE_LOOKBACK_S, t_inject), (t_inject, t_end)]
     spans, seen = [], set()
     for service in config.APP_SERVICES:
-        for sp in backends.flatten_otlp(fetch.jaeger_raw(service, since, t_end, config.TRACES_PER_SERVICE)):
-            if sp["span_id"] not in seen:
-                seen.add(sp["span_id"])
-                spans.append(sp)
-    logs = []
+        for start, end in windows:
+            for sp in backends.flatten_otlp(fetch.jaeger_raw(service, start, end, config.TRACES_PER_SERVICE)):
+                if sp["span_id"] not in seen:
+                    seen.add(sp["span_id"])
+                    spans.append(sp)
+    logs = []  # no natural log key; windows don't overlap, so just concatenate
     for service in config.KNOWN_TARGETS:
         query = f'resource.service.name:"{service}"'
-        logs += [backends.flatten_log(src) for src in fetch.os_logs(query, since, t_end, config.LOGS_PER_SERVICE)]
+        for start, end in windows:
+            logs += [backends.flatten_log(src) for src in fetch.os_logs(query, start, end, config.LOGS_PER_SERVICE)]
 
     spans, logs = sanitize.sanitize_spans(spans, names), sanitize.sanitize_logs(logs, names)
 

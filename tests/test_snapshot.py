@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from helpers import FLAGS, otlp_payload
-from rootcause import sanitize, snapshot
+from rootcause import config, sanitize, snapshot
 from rootcause.scenarios import Scenario
 
 NAMES = sanitize.flag_names(FLAGS)
@@ -147,3 +147,55 @@ def test_hidden_services_never_queried(tmp_path):
     assert "flagd-ui" not in calls["jaeger_raw"]
     for query in calls["os_logs"]:
         assert "flagd" not in query and "flagd-ui" not in query
+
+
+def test_capture_fetches_pre_fault_and_fault_windows_per_service(tmp_path):
+    """Each service is queried over [since, t_inject) and [t_inject, t_end]; each window gets the full cap."""
+    since = T_INJECT - config.CAPTURE_LOOKBACK_S
+    trace_calls, log_calls = [], []
+
+    def jaeger_raw(service, start, end, limit):
+        trace_calls.append((service, start, end, limit))
+        return otlp_payload(service, [{"span_id": f"{service}-{start}-{i}", "name": "op"} for i in range(limit)])
+
+    def os_logs(query, start, end, size):
+        log_calls.append((query, start, end, size))
+        phase = "pre" if end <= T_INJECT else "fault"
+        return [{"@timestamp": "t", "resource": {"service.name": "cart"}, "severity": {"text": "INFO", "number": 9},
+                 "body": f"{phase} {start} {i}"} for i in range(size)]
+
+    def prom_range(query, start, end, step):
+        return []
+
+    fetch = SimpleNamespace(prom_range=prom_range, jaeger_raw=jaeger_raw, os_logs=os_logs)
+    control = Scenario(id="control-test", category="control", alert="Baseline.", inject={}, truth={"causes": []}, checks=[])
+    out = snapshot.capture(control, T_INJECT, T_END, NAMES, fetch=fetch, out_dir=tmp_path)
+
+    for service in config.APP_SERVICES:
+        assert (service, since, T_INJECT, config.TRACES_PER_SERVICE) in trace_calls
+        assert (service, T_INJECT, T_END, config.TRACES_PER_SERVICE) in trace_calls
+    assert len(trace_calls) == 2 * len(config.APP_SERVICES)
+    for service in config.KNOWN_TARGETS:
+        q = f'resource.service.name:"{service}"'
+        assert (q, since, T_INJECT, config.LOGS_PER_SERVICE) in log_calls
+        assert (q, T_INJECT, T_END, config.LOGS_PER_SERVICE) in log_calls
+    assert len(log_calls) == 2 * len(config.KNOWN_TARGETS)
+
+    # chatty backend: cap-many items per call -> snapshot holds both windows, not just the newest
+    snap = snapshot.load(out["path"])
+    cart_spans = [s for s in snap["spans"] if s["service"] == "cart"]
+    assert len(cart_spans) == 2 * config.TRACES_PER_SERVICE
+    assert {s["span_id"].split("-")[1] for s in cart_spans} == {str(since), str(T_INJECT)}
+    assert sum(l["body"].startswith("pre") for l in snap["logs"]) == len(config.KNOWN_TARGETS) * config.LOGS_PER_SERVICE
+    assert sum(l["body"].startswith("fault") for l in snap["logs"]) == len(config.KNOWN_TARGETS) * config.LOGS_PER_SERVICE
+
+
+def test_hidden_services_not_queried_in_either_window(tmp_path):
+    calls = []
+    fetch = SimpleNamespace(
+        prom_range=lambda q, s, e, step: [],
+        jaeger_raw=lambda service, s, e, n: calls.append(service) or {"result": {"resourceSpans": []}},
+        os_logs=lambda q, s, e, n: calls.append(q) or [])
+    control = Scenario(id="control-test", category="control", alert="Baseline.", inject={}, truth={"causes": []}, checks=[])
+    snapshot.capture(control, T_INJECT, T_END, NAMES, fetch=fetch, out_dir=tmp_path)
+    assert calls and not any("flagd" in c for c in calls)

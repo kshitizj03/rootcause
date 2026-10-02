@@ -1,5 +1,5 @@
 from helpers import FLAGS
-from rootcause import scenarios
+from rootcause import config, scenarios
 from rootcause.inject import flag_variants
 
 VARIANTS = flag_variants(FLAGS)
@@ -9,7 +9,7 @@ def make(**over):
     base = dict(id="x", category="easy", alert="Some orders fail at checkout.",
                 inject={"flags": {"paymentFailure": "50%"}},
                 truth={"causes": [{"accept": ["payment"], "fault_type": "errors"}]},
-                checks=[{"service": "payment", "signal": "error_ratio", "at_least": 0.2}], settle_s=180)
+                checks=[{"service": "payment", "signal": "error_ratio", "at_least": 0.2}], settle_s=config.SETTLE_S)
     base.update(over)
     return scenarios.Scenario(**base)
 
