@@ -3,7 +3,7 @@ import json
 import pytest
 
 from helpers import FLAGS, Clock
-from rootcause import harness, sanitize, config
+from rootcause import harness, sanitize, config, snapshot
 from rootcause.scenarios import Scenario
 from test_snapshot import SCENARIO, fake_fetch
 
@@ -55,6 +55,38 @@ def test_restore_happens_even_when_capture_fails(tmp_path):
         run(tmp_path, clock, inj, fetch=broken)
     assert inj.calls == ["apply", "restore"]
     assert (tmp_path / "state.json").exists()
+
+
+def test_t_end_captured_before_ingest_lag_sleep(tmp_path):
+    """t_end passed to capture equals clock time right after settle, before ingest lag sleep."""
+    clock = Clock()
+    harness.mark_restored(clock.t - config.COOLDOWN_S - 1, tmp_path / "state.json")
+    clock.sleeps.clear()
+    t_inject_start = clock.t
+
+    captured_t_end = None
+    def recording_capture(scenario, t_inject, t_end, names, fetch, out_dir, demo_commit=""):
+        nonlocal captured_t_end
+        captured_t_end = t_end
+        # Return a valid-looking summary
+        return {"scenario": scenario.id, "path": str(out_dir / "incident__123"), "valid": True,
+                "results": [], "leaks": {}}
+
+    # Temporarily replace snapshot.capture
+    original_capture = snapshot.capture
+    snapshot.capture = recording_capture
+    try:
+        harness.record(SCENARIO, NAMES, FakeInjector(), fetch=fake_fetch(t_inject=clock.t), now=clock.now,
+                      sleep=clock.sleep, state_file=tmp_path / "state.json", out_dir=tmp_path / "snaps")
+        # t_end should equal t_inject + settle_s (captured right after settle, before ingest_lag)
+        # Flow: t_inject=100_000, sleep(180), t_end=100_180, sleep(60), capture
+        expected_t_end = t_inject_start + SCENARIO.settle_s
+        assert captured_t_end == expected_t_end, f"t_end {captured_t_end} != expected {expected_t_end}"
+        # Verify t_end is strictly before time after ingest_lag
+        time_after_lag = expected_t_end + config.INGEST_LAG_S
+        assert captured_t_end < time_after_lag, f"t_end {captured_t_end} should be < {time_after_lag}"
+    finally:
+        snapshot.capture = original_capture
 
 
 def test_restore_failure_writes_dirty_state_and_raises_restore_error(tmp_path):

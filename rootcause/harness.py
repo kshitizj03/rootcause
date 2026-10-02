@@ -26,6 +26,7 @@ def mark_restored(t, state_file=config.STATE_FILE):
 
 def wait_cooldown(now=time.time, sleep=time.sleep, state_file=config.STATE_FILE):
     state_file = Path(state_file)
+    t_now = now()  # Compute once, use for all time calculations
     remaining = config.COOLDOWN_S  # Default: unknown history = wait full cooldown
 
     if state_file.exists():
@@ -35,7 +36,7 @@ def wait_cooldown(now=time.time, sleep=time.sleep, state_file=config.STATE_FILE)
             if state.get("dirty"):
                 raise DirtyStateError(f"State is dirty (restore failed): {state.get('error', 'unknown error')}. Run `reset` to recover.")
             # Calculate remaining cooldown
-            remaining = config.COOLDOWN_S - (now() - state.get("last_restore", now()))
+            remaining = config.COOLDOWN_S - (t_now - state.get("last_restore", t_now))
         except (json.JSONDecodeError, ValueError, TypeError, AttributeError, UnicodeDecodeError):
             # Any unreadable state: treat as unknown history
             remaining = config.COOLDOWN_S
@@ -59,8 +60,6 @@ def record(scenario, names, injector, fetch=backends, now=time.time, sleep=time.
         sleep(scenario.settle_s)
         t_end = now()
         sleep(config.INGEST_LAG_S)
-        # Assertion: t_end is before the INGEST_LAG_S sleep (captured before ingest lag)
-        assert t_end <= now() - config.INGEST_LAG_S or config.INGEST_LAG_S == 0, "t_end must be captured before ingest lag sleep"
         summary = snapshot.capture(scenario, t_inject, t_end, names, fetch, out_dir, demo_commit)
         return summary
     except Exception as e:
@@ -72,13 +71,13 @@ def record(scenario, names, injector, fetch=backends, now=time.time, sleep=time.
         except Exception as restore_error:
             # Restore failed: write dirty state and raise RestoreError
             state_file = Path(state_file)
-            state_file.parent.mkdir(parents=True, exist_ok=True)
             error_msg = f"{type(restore_error).__name__}: {restore_error}"
             try:
+                state_file.parent.mkdir(parents=True, exist_ok=True)
                 state_file.write_text(json.dumps({"dirty": True, "t": now(), "error": error_msg}), encoding="utf-8")
-            except Exception:
-                # State file write failed: don't let that mask the RestoreError
-                pass
+            except Exception as write_error:
+                # State file write/mkdir failed: append to message
+                error_msg = f"{error_msg}; state file NOT written: {type(write_error).__name__}: {write_error}"
             # Build message: restore error + original in-flight error if there was one
             msg = error_msg
             if in_flight:
@@ -101,6 +100,7 @@ def record_all(scenarios, names, injector, out_dir=config.SNAPSHOTS, **kwargs):
     for i, sc in enumerate(scenarios, 1):
         print(f"[{i}/{len(scenarios)}] {sc.id} ({sc.category})", flush=True)
         summary = None
+        stop = None  # Exception to re-raise after tail
         try:
             summary = record(sc, names, injector, out_dir=out_dir, **kwargs)
             consecutive_failures = 0
@@ -112,22 +112,17 @@ def record_all(scenarios, names, injector, out_dir=config.SNAPSHOTS, **kwargs):
             summary = {"scenario": sc.id, "valid": False, "error": str(e)}
             if e.summary:
                 summary["path"] = e.summary["path"]
-            summaries.append(summary)
-            _write_index_row(out_dir, summary)
-            print(f"    -> valid={summary['valid']} {summary.get('error', '')}", flush=True)
-            raise
+            stop = e
         except Exception as e:
-            # Other failures: increment counter, create summary, write row
+            # Other failures: increment counter, create summary
             consecutive_failures += 1
             summary = {"scenario": sc.id, "valid": False, "error": f"{type(e).__name__}: {e}"}
-            summaries.append(summary)
-            _write_index_row(out_dir, summary)
-            print(f"    -> valid={summary['valid']} {summary.get('error', '')}", flush=True)
             if consecutive_failures >= 3:
-                raise RuntimeError(f"Aborting after 3 consecutive failures: {e}")
-            continue
-        # Success path
+                stop = RuntimeError(f"Aborting after 3 consecutive failures: {e}")
+        # Shared tail: append, write, print (once per scenario)
         summaries.append(summary)
         _write_index_row(out_dir, summary)
         print(f"    -> valid={summary['valid']} {summary.get('error', '')}", flush=True)
+        if stop:
+            raise stop
     return summaries
