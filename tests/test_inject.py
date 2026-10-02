@@ -221,3 +221,10 @@ def test_cpus_action_without_value_rejected_upfront(flags_file):
     assert not flags_file.with_name(flags_file.name + ".orig").exists()
     # Runner should never have been called
     assert len(calls) == 0
+
+
+def test_restore_without_backup_is_a_noop(flags_file):
+    original = flags_file.read_text()
+    Injector(flags_file=flags_file, run=lambda cmd: None).restore()
+    assert flags_file.read_text() == original
+    assert not flags_file.with_name(flags_file.name + ".orig").exists()
