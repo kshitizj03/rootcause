@@ -31,3 +31,15 @@ def test_flatten_log_supports_nested_and_dotted_resource_keys():
                                             "severity_number": 17, "body": "failed", "trace_id": "t9"}
     assert backends.flatten_log(dotted)["service"] == "email"
     assert backends.flatten_log(dotted)["body"] == "42"
+
+
+def test_flatten_log_treats_none_body_as_empty_string():
+    assert backends.flatten_log({"@timestamp": "t", "body": None})["body"] == ""
+    assert backends.flatten_log({"@timestamp": "t"})["body"] == ""
+
+
+def test_jaeger_raw_404_returns_empty_payload(monkeypatch):
+    class MockResponse:
+        status_code = 404
+    monkeypatch.setattr(backends.requests, "get", lambda *args, **kwargs: MockResponse())
+    assert backends.flatten_otlp(backends.jaeger_raw("s", 0, 1, 10)) == []

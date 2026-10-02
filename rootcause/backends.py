@@ -83,4 +83,4 @@ def flatten_log(src):
     service = res.get("service.name") or (res.get("service") or {}).get("name") or "?"
     sev = src.get("severity") or {}
     return {"ts": src.get("@timestamp"), "service": service, "severity": sev.get("text"),
-            "severity_number": sev.get("number"), "body": str(src.get("body", "")), "trace_id": src.get("traceId", "")}
+            "severity_number": sev.get("number"), "body": str(src.get("body") or ""), "trace_id": src.get("traceId", "")}
