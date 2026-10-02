@@ -37,12 +37,13 @@ def capture(scenario, t_inject, t_end, names, fetch=backends, out_dir=config.SNA
     spans, logs = sanitize.sanitize_spans(spans, names), sanitize.sanitize_logs(logs, names)
 
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(t_inject))
-    path = Path(out_dir) / f"{scenario.id}__{stamp}"
+    path = Path(out_dir) / f"incident__{stamp}"
     path.mkdir(parents=True)
-    meta = {"scenario_id": scenario.id, "category": scenario.category, "alert": scenario.alert,
-            "baseline_start": baseline_start, "fault_start": t_inject, "end": t_end, "demo_commit": demo_commit}
+    meta = {"alert": scenario.alert, "baseline_start": baseline_start, "fault_start": t_inject,
+            "end": t_end, "demo_commit": demo_commit}
     (path / "meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
-    (path / "truth.json").write_text(json.dumps(scenario.truth, indent=1), encoding="utf-8")
+    truth = dict(scenario.truth, scenario_id=scenario.id, category=scenario.category)
+    (path / "truth.json").write_text(json.dumps(truth, indent=1), encoding="utf-8")
     (path / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
     _write_jsonl_gz(path / "spans.jsonl.gz", spans)
     _write_jsonl_gz(path / "logs.jsonl.gz", logs)

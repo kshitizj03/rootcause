@@ -44,16 +44,36 @@ def test_capture_writes_sanitised_valid_snapshot(tmp_path):
     out = snapshot.capture(SCENARIO, T_INJECT, T_END, NAMES, fetch=fake_fetch(), out_dir=tmp_path, demo_commit="abc")
     path = Path(out["path"])
     assert out["valid"] is True and out["leaks"] == {}
+    assert out["scenario"] == "payment-test" and "path" in out
+
+    # Directory name must be opaque (not contain scenario id)
+    assert "payment-test" not in path.name
+    assert path.name.startswith("incident__")
+
     for name in ("meta.json", "truth.json", "metrics.json", "spans.jsonl.gz", "logs.jsonl.gz", "validation.json"):
         assert (path / name).exists(), name
+
+    # Verify scenario_id and category are NOT in meta.json or metrics.json
+    meta_text = (path / "meta.json").read_text(encoding="utf-8")
+    assert "scenario_id" not in meta_text and "category" not in meta_text and "payment-test" not in meta_text
+    metrics_text = (path / "metrics.json").read_text(encoding="utf-8")
+    assert "payment-test" not in metrics_text
+
+    # Verify scenario_id/category are NOT in spans or logs
     snap = snapshot.load(path)
+    assert "scenario_id" not in snap["meta"] and "category" not in snap["meta"]
     assert snap["meta"]["fault_start"] == T_INJECT and snap["meta"]["demo_commit"] == "abc"
     assert "truth" not in snap
     assert [s["span_id"] for s in snap["spans"]] == ["a"]
     assert snap["spans"][0]["events"] == []
     assert any("[redacted]" in l["body"] for l in snap["logs"])
-    assert snapshot.load_truth(path) == SCENARIO.truth
-    assert json.loads((path / "validation.json").read_text())["valid"] is True
+
+    # Verify scenario_id and category ARE in truth.json
+    truth = snapshot.load_truth(path)
+    assert truth["scenario_id"] == "payment-test" and truth["category"] == "easy"
+    assert truth["causes"] == SCENARIO.truth["causes"]
+
+    assert json.loads((path / "validation.json").read_text(encoding="utf-8"))["valid"] is True
 
 
 def test_capture_marks_invalid_when_signal_is_too_weak(tmp_path):
@@ -66,7 +86,7 @@ def test_capture_empty_spans_and_logs(tmp_path):
     """Empty spans/logs (e.g. control scenarios) still write all three tool files; validation runs cleanly."""
     def empty_fetch():
         def prom_range(query, start, end, step):
-            vals = [[t, "0"] for t in range(int(start), int(end) + 1, step)]
+            vals = [[t, "0.01"] for t in range(int(start), int(end) + 1, step)]
             return [{"metric": {"service_name": "payment", "container_name": "payment"}, "values": vals}]
 
         def jaeger_raw(service, start, end, limit):
@@ -79,11 +99,12 @@ def test_capture_empty_spans_and_logs(tmp_path):
 
     control_scenario = Scenario(id="control-test", category="control", alert="Baseline with no faults.",
                                 inject={}, truth={"causes": []},
-                                checks=[])
+                                checks=[{"service": "payment", "signal": "error_ratio", "at_most": 0.05}])
     out = snapshot.capture(control_scenario, T_INJECT, T_END, NAMES, fetch=empty_fetch(), out_dir=tmp_path)
     path = Path(out["path"])
 
-    # All tool files written, even when empty
+    # All three tool files written, even when empty
+    assert (path / "metrics.json").exists()
     assert (path / "spans.jsonl.gz").exists()
     assert (path / "logs.jsonl.gz").exists()
 
@@ -91,7 +112,38 @@ def test_capture_empty_spans_and_logs(tmp_path):
     assert snap["spans"] == []
     assert snap["logs"] == []
 
-    # Validation runs cleanly with no leaks
+    # Validation runs cleanly with no leaks and passes the check
     assert out["leaks"] == {}
-    validation = json.loads((path / "validation.json").read_text())
+    validation = json.loads((path / "validation.json").read_text(encoding="utf-8"))
     assert validation["leaks"] == {}
+    assert validation["valid"] is True
+
+
+def test_hidden_services_never_queried(tmp_path):
+    """Ensure flagd and flagd-ui are never queried for spans or logs."""
+    calls = {"jaeger_raw": [], "os_logs": []}
+
+    def recording_fetch():
+        def prom_range(query, start, end, step):
+            vals = [[t, "0"] for t in range(int(start), int(end) + 1, step)]
+            return [{"metric": {"service_name": "payment", "container_name": "payment"}, "values": vals}]
+
+        def jaeger_raw(service, start, end, limit):
+            calls["jaeger_raw"].append(service)
+            return {"result": {"resourceSpans": []}}
+
+        def os_logs(query, start, end, size):
+            calls["os_logs"].append(query)
+            return []
+
+        return SimpleNamespace(prom_range=prom_range, jaeger_raw=jaeger_raw, os_logs=os_logs)
+
+    control_scenario = Scenario(id="control-test", category="control", alert="Baseline.",
+                                inject={}, truth={"causes": []}, checks=[])
+    snapshot.capture(control_scenario, T_INJECT, T_END, NAMES, fetch=recording_fetch(), out_dir=tmp_path)
+
+    # Verify flagd and flagd-ui never appear in queries
+    assert "flagd" not in calls["jaeger_raw"]
+    assert "flagd-ui" not in calls["jaeger_raw"]
+    for query in calls["os_logs"]:
+        assert "flagd" not in query and "flagd-ui" not in query
