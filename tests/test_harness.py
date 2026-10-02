@@ -11,17 +11,17 @@ NAMES = sanitize.flag_names(FLAGS)
 
 
 class FakeInjector:
-    def __init__(self, fail_on=None, fail_restore_on=None):
-        self.calls, self.fail_on, self.fail_restore_on = [], fail_on, fail_restore_on
+    def __init__(self, fail_apply=False, fail_restore=False):
+        self.calls, self.fail_apply, self.fail_restore = [], fail_apply, fail_restore
 
     def apply(self, injection):
         self.calls.append("apply")
-        if self.fail_on and self.fail_on in json.dumps(injection):
+        if self.fail_apply:
             raise RuntimeError("inject failed")
 
     def restore(self):
         self.calls.append("restore")
-        if self.fail_restore_on and self.fail_restore_on in json.dumps(self.calls):
+        if self.fail_restore:
             raise RuntimeError("restore failed")
 
 
@@ -58,7 +58,7 @@ def test_restore_happens_even_when_capture_fails(tmp_path):
 
 
 def test_restore_failure_writes_dirty_state_and_raises_restore_error(tmp_path):
-    clock, inj = Clock(100_000.0), FakeInjector(fail_restore_on="restore")
+    clock, inj = Clock(100_000.0), FakeInjector(fail_restore=True)
     with pytest.raises(harness.RestoreError, match="restore failed"):
         run(tmp_path, clock, inj)
     # State should be dirty, not marked clean
@@ -69,7 +69,7 @@ def test_restore_failure_writes_dirty_state_and_raises_restore_error(tmp_path):
 
 def test_restore_failure_with_prior_apply_error(tmp_path):
     """Restore failure message includes both restore error and prior in-flight error."""
-    clock, inj = Clock(), FakeInjector(fail_on="adFailure", fail_restore_on="restore")
+    clock, inj = Clock(), FakeInjector(fail_apply=True, fail_restore=True)
     scenario = Scenario(id="bad", category="easy", alert="x", inject={"flags": {"adFailure": "on"}},
                         truth=SCENARIO.truth, checks=SCENARIO.checks)
     with pytest.raises(harness.RestoreError) as exc_info:
@@ -80,7 +80,7 @@ def test_restore_failure_with_prior_apply_error(tmp_path):
 
 def test_restore_failure_summary_has_path_if_capture_succeeded(tmp_path):
     """When capture succeeds but restore fails, RestoreError carries the summary path."""
-    clock, inj = Clock(), FakeInjector(fail_restore_on="restore")
+    clock, inj = Clock(), FakeInjector(fail_restore=True)
     with pytest.raises(harness.RestoreError) as exc_info:
         run(tmp_path, clock, inj)
     # The summary should be available on the exception
@@ -115,12 +115,32 @@ def test_cooldown_corrupt_file_waits_full_cooldown(tmp_path):
 
 
 def test_cooldown_dirty_state_raises(tmp_path):
-    """If state is dirty (prior restore failed), raise RuntimeError telling user to reset."""
+    """If state is dirty (prior restore failed), raise DirtyStateError."""
     clock = Clock()
     state_file = tmp_path / "state.json"
     state_file.write_text(json.dumps({"dirty": True, "error": "prior restore failed"}), encoding="utf-8")
-    with pytest.raises(RuntimeError, match="State is dirty"):
+    with pytest.raises(harness.DirtyStateError, match="State is dirty"):
         harness.wait_cooldown(clock.now, clock.sleep, state_file)
+
+
+def test_cooldown_dirty_false_is_not_dirty(tmp_path):
+    """If state has {"dirty": false}, it is safe (not dirty)."""
+    clock = Clock()
+    state_file = tmp_path / "state.json"
+    state_file.write_text(json.dumps({"dirty": False, "last_restore": clock.t - config.COOLDOWN_S - 1}), encoding="utf-8")
+    waited = harness.wait_cooldown(clock.now, clock.sleep, state_file)
+    assert waited == 0.0
+    assert clock.sleeps == []
+
+
+def test_cooldown_empty_list_json_waits_full_cooldown(tmp_path):
+    """If state file contains [], treat as unknown history."""
+    clock = Clock()
+    state_file = tmp_path / "state.json"
+    state_file.write_text("[]")
+    waited = harness.wait_cooldown(clock.now, clock.sleep, state_file)
+    assert waited == config.COOLDOWN_S
+    assert clock.sleeps == [config.COOLDOWN_S]
 
 
 def test_record_all_continues_after_non_restore_failure_and_writes_index(tmp_path):
@@ -128,7 +148,13 @@ def test_record_all_continues_after_non_restore_failure_and_writes_index(tmp_pat
     clock = Clock()
     bad = Scenario(id="bad", category="easy", alert="x", inject={"flags": {"adFailure": "on"}},
                    truth=SCENARIO.truth, checks=SCENARIO.checks)
-    summaries = harness.record_all([bad, SCENARIO], NAMES, FakeInjector(fail_on="adFailure"), fetch=fake_fetch(t_inject=clock.t),
+    # Use an injector that fails only on injection with "adFailure" key
+    class SelectiveFailInjector(FakeInjector):
+        def apply(self, injection):
+            self.calls.append("apply")
+            if "adFailure" in json.dumps(injection):
+                raise RuntimeError("inject failed")
+    summaries = harness.record_all([bad, SCENARIO], NAMES, SelectiveFailInjector(), fetch=fake_fetch(t_inject=clock.t),
                                    now=clock.now, sleep=clock.sleep, state_file=tmp_path / "state.json",
                                    out_dir=tmp_path / "snaps")
     assert [s["scenario"] for s in summaries] == ["bad", "payment-test"]
@@ -148,7 +174,7 @@ def test_record_all_continues_after_non_restore_failure_and_writes_index(tmp_pat
 def test_record_all_aborts_after_3_consecutive_failures(tmp_path):
     """record_all aborts (raises) after 3 consecutive non-restore failures."""
     clock = Clock()
-    inj = FakeInjector(fail_on="fail")
+    inj = FakeInjector(fail_apply=True)
     scenarios = [
         Scenario(id=f"bad{i}", category="easy", alert="x", inject={"flags": {"fail": "on"}},
                  truth=SCENARIO.truth, checks=SCENARIO.checks)
@@ -170,7 +196,7 @@ def test_record_all_restore_error_stops_batch(tmp_path):
     clock = Clock()
     bad = Scenario(id="bad", category="easy", alert="x", inject={},
                    truth=SCENARIO.truth, checks=SCENARIO.checks)
-    inj = FakeInjector(fail_restore_on="restore")
+    inj = FakeInjector(fail_restore=True)
     with pytest.raises(harness.RestoreError):
         harness.record_all([bad, SCENARIO], NAMES, inj, fetch=fake_fetch(t_inject=clock.t),
                           now=clock.now, sleep=clock.sleep, state_file=tmp_path / "state.json",
@@ -180,6 +206,19 @@ def test_record_all_restore_error_stops_batch(tmp_path):
     assert len(lines) == 1
     row = json.loads(lines[0])
     assert row["scenario"] == "bad" and "error" in row and "path" in row  # capture succeeded before restore failed
+
+
+def test_record_all_dirty_state_stops_batch_without_row(tmp_path):
+    """Dirty state in wait_cooldown stops batch immediately without writing a scenario row."""
+    state_file = tmp_path / "state.json"
+    state_file.write_text(json.dumps({"dirty": True, "error": "prior restore failed"}), encoding="utf-8")
+    clock = Clock()
+    with pytest.raises(harness.DirtyStateError):
+        harness.record_all([SCENARIO], NAMES, FakeInjector(), fetch=fake_fetch(t_inject=clock.t),
+                          now=clock.now, sleep=clock.sleep, state_file=state_file,
+                          out_dir=tmp_path / "snaps")
+    # No scenario row written (index.jsonl doesn't exist)
+    assert not (tmp_path / "snaps" / "index.jsonl").exists()
 
 
 def test_index_jsonl_survives_prior_lines(tmp_path):

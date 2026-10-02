@@ -13,6 +13,11 @@ class RestoreError(RuntimeError):
         self.summary = summary
 
 
+class DirtyStateError(RuntimeError):
+    """Raised when state file indicates a prior restore failed."""
+    pass
+
+
 def mark_restored(t, state_file=config.STATE_FILE):
     state_file = Path(state_file)
     state_file.parent.mkdir(parents=True, exist_ok=True)
@@ -21,26 +26,26 @@ def mark_restored(t, state_file=config.STATE_FILE):
 
 def wait_cooldown(now=time.time, sleep=time.sleep, state_file=config.STATE_FILE):
     state_file = Path(state_file)
-    if not state_file.exists():
-        # Unknown history: wait full cooldown to be safe
-        print(f"  cooling down {config.COOLDOWN_S / 60:.1f} min so the baseline window is fault-free", flush=True)
-        sleep(config.COOLDOWN_S)
-        return config.COOLDOWN_S
-    try:
-        state = json.loads(state_file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        # Corrupt state: wait full cooldown to be safe
-        print(f"  cooling down {config.COOLDOWN_S / 60:.1f} min so the baseline window is fault-free", flush=True)
-        sleep(config.COOLDOWN_S)
-        return config.COOLDOWN_S
-    if "dirty" in state:
-        raise RuntimeError(f"State is dirty (restore failed): {state.get('error', 'unknown error')}. Run `reset` to recover.")
-    remaining = config.COOLDOWN_S - (now() - state.get("last_restore", now()))
-    if remaining <= 0:
-        return 0.0
-    print(f"  cooling down {remaining / 60:.1f} min so the baseline window is fault-free", flush=True)
-    sleep(remaining)
-    return remaining
+    remaining = config.COOLDOWN_S  # Default: unknown history = wait full cooldown
+
+    if state_file.exists():
+        try:
+            state = json.loads(state_file.read_text(encoding="utf-8"))
+            # Check if state is dirty (truthy "dirty" field)
+            if state.get("dirty"):
+                raise DirtyStateError(f"State is dirty (restore failed): {state.get('error', 'unknown error')}. Run `reset` to recover.")
+            # Calculate remaining cooldown
+            remaining = config.COOLDOWN_S - (now() - state.get("last_restore", now()))
+        except (json.JSONDecodeError, ValueError, TypeError, AttributeError, UnicodeDecodeError):
+            # Any unreadable state: treat as unknown history
+            remaining = config.COOLDOWN_S
+
+    # Sleep only if remaining > 0
+    if remaining > 0:
+        print(f"  cooling down {remaining / 60:.1f} min so the baseline window is fault-free", flush=True)
+        sleep(remaining)
+        return remaining
+    return 0.0
 
 
 def record(scenario, names, injector, fetch=backends, now=time.time, sleep=time.sleep,
@@ -48,16 +53,18 @@ def record(scenario, names, injector, fetch=backends, now=time.time, sleep=time.
     wait_cooldown(now, sleep, state_file)
     t_inject = now()
     summary = None
-    apply_error = None
+    in_flight = None
     try:
         injector.apply(scenario.inject)
         sleep(scenario.settle_s)
         t_end = now()
         sleep(config.INGEST_LAG_S)
+        # Assertion: t_end is before the INGEST_LAG_S sleep (captured before ingest lag)
+        assert t_end <= now() - config.INGEST_LAG_S or config.INGEST_LAG_S == 0, "t_end must be captured before ingest lag sleep"
         summary = snapshot.capture(scenario, t_inject, t_end, names, fetch, out_dir, demo_commit)
         return summary
     except Exception as e:
-        apply_error = e
+        in_flight = e
         raise
     finally:
         try:
@@ -67,13 +74,23 @@ def record(scenario, names, injector, fetch=backends, now=time.time, sleep=time.
             state_file = Path(state_file)
             state_file.parent.mkdir(parents=True, exist_ok=True)
             error_msg = f"{type(restore_error).__name__}: {restore_error}"
-            state_file.write_text(json.dumps({"dirty": True, "t": now(), "error": error_msg}), encoding="utf-8")
+            try:
+                state_file.write_text(json.dumps({"dirty": True, "t": now(), "error": error_msg}), encoding="utf-8")
+            except Exception:
+                # State file write failed: don't let that mask the RestoreError
+                pass
             # Build message: restore error + original in-flight error if there was one
             msg = error_msg
-            if apply_error:
-                msg = f"{msg}; prior error: {type(apply_error).__name__}: {apply_error}"
+            if in_flight:
+                msg = f"{msg}; prior error: {type(in_flight).__name__}: {in_flight}"
             raise RestoreError(msg, summary=summary) from restore_error
         mark_restored(now(), state_file)
+
+
+def _write_index_row(out_dir, summary):
+    """Write summary to index.jsonl (append mode)."""
+    with open(out_dir / "index.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps({k: v for k, v in summary.items() if k != "results"}) + "\n")
 
 
 def record_all(scenarios, names, injector, out_dir=config.SNAPSHOTS, **kwargs):
@@ -87,30 +104,30 @@ def record_all(scenarios, names, injector, out_dir=config.SNAPSHOTS, **kwargs):
         try:
             summary = record(sc, names, injector, out_dir=out_dir, **kwargs)
             consecutive_failures = 0
+        except DirtyStateError:
+            # Dirty state: stop batch immediately without writing a scenario row
+            raise
         except RestoreError as e:
             # Restore failure: write row and stop batch
             summary = {"scenario": sc.id, "valid": False, "error": str(e)}
             if e.summary:
                 summary["path"] = e.summary["path"]
             summaries.append(summary)
-            with open(out_dir / "index.jsonl", "a", encoding="utf-8") as f:
-                f.write(json.dumps({k: v for k, v in summary.items() if k != "results"}) + "\n")
+            _write_index_row(out_dir, summary)
             print(f"    -> valid={summary['valid']} {summary.get('error', '')}", flush=True)
             raise
         except Exception as e:
-            # Other failures: write row and continue; count consecutive
+            # Other failures: increment counter, create summary, write row
             consecutive_failures += 1
             summary = {"scenario": sc.id, "valid": False, "error": f"{type(e).__name__}: {e}"}
             summaries.append(summary)
-            with open(out_dir / "index.jsonl", "a", encoding="utf-8") as f:
-                f.write(json.dumps({k: v for k, v in summary.items() if k != "results"}) + "\n")
+            _write_index_row(out_dir, summary)
             print(f"    -> valid={summary['valid']} {summary.get('error', '')}", flush=True)
             if consecutive_failures >= 3:
                 raise RuntimeError(f"Aborting after 3 consecutive failures: {e}")
             continue
         # Success path
         summaries.append(summary)
-        with open(out_dir / "index.jsonl", "a", encoding="utf-8") as f:
-            f.write(json.dumps({k: v for k, v in summary.items() if k != "results"}) + "\n")
+        _write_index_row(out_dir, summary)
         print(f"    -> valid={summary['valid']} {summary.get('error', '')}", flush=True)
     return summaries
