@@ -33,12 +33,14 @@ class Injector:
                 raise ValueError(f"unknown docker action {act.get('action')!r}")
             if "container" not in act:
                 raise ValueError("docker action missing 'container'")
+            if act.get("action") == "cpus" and "value" not in act:
+                raise ValueError("cpus action missing 'value'")
+
+        # Reset from backup upfront if one exists, before flag or docker operations
+        if self.backup.exists():
+            shutil.copy(self.backup, self.flags_file)
 
         if flags:
-            # If a backup exists from a previous interrupted run, restore from it first
-            if self.backup.exists():
-                shutil.copy(self.backup, self.flags_file)
-
             cfg = json.loads(self.flags_file.read_text(encoding="utf-8"))
             for name, variant in flags.items():
                 if variant not in cfg["flags"].get(name, {}).get("variants", {}):

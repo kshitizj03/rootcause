@@ -1,5 +1,8 @@
 import json
 import shutil
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -92,11 +95,7 @@ def test_leftover_backup_resets_file_to_pristine_before_applying(flags_file):
 
 
 def test_file_restore_error_does_not_block_docker_undos():
-    import tempfile
-    from unittest.mock import patch
-
     with tempfile.TemporaryDirectory() as tmp:
-        from pathlib import Path
         flags_file = Path(tmp) / "demo.flagd.json"
         shutil.copy(FLAGS, flags_file)
 
@@ -118,9 +117,6 @@ def test_file_restore_error_does_not_block_docker_undos():
 
 
 def test_unknown_docker_action_rejected_before_any_write():
-    import tempfile
-    from pathlib import Path
-
     with tempfile.TemporaryDirectory() as tmp:
         flags_file = Path(tmp) / "demo.flagd.json"
         shutil.copy(FLAGS, flags_file)
@@ -142,9 +138,6 @@ def test_unknown_docker_action_rejected_before_any_write():
 
 
 def test_partial_docker_failure_during_apply_undoes_prior_action_only():
-    import tempfile
-    from pathlib import Path
-
     with tempfile.TemporaryDirectory() as tmp:
         flags_file = Path(tmp) / "demo.flagd.json"
         shutil.copy(FLAGS, flags_file)
@@ -172,3 +165,59 @@ def test_partial_docker_failure_during_apply_undoes_prior_action_only():
         assert ["docker", "unpause", "valkey-cart"] in calls
         # File should be pristine (no flags were changed)
         assert flags_file.read_text(encoding="utf-8") == pristine
+
+
+def test_leftover_backup_reset_on_docker_only_apply(flags_file):
+    """Docker-only apply should restore from backup if it exists."""
+    pristine = flags_file.read_text(encoding="utf-8")
+    backup = flags_file.with_name(flags_file.name + ".orig")
+    shutil.copy(flags_file, backup)
+
+    # Corrupt the flags file (simulate crashed run with old fault)
+    cfg = json.loads(pristine)
+    cfg["flags"]["paymentFailure"]["defaultVariant"] = "50%"
+    flags_file.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+    # Docker-only apply should reset file to pristine
+    inj = Injector(flags_file=flags_file, run=lambda cmd: None)
+    inj.apply({"docker": [{"action": "pause", "container": "valkey-cart"}]})
+
+    flags = json.loads(flags_file.read_text(encoding="utf-8"))["flags"]
+    assert flags["paymentFailure"]["defaultVariant"] == "off"
+
+
+def test_leftover_backup_reset_on_empty_apply(flags_file):
+    """Empty apply should restore from backup if it exists."""
+    pristine = flags_file.read_text(encoding="utf-8")
+    backup = flags_file.with_name(flags_file.name + ".orig")
+    shutil.copy(flags_file, backup)
+
+    # Corrupt the flags file (simulate crashed run with old fault)
+    cfg = json.loads(pristine)
+    cfg["flags"]["paymentFailure"]["defaultVariant"] = "50%"
+    flags_file.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+    # Empty apply should reset file to pristine
+    inj = Injector(flags_file=flags_file, run=lambda cmd: None)
+    inj.apply({})
+
+    flags = json.loads(flags_file.read_text(encoding="utf-8"))["flags"]
+    assert flags["paymentFailure"]["defaultVariant"] == "off"
+
+
+def test_cpus_action_without_value_rejected_upfront(flags_file):
+    """cpus action must have a value field; validation happens before any write."""
+    original = flags_file.read_text(encoding="utf-8")
+    calls = []
+
+    inj = Injector(flags_file=flags_file, run=calls.append)
+
+    with pytest.raises(ValueError):
+        inj.apply({"docker": [{"action": "cpus", "container": "currency"}]})
+
+    # File should not be modified
+    assert flags_file.read_text(encoding="utf-8") == original
+    # No .orig should be created
+    assert not flags_file.with_name(flags_file.name + ".orig").exists()
+    # Runner should never have been called
+    assert len(calls) == 0
