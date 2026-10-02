@@ -16,6 +16,23 @@ def flag_variants(flags_file=config.FLAGS_FILE):
     return {name: list(spec.get("variants", {})) for name, spec in flags.items()}
 
 
+def docker_errors(actions):
+    """Validate docker actions: action in {pause, cpus}, container present, cpus has value.
+    Returns list of error strings; empty = valid."""
+    errs = []
+    for act in actions:
+        action = act.get("action")
+        if action not in ("pause", "cpus"):
+            errs.append(f"unknown docker action {action!r}")
+        if "container" not in act:
+            errs.append("docker action missing 'container'")
+        elif act.get("container") not in config.KNOWN_TARGETS:
+            errs.append(f"unknown container {act.get('container')}")
+        if action == "cpus" and "value" not in act:
+            errs.append("cpus action missing 'value'")
+    return errs
+
+
 class Injector:
     def __init__(self, flags_file=config.FLAGS_FILE, run=_run):
         self.flags_file = Path(flags_file)
@@ -28,13 +45,9 @@ class Injector:
         docker_actions = injection.get("docker") or []
 
         # Validate all docker actions upfront, before any write or docker call
-        for act in docker_actions:
-            if act.get("action") not in ("pause", "cpus"):
-                raise ValueError(f"unknown docker action {act.get('action')!r}")
-            if "container" not in act:
-                raise ValueError("docker action missing 'container'")
-            if act.get("action") == "cpus" and "value" not in act:
-                raise ValueError("cpus action missing 'value'")
+        errs = docker_errors(docker_actions)
+        if errs:
+            raise ValueError("; ".join(errs))
 
         # Reset from backup upfront if one exists, before flag or docker operations
         if self.backup.exists():

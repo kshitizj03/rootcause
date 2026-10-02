@@ -6,10 +6,10 @@ from pathlib import Path
 import yaml
 
 from rootcause import config, signals
+from rootcause.inject import docker_errors
 
 CATEGORIES = {"easy", "hard-cross-service", "hard-silent", "hard-noisy", "hard-two-faults", "control"}
 FAULT_TYPES = {"errors", "latency", "resource"}
-DOCKER_ACTIONS = {"pause", "cpus"}
 
 
 @dataclass(frozen=True)
@@ -26,9 +26,12 @@ class Scenario:
 def load_all(directory=config.SCENARIOS_DIR):
     out = []
     for path in sorted(Path(directory).glob("*.yaml")):
-        d = yaml.safe_load(path.read_text(encoding="utf-8"))
-        out.append(Scenario(id=path.stem, category=d["category"], alert=d["alert"], inject=d.get("inject") or {},
-                            truth=d["truth"], checks=d.get("checks") or [], settle_s=d.get("settle_s", config.SETTLE_S)))
+        try:
+            d = yaml.safe_load(path.read_text(encoding="utf-8"))
+            out.append(Scenario(id=path.stem, category=d["category"], alert=d["alert"], inject=d.get("inject") or {},
+                                truth=d["truth"], checks=d.get("checks") or [], settle_s=d.get("settle_s", config.SETTLE_S)))
+        except Exception as e:
+            raise ValueError(f"Failed to parse {path.name}: {e}") from e
     return out
 
 
@@ -46,11 +49,11 @@ def validate(s, variants):
             errs.append(f"unknown flag {flag}")
         elif variant not in variants[flag]:
             errs.append(f"flag {flag} has no variant {variant}")
-    for act in s.inject.get("docker") or []:
-        if act.get("action") not in DOCKER_ACTIONS:
-            errs.append(f"unknown docker action {act.get('action')}")
-        if act.get("container") not in config.KNOWN_TARGETS:
-            errs.append(f"unknown container {act.get('container')}")
+
+    # Validate docker actions
+    docker_act_errs = docker_errors(s.inject.get("docker") or [])
+    errs.extend(docker_act_errs)
+
     causes = s.truth.get("causes")
     if causes is None:
         errs.append("truth.causes missing")
@@ -63,7 +66,9 @@ def validate(s, variants):
         for svc in cause.get("accept", []):
             if svc not in config.KNOWN_TARGETS:
                 errs.append(f"unknown truth service {svc}")
-            if re.search(rf"\b{re.escape(svc)}\b", s.alert, re.IGNORECASE):
+            # Check alert doesn't name root cause: handle spaces, dashes, plurals
+            pattern = r"\b" + re.escape(svc).replace(r"\-", r"[\s\-]?") + r"s?\b"
+            if re.search(pattern, s.alert, re.IGNORECASE):
                 errs.append(f"alert names root cause {svc}")
     if (s.category == "control") != (causes == []):
         errs.append("controls (and only controls) must have no causes")
@@ -76,4 +81,7 @@ def validate(s, variants):
             errs.append(f"unknown check target {chk.get('service')}")
         if not any(k in chk for k in ("at_least", "at_most", "ratio_at_least")):
             errs.append(f"check without a threshold: {chk}")
+        # Validate stat if present
+        if "stat" in chk and chk["stat"] not in ("mean", "max"):
+            errs.append(f"stat must be 'mean' or 'max', got {chk['stat']!r}")
     return errs
