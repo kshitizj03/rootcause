@@ -35,7 +35,8 @@ def load_all(directory=config.SCENARIOS_DIR):
     return out
 
 
-def validate(s, variants):
+def validate(s, variants, targeting_errs=None):
+    """targeting_errs: inject.flag_targeting_errors() ({flag: message}); flags whose targeting apply() can't override."""
     errs = []
     if s.category not in CATEGORIES:
         errs.append(f"unknown category {s.category}")
@@ -49,6 +50,8 @@ def validate(s, variants):
             errs.append(f"unknown flag {flag}")
         elif variant not in variants[flag]:
             errs.append(f"flag {flag} has no variant {variant}")
+        elif flag in (targeting_errs or {}):
+            errs.append(f"flag {flag}: {targeting_errs[flag]}")
 
     # Validate docker actions
     docker_act_errs = docker_errors(s.inject.get("docker") or [])

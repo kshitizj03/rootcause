@@ -115,3 +115,9 @@ def test_category_counts():
     expected = {"easy": 4, "hard-cross-service": 3, "hard-silent": 6, "hard-noisy": 2, "hard-two-faults": 2, "control": 4}
     for cat, count in expected.items():
         assert len(by_cat.get(cat, [])) == count, f"Category {cat}: expected {count}, got {len(by_cat.get(cat, []))}"
+
+
+def test_unsupported_targeting_is_reported_for_injected_flags_only():
+    bad = {"paymentFailure": "targeting is not a simple if/then/else"}
+    assert any("targeting" in e for e in scenarios.validate(make(), VARIANTS, bad))
+    assert scenarios.validate(make(), VARIANTS, {"adHighCpu": "x"}) == []

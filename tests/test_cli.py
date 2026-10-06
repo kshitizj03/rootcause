@@ -179,7 +179,8 @@ def rec(monkeypatch):
     monkeypatch.setattr(inject, "flag_variants", lambda: {})
     monkeypatch.setattr(sanitize, "flag_names", lambda: ["f"])
     monkeypatch.setattr(env, "demo_commit", lambda: "abc")
-    monkeypatch.setattr(scenarios, "validate", lambda s, v: [])
+    monkeypatch.setattr(inject, "flag_targeting_errors", lambda: {})
+    monkeypatch.setattr(scenarios, "validate", lambda s, v, t: [])
     monkeypatch.setattr(harness, "record_all", lambda chosen, names, injector, **kw: calls.append(chosen) or
                         [{"valid": True} for _ in chosen])
     return calls
@@ -192,7 +193,7 @@ def test_record_unknown_or_missing_ids_exit_2(rec, capsys):
 
 
 def test_record_validation_failure_exit_2_and_nothing_recorded(rec, monkeypatch, capsys):
-    monkeypatch.setattr(scenarios, "validate", lambda s, v: ["bad"] if s.id == "s2" else [])
+    monkeypatch.setattr(scenarios, "validate", lambda s, v, t: ["bad"] if s.id == "s2" else [])
     assert cli.main(["record", "--all"]) == 2
     assert rec == []
     assert "s2" in capsys.readouterr().out

@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from helpers import FLAGS
-from rootcause.inject import Injector, flag_variants
+from rootcause.inject import Injector, flag_targeting_errors, flag_variants
 
 
 INFO = ["docker", "info", "--format", "{{.NCPU}}"]
@@ -253,3 +253,43 @@ def test_restore_without_backup_is_a_noop(flags_file):
     Injector(flags_file=flags_file, run=lambda cmd: None).restore()
     assert flags_file.read_text() == original
     assert not flags_file.with_name(flags_file.name + ".orig").exists()
+
+
+COND = {"==": [{"var": "product_id"}, "OLJCESPC7Z"]}
+
+
+def test_apply_sets_then_branch_of_targeting_and_restore_is_byte_identical(flags_file):
+    original = flags_file.read_bytes()
+    inj = Injector(flags_file=flags_file, run=lambda cmd: None)
+    inj.apply({"flags": {"productCatalogFailure": "on"}})
+    spec = json.loads(flags_file.read_text())["flags"]["productCatalogFailure"]
+    assert spec["targeting"] == {"if": [COND, "on", "off"]} and spec["defaultVariant"] == "on"
+    inj.restore()
+    assert flags_file.read_bytes() == original
+
+
+@pytest.mark.parametrize("targeting", [
+    {"fractional": [["on", 50], ["off", 50]]},
+    {"if": [COND, "on"]},
+    {"if": [COND, "on", {"if": [COND, "on", "off"]}]},
+    {"if": [COND, "nope", "off"]},
+])
+def test_unsupported_targeting_rejected_before_any_write(flags_file, targeting):
+    cfg = json.loads(flags_file.read_text())
+    cfg["flags"]["productCatalogFailure"]["targeting"] = targeting
+    flags_file.write_text(json.dumps(cfg, indent=2))
+    original = flags_file.read_bytes()
+    calls = []
+    with pytest.raises(ValueError, match="targeting"):
+        Injector(flags_file=flags_file, run=calls.append).apply({"flags": {"productCatalogFailure": "on"}})
+    assert flags_file.read_bytes() == original
+    assert not flags_file.with_name(flags_file.name + ".orig").exists()
+    assert calls == []
+
+
+def test_flag_targeting_errors_flags_only_unsupported_shapes(flags_file):
+    assert flag_targeting_errors(flags_file) == {}
+    cfg = json.loads(flags_file.read_text())
+    cfg["flags"]["productCatalogFailure"]["targeting"] = {"fractional": []}
+    flags_file.write_text(json.dumps(cfg))
+    assert list(flag_targeting_errors(flags_file)) == ["productCatalogFailure"]

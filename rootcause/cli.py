@@ -73,7 +73,8 @@ def _record(args):
             return 2
         chosen = [s for s in chosen if s.id in args.ids]
     variants = inject.flag_variants()
-    problems = {s.id: scenarios.validate(s, variants) for s in chosen}
+    targeting_errs = inject.flag_targeting_errors()
+    problems = {s.id: scenarios.validate(s, variants, targeting_errs) for s in chosen}
     problems = {k: v for k, v in problems.items() if v}
     if problems:
         print(json.dumps(problems, indent=1))

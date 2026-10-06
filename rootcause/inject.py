@@ -29,6 +29,24 @@ def flag_variants(flags_file=config.FLAGS_FILE):
     return {name: list(spec.get("variants", {})) for name, spec in flags.items()}
 
 
+def targeting_error(spec):
+    """None if the flag's targeting is absent or exactly {"if": [cond, then_variant, else_variant]} with both
+    branches being variant names (the only shape `apply` knows how to override); else a message."""
+    t = spec.get("targeting")
+    if not t:
+        return None
+    variants = spec.get("variants", {})
+    if (isinstance(t, dict) and list(t) == ["if"] and isinstance(t["if"], list) and len(t["if"]) == 3
+            and all(isinstance(b, str) and b in variants for b in t["if"][1:])):
+        return None
+    return "targeting is not a simple {if: [cond, variant, variant]}"
+
+
+def flag_targeting_errors(flags_file=config.FLAGS_FILE):
+    flags = json.loads(Path(flags_file).read_text(encoding="utf-8"))["flags"]
+    return {name: err for name, spec in flags.items() if (err := targeting_error(spec))}
+
+
 def docker_errors(actions):
     """Validate docker actions: action in {pause, cpus}, container present, cpus has value.
     Returns list of error strings; empty = valid."""
@@ -73,10 +91,15 @@ class Injector:
             for name, variant in flags.items():
                 if variant not in cfg["flags"].get(name, {}).get("variants", {}):
                     raise ValueError(f"flag {name!r} has no variant {variant!r}")
+                if err := targeting_error(cfg["flags"][name]):
+                    raise ValueError(f"flag {name!r}: {err}")
             if not self.backup.exists():  # an existing backup is the pristine copy from an interrupted run
                 shutil.copy(self.flags_file, self.backup)
             for name, variant in flags.items():
-                cfg["flags"][name]["defaultVariant"] = variant
+                spec = cfg["flags"][name]
+                spec["defaultVariant"] = variant
+                if "targeting" in spec:  # flagd evaluates targeting before defaultVariant: override its THEN branch too
+                    spec["targeting"]["if"][1] = variant
             self.flags_file.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
         for act in docker_actions:
