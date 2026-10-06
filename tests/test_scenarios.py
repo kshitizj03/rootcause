@@ -1,6 +1,6 @@
 from helpers import FLAGS
 from rootcause import config, scenarios
-from rootcause.inject import flag_variants
+from rootcause.inject import flag_targeting_errors, flag_variants
 
 VARIANTS = flag_variants(FLAGS)
 
@@ -121,3 +121,9 @@ def test_unsupported_targeting_is_reported_for_injected_flags_only():
     bad = {"paymentFailure": "targeting is not a simple if/then/else"}
     assert any("targeting" in e for e in scenarios.validate(make(), VARIANTS, bad))
     assert scenarios.validate(make(), VARIANTS, {"adHighCpu": "x"}) == []
+
+
+def test_all_shipped_scenarios_have_no_targeting_errors():
+    targeting_errs = flag_targeting_errors(FLAGS)
+    assert {s.id: scenarios.validate(s, VARIANTS, targeting_errs) for s in scenarios.load_all()
+            if scenarios.validate(s, VARIANTS, targeting_errs)} == {}

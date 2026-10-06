@@ -80,6 +80,14 @@ class Injector:
         if errs:
             raise ValueError("; ".join(errs))
 
+        if flags:  # validate flags upfront too (against the pristine backup if one is left over), before any docker call
+            known = json.loads((self.backup if self.backup.exists() else self.flags_file).read_text(encoding="utf-8"))["flags"]
+            for name, variant in flags.items():
+                if variant not in known.get(name, {}).get("variants", {}):
+                    raise ValueError(f"flag {name!r} has no variant {variant!r}")
+                if err := targeting_error(known[name]):
+                    raise ValueError(f"flag {name!r}: {err}")
+
         ncpu = host_cpus(self.run) if any(a["action"] == "cpus" for a in docker_actions) else None
 
         # Reset from backup upfront if one exists, before flag or docker operations
@@ -88,17 +96,12 @@ class Injector:
 
         if flags:
             cfg = json.loads(self.flags_file.read_text(encoding="utf-8"))
-            for name, variant in flags.items():
-                if variant not in cfg["flags"].get(name, {}).get("variants", {}):
-                    raise ValueError(f"flag {name!r} has no variant {variant!r}")
-                if err := targeting_error(cfg["flags"][name]):
-                    raise ValueError(f"flag {name!r}: {err}")
             if not self.backup.exists():  # an existing backup is the pristine copy from an interrupted run
                 shutil.copy(self.flags_file, self.backup)
             for name, variant in flags.items():
                 spec = cfg["flags"][name]
                 spec["defaultVariant"] = variant
-                if "targeting" in spec:  # flagd evaluates targeting before defaultVariant: override its THEN branch too
+                if spec.get("targeting"):  # flagd evaluates targeting before defaultVariant: override its THEN branch too
                     spec["targeting"]["if"][1] = variant
             self.flags_file.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 

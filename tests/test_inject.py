@@ -281,7 +281,8 @@ def test_unsupported_targeting_rejected_before_any_write(flags_file, targeting):
     original = flags_file.read_bytes()
     calls = []
     with pytest.raises(ValueError, match="targeting"):
-        Injector(flags_file=flags_file, run=calls.append).apply({"flags": {"productCatalogFailure": "on"}})
+        Injector(flags_file=flags_file, run=calls.append).apply(
+            {"flags": {"productCatalogFailure": "on"}, "docker": [{"action": "cpus", "container": "currency", "value": 0.05}]})
     assert flags_file.read_bytes() == original
     assert not flags_file.with_name(flags_file.name + ".orig").exists()
     assert calls == []
@@ -293,3 +294,13 @@ def test_flag_targeting_errors_flags_only_unsupported_shapes(flags_file):
     cfg["flags"]["productCatalogFailure"]["targeting"] = {"fractional": []}
     flags_file.write_text(json.dumps(cfg))
     assert list(flag_targeting_errors(flags_file)) == ["productCatalogFailure"]
+
+
+@pytest.mark.parametrize("targeting", [{}, None])
+def test_empty_targeting_is_treated_as_absent(flags_file, targeting):
+    cfg = json.loads(flags_file.read_text())
+    cfg["flags"]["productCatalogFailure"]["targeting"] = targeting
+    flags_file.write_text(json.dumps(cfg, indent=2))
+    Injector(flags_file=flags_file, run=lambda cmd: None).apply({"flags": {"productCatalogFailure": "on"}})
+    spec = json.loads(flags_file.read_text())["flags"]["productCatalogFailure"]
+    assert spec["defaultVariant"] == "on" and spec["targeting"] == targeting
