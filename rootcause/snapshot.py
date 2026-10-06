@@ -52,11 +52,21 @@ def capture(scenario, t_inject, t_end, names, fetch=backends, out_dir=config.SNA
     _write_jsonl_gz(path / "spans.jsonl.gz", spans)
     _write_jsonl_gz(path / "logs.jsonl.gz", logs)
 
-    results = signals.evaluate(scenario.checks, metrics, (baseline_start, t_inject), (t_inject + config.RAMP_S, t_end))
+    result = validate_snapshot(path, scenario, names)
+    return {"scenario": scenario.id, "path": str(path), **result}
+
+
+def validate_snapshot(path, scenario, names):
+    """Score a recorded snapshot against the scenario's CURRENT checks; rewrites validation.json."""
+    path = Path(path)
+    meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
+    metrics = json.loads((path / "metrics.json").read_text(encoding="utf-8"))
+    results = signals.evaluate(scenario.checks, metrics, (meta["baseline_start"], meta["fault_start"]),
+                               (meta["fault_start"] + config.RAMP_S, meta["end"]))
     leaks = sanitize.scan_snapshot(path, names)
-    valid = all(r["passed"] for r in results) and not leaks
-    (path / "validation.json").write_text(json.dumps({"valid": valid, "results": results, "leaks": leaks}, indent=1), encoding="utf-8")
-    return {"scenario": scenario.id, "path": str(path), "valid": valid, "results": results, "leaks": leaks}
+    out = {"valid": all(r["passed"] for r in results) and not leaks, "results": results, "leaks": leaks}
+    (path / "validation.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
+    return out
 
 
 def load(path):

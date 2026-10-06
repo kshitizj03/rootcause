@@ -199,3 +199,20 @@ def test_hidden_services_not_queried_in_either_window(tmp_path):
     control = Scenario(id="control-test", category="control", alert="Baseline.", inject={}, truth={"causes": []}, checks=[])
     snapshot.capture(control, T_INJECT, T_END, NAMES, fetch=fetch, out_dir=tmp_path)
     assert calls and not any("flagd" in c for c in calls)
+
+
+def test_validate_snapshot_rescores_stored_metrics_against_changed_checks(tmp_path):
+    out = snapshot.capture(SCENARIO, T_INJECT, T_END, NAMES, fetch=fake_fetch(prom_value_after=0.05), out_dir=tmp_path)
+    assert out["valid"] is False
+    path = Path(out["path"])
+    meta_before = (path / "meta.json").read_bytes()
+
+    relaxed = Scenario(**{**SCENARIO.__dict__, "checks": [{"service": "payment", "signal": "error_ratio", "at_least": 0.04}]})
+    res = snapshot.validate_snapshot(path, relaxed, NAMES)
+    assert res["valid"] is True and res["leaks"] == {} and res["results"][0]["passed"] is True
+    assert json.loads((path / "validation.json").read_text(encoding="utf-8")) == res
+    assert (path / "meta.json").read_bytes() == meta_before
+
+    res = snapshot.validate_snapshot(path, SCENARIO, NAMES)  # original threshold fails again
+    assert res["valid"] is False
+    assert json.loads((path / "validation.json").read_text(encoding="utf-8"))["valid"] is False

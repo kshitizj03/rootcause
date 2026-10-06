@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 
-from rootcause import config, env, harness, inject, sanitize, scenarios
+from rootcause import config, env, harness, inject, sanitize, scenarios, snapshot
 
 
 def build_parser():
@@ -19,6 +19,8 @@ def build_parser():
     rec.add_argument("--all", action="store_true")
     leak = sub.add_parser("leak-check", help="scan snapshots for anything revealing the fault")
     leak.add_argument("paths", nargs="*")
+    reval = sub.add_parser("revalidate", help="re-score recorded snapshots against the current scenario checks")
+    reval.add_argument("ids", nargs="*")
     return p
 
 
@@ -98,6 +100,27 @@ def _leak_check(args):
     return 1 if found else 0
 
 
+def _revalidate(args):
+    index = Path(config.SNAPSHOTS) / "index.jsonl"
+    rows = [json.loads(l) for l in index.read_text(encoding="utf-8").splitlines() if l.strip()] if index.exists() else []
+    latest = {r["scenario"]: r for r in rows if r.get("path")}  # later rows overwrite earlier ones
+    known = {s.id: s for s in scenarios.load_all()}
+    ids = args.ids or [i for i in latest if i in known]
+    unknown = [i for i in ids if i not in known or i not in latest]
+    if unknown or not ids:
+        print(f"unknown or unrecorded scenario ids: {sorted(unknown)}" if unknown else "no recorded snapshots found")
+        return 2
+    names = sanitize.flag_names()
+    all_valid = True
+    for i in ids:
+        res = snapshot.validate_snapshot(latest[i]["path"], known[i], names)
+        harness._write_index_row(Path(config.SNAPSHOTS), {"scenario": i, "path": latest[i]["path"], "valid": res["valid"],
+                                                          "leaks": res["leaks"], "revalidated": True})
+        print(f"{i}: valid={res['valid']} (was {latest[i].get('valid')})")
+        all_valid &= res["valid"]
+    return 0 if all_valid else 1
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
     try:
@@ -130,4 +153,6 @@ def _dispatch(args):
         return _record(args)
     elif args.cmd == "leak-check":
         return _leak_check(args)
+    elif args.cmd == "revalidate":
+        return _revalidate(args)
     return 0

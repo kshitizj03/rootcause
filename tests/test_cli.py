@@ -5,7 +5,7 @@ import subprocess
 import pytest
 
 from helpers import FLAGS
-from rootcause import cli, config, env, harness, inject, sanitize, scenarios
+from rootcause import cli, config, env, harness, inject, sanitize, scenarios, snapshot
 
 INFO = ["docker", "info", "--format", "{{.NCPU}}"]
 
@@ -244,3 +244,65 @@ def test_leak_check_all_clean_exit_0(snaps, monkeypatch, capsys):
     monkeypatch.setattr(sanitize, "scan_snapshot", lambda p, n: {})
     assert cli.main(["leak-check"]) == 0
     assert "leaks: none" in capsys.readouterr().out
+
+
+# --- revalidate ---
+
+def _index(snaps, *rows):
+    (snaps / "index.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+
+
+@pytest.fixture
+def reval(snaps, monkeypatch):
+    calls = []
+    verdict = {}
+    monkeypatch.setattr(scenarios, "load_all", lambda: FIXED)
+
+    def fake_validate(path, scenario, names):
+        calls.append((str(path), scenario.id, names))
+        return {"valid": verdict.get(scenario.id, True), "results": [{"passed": True}], "leaks": {}}
+    monkeypatch.setattr(snapshot, "validate_snapshot", fake_validate)
+    return calls, verdict
+
+
+def _rows(snaps):
+    return [json.loads(l) for l in (snaps / "index.jsonl").read_text(encoding="utf-8").splitlines()]
+
+
+def test_revalidate_latest_row_per_scenario_skips_pathless_and_appends(reval, snaps, capsys):
+    calls, _ = reval
+    old = [{"scenario": "s1", "path": "p/old", "valid": False},
+           {"scenario": "s1", "path": "p/new", "valid": False},
+           {"scenario": "s2", "path": "p/s2", "valid": True},
+           {"scenario": "s2", "valid": False, "error": "boom"},   # latest s2 row has no path: ignored
+           {"scenario": "gone", "path": "p/gone", "valid": True}]  # no longer a scenario: ignored
+    _index(snaps, *old)
+    assert cli.main(["revalidate"]) == 0
+    assert [(c[0], c[1]) for c in calls] == [("p/new", "s1"), ("p/s2", "s2")]
+    assert calls[0][2] == ["f"]
+    assert _rows(snaps)[:len(old)] == old  # earlier rows untouched
+    assert _rows(snaps)[len(old):] == [
+        {"scenario": "s1", "path": "p/new", "valid": True, "leaks": {}, "revalidated": True},
+        {"scenario": "s2", "path": "p/s2", "valid": True, "leaks": {}, "revalidated": True}]
+    assert capsys.readouterr().out.splitlines() == ["s1: valid=True (was False)", "s2: valid=True (was True)"]
+
+
+def test_revalidate_filters_by_ids_and_exit_1_when_any_invalid(reval, snaps):
+    calls, verdict = reval
+    _index(snaps, {"scenario": "s1", "path": "p1", "valid": True}, {"scenario": "s2", "path": "p2", "valid": True})
+    verdict["s2"] = False
+    assert cli.main(["revalidate", "s2"]) == 1
+    assert [c[1] for c in calls] == ["s2"]
+    assert len(_rows(snaps)) == 3 and _rows(snaps)[-1]["valid"] is False
+
+
+def test_revalidate_unknown_or_unrecorded_id_exit_2_and_nothing_written(reval, snaps):
+    calls, _ = reval
+    _index(snaps, {"scenario": "s1", "path": "p1", "valid": True})
+    assert cli.main(["revalidate", "nope"]) == 2
+    assert cli.main(["revalidate", "s1", "s3"]) == 2  # s3 is a scenario but was never recorded
+    assert calls == [] and len(_rows(snaps)) == 1
+
+
+def test_revalidate_without_index_exit_2(reval, snaps):
+    assert cli.main(["revalidate"]) == 2
