@@ -9,7 +9,7 @@ from rootcause import config
 PHRASES = [r"feature[\s_\-.]?flags?", r"flagd", r"openfeature", r"ofrep", r"flagservice", r"\[redacted\]",  # stubs left by older snapshots
            # demo services that announce the injected fault in their own telemetry; deliberately narrow so generic
            # "lock wait timeout" / "server overloaded" / "lock contention" wording from real systems stays.
-           r"problem ?pattern", r"overload simulation", r"lock contention (?:scenario|transaction)"]
+           r"\bproblempattern\b", r"overload simulation", r"\block contention (?:scenario|transaction)\b"]
 SNAPSHOT_TOOL_FILES = ("metrics.json", "spans.jsonl.gz", "logs.jsonl.gz")  # what agent tools can read
 
 
@@ -95,6 +95,11 @@ def sanitize_logs(logs, names):
     return [lg for lg in stripped if not _matches(lg, pat)]
 
 
+def sanitize_metrics(metrics):
+    """{signal: {service: points}} -> only series of services the agent may see (drops hidden and unknown keys)."""
+    return {sig: {k: v for k, v in by_service.items() if k in config.KNOWN_TARGETS} for sig, by_service in metrics.items()}
+
+
 def find_leaks(text, names):
     return sorted({m.group(0).lower() for m in leak_pattern(names).finditer(text)})
 
@@ -111,6 +116,9 @@ def scan_snapshot(path, names):
         else:
             text = p.read_text(encoding="utf-8")
         hits = find_leaks(text, names)
+        if name == "metrics.json":
+            keys = {k for by_service in json.loads(text).values() for k in by_service}
+            hits += [f"hidden service: {k}" for k in sorted(keys & config.HIDDEN_SERVICES)]
         if hits:
             found[name] = hits
     return found

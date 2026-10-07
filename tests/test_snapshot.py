@@ -246,3 +246,30 @@ def test_resanitize_drops_fault_announcing_ad_log(tmp_path):
     snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [ad("High CPU-Load problempattern enabled"), ad("served ad")])
     assert snapshot.resanitize(tmp_path, NAMES)["logs"] == (2, 1)
     assert [l["body"] for l in snapshot._read_jsonl_gz(tmp_path / "logs.jsonl.gz")] == ["served ad"]
+
+
+def test_resanitize_drops_load_generator_span_log_and_metrics_series_and_unknown_keys(tmp_path):
+    lg_log = {"ts": "t", "service": "load-generator", "severity": "INFO", "severity_number": 9,
+              "body": "User flooding homepage 10 times", "trace_id": ""}
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [flat_span(service="load-generator", name="user_flood_home", span_id="lg"),
+                                                           flat_span(span_id="ok")])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [lg_log])
+    series = [[1.0, 2.0]]
+    (tmp_path / "metrics.json").write_text(json.dumps(
+        {"rps": {"payment": series, "load-generator": series, "grafana": series}, "mem_mb": {"kafka": series}}))
+    counts = snapshot.resanitize(tmp_path, NAMES)
+    assert counts["spans"] == (2, 1) and counts["logs"] == (1, 0) and counts["metrics"] == (4, 2)
+    assert json.loads((tmp_path / "metrics.json").read_text()) == {"rps": {"payment": series}, "mem_mb": {"kafka": series}}
+    assert [s["span_id"] for s in snapshot._read_jsonl_gz(tmp_path / "spans.jsonl.gz")] == ["ok"]
+    assert sanitize.scan_snapshot(tmp_path, NAMES) == {}
+    before = (tmp_path / "metrics.json").read_bytes()
+    assert snapshot.resanitize(tmp_path, NAMES)["metrics"] == (2, 2) and (tmp_path / "metrics.json").read_bytes() == before
+
+
+def test_resanitize_dry_run_leaves_metrics_alone(tmp_path):
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [])
+    text = json.dumps({"rps": {"load-generator": [[1.0, 2.0]]}})
+    (tmp_path / "metrics.json").write_text(text)
+    assert snapshot.resanitize(tmp_path, NAMES, dry_run=True)["metrics"] == (1, 0)
+    assert (tmp_path / "metrics.json").read_text() == text

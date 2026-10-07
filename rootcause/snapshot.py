@@ -61,8 +61,10 @@ def resanitize(path, names, dry_run=False):
     """Re-apply the CURRENT sanitisers to a recorded snapshot's spans and logs (idempotent filters).
 
     Both files are read and filtered before anything is written, then swapped in via .tmp + os.replace,
-    so a failure before the swap leaves the originals untouched. metrics/meta/truth are never touched.
-    Returns {"spans": (before, after), "logs": (before, after), "dropped": {"spans": [...], "logs": [...]}};
+    so a failure before the swap leaves the originals untouched. metrics.json only loses series of hidden/unknown
+    services (kept series untouched, rewritten only if something was dropped); meta/truth are never touched.
+    Returns {"spans": (before, after), "logs": (before, after), "metrics": (series before, after),
+    "dropped": {"spans": [...], "logs": [...]}};
     "dropped" is only filled for dry_run."""
     path, counts, dropped, kept = Path(path), {}, {}, {}
     for name, clean in (("spans", sanitize.sanitize_spans), ("logs", sanitize.sanitize_logs)):
@@ -71,15 +73,24 @@ def resanitize(path, names, dry_run=False):
         counts[name] = (len(rows), len(kept[name]))
         # ponytail: per-row re-run to find what was dropped (rebuilds the pattern each row); dry-run only
         dropped[name] = [r for r in rows if not clean([r], names)] if dry_run else []
+    metrics = json.loads((path / "metrics.json").read_text(encoding="utf-8")) if (path / "metrics.json").exists() else {}
+    clean_metrics = sanitize.sanitize_metrics(metrics)
+    count = lambda m: sum(len(v) for v in m.values())
+    counts["metrics"] = (count(metrics), count(clean_metrics))
     if not dry_run:
         tmps = {n: path / f"{n}.jsonl.gz.tmp" for n in kept}
+        mtmp = path / "metrics.json.tmp"
         try:
             for n, tmp in tmps.items():
                 _write_jsonl_gz(tmp, kept[n])
+            if counts["metrics"][0] != counts["metrics"][1]:
+                mtmp.write_text(json.dumps(clean_metrics), encoding="utf-8")
             for n, tmp in tmps.items():
                 os.replace(tmp, path / f"{n}.jsonl.gz")
+            if mtmp.exists():
+                os.replace(mtmp, path / "metrics.json")
         finally:
-            for tmp in tmps.values():
+            for tmp in (*tmps.values(), mtmp):
                 tmp.unlink(missing_ok=True)
     return {**counts, "dropped": dropped}
 

@@ -140,10 +140,12 @@ OPENSEARCH = "http://localhost:9200"
 
 # Services whose telemetry the agent may see (traced apps).
 APP_SERVICES = ["accounting", "ad", "cart", "checkout", "currency", "email", "fraud-detection",
-                "frontend", "frontend-proxy", "frontend-web", "image-provider", "load-generator",
+                "frontend", "frontend-proxy", "frontend-web", "image-provider",
                 "payment", "product-catalog", "quote", "recommendation", "shipping"]
 # The flag service would reveal the injected fault: never shown.
-HIDDEN_SERVICES = {"flagd", "flagd-ui"}
+HIDDEN_SERVICES = {"flagd", "flagd-ui", "load-generator"}
+# Note (task 10f): load-generator moved here from APP_SERVICES: it is the demo's synthetic users (not observable in
+# production) and its flood task names (user_flood_home) reveal that a traffic surge is an artificial decoy.
 # Untraced dependencies that still have container metrics and can be a root cause.
 INFRA_CONTAINERS = ["kafka", "valkey-cart", "astronomy-db"]
 KNOWN_TARGETS = APP_SERVICES + INFRA_CONTAINERS

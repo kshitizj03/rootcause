@@ -255,3 +255,18 @@ def test_load_generator_logs_and_spans_are_dropped_as_a_hidden_service():
     spans = [flat_span(service="load-generator", name="user_flood_home", span_id="lg"),
              flat_span(service="frontend", name="GET /", span_id="fe")]
     assert [s["span_id"] for s in sanitize.sanitize_spans(spans, NAMES)] == ["fe"]
+
+
+def test_phrases_are_narrow_demo_tokens_not_generic_wording():
+    for ok in ("known problem patterns in this service", "lock contention transactions rolled back"):
+        assert sanitize.find_leaks(ok, NAMES) == [], ok
+        assert sanitize.sanitize_logs([_log("cart", ok)], NAMES) != []
+
+
+def test_scan_snapshot_flags_hidden_service_series_in_metrics(tmp_path):
+    (tmp_path / "metrics.json").write_text(json.dumps(
+        {"rps": {"payment": [[1, 2]], "load-generator": [[1, 9]]}}))
+    for n in ("logs.jsonl.gz", "spans.jsonl.gz"):
+        with gzip.open(tmp_path / n, "wt", encoding="utf-8") as f:
+            f.write(json.dumps({"name": "clean"}) + "\n")
+    assert sanitize.scan_snapshot(tmp_path, NAMES) == {"metrics.json": ["hidden service: load-generator"]}
