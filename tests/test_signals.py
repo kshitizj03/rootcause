@@ -58,6 +58,7 @@ def test_fetch_series_filters_hidden_unknown_and_nan():
     def prom_range(query, start, end, step):
         return [{"metric": {"service_name": "payment", "container_name": "payment"}, "values": [[1, "0.5"], [2, "NaN"]]},
                 {"metric": {"service_name": "flagd", "container_name": "flagd"}, "values": [[1, "1"]]},
+                {"metric": {"service_name": "load-generator", "container_name": "load-generator"}, "values": [[1, "1"]]},
                 {"metric": {"service_name": "grafana", "container_name": "grafana"}, "values": [[1, "1"]]}]
     out = signals.fetch_series(prom_range, 0, 10, 5)
     assert set(out) == set(signals.SIGNALS)

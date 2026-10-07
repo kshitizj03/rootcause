@@ -220,3 +220,38 @@ def test_rewrite_is_case_sensitive_and_real_flag_names_still_drop_the_span():
     spans = [_pc_span("lower", "error: product catalog fail feature flag enabled", ""),
              _pc_span("kafka", "kafkaQueueProblems on", "")]
     assert sanitize.sanitize_spans(spans, NAMES) == []
+
+
+def _log(service, body):
+    return {"ts": "t", "service": service, "severity": "INFO", "severity_number": 9, "body": body, "trace_id": ""}
+
+
+FAULT_ANNOUNCEMENTS = [
+    ("ad", "High CPU-Load problempattern enabled"),
+    ("ad", "at oteldemo.problempattern.CpuLoad.run(CpuLoad.java:42)"),
+    ("checkout", "Done with #12 messages for overload simulation."),
+    ("product-catalog", "lock contention scenario active: holding ACCESS EXCLUSIVE lock on catalog.products"),
+    ("product-catalog", "failed to commit lock contention transaction"),
+]
+
+
+def test_fault_announcing_phrases_are_dropped_and_flagged():
+    logs = [_log(s, b) for s, b in FAULT_ANNOUNCEMENTS]
+    assert sanitize.sanitize_logs(logs, NAMES) == []
+    for _, body in FAULT_ANNOUNCEMENTS:
+        assert sanitize.find_leaks(body, NAMES), body
+
+
+def test_generic_overload_and_lock_wording_is_not_a_leak():
+    ok = ["server overloaded, shedding load", "ERROR 1205: lock wait timeout exceeded",
+          "high lock contention on table orders", "pool overload detected"]
+    logs = [_log("cart", b) for b in ok]
+    assert sanitize.sanitize_logs(logs, NAMES) == logs
+    assert all(sanitize.find_leaks(b, NAMES) == [] for b in ok)
+
+
+def test_load_generator_logs_and_spans_are_dropped_as_a_hidden_service():
+    assert sanitize.sanitize_logs([_log("load-generator", "User flooding homepage 10 times")], NAMES) == []
+    spans = [flat_span(service="load-generator", name="user_flood_home", span_id="lg"),
+             flat_span(service="frontend", name="GET /", span_id="fe")]
+    assert [s["span_id"] for s in sanitize.sanitize_spans(spans, NAMES)] == ["fe"]

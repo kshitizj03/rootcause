@@ -145,8 +145,10 @@ def test_hidden_services_never_queried(tmp_path):
     # Verify flagd and flagd-ui never appear in queries
     assert "flagd" not in calls["jaeger_raw"]
     assert "flagd-ui" not in calls["jaeger_raw"]
+    assert "load-generator" not in calls["jaeger_raw"]
     for query in calls["os_logs"]:
         assert "flagd" not in query and "flagd-ui" not in query
+        assert "load-generator" not in query
 
 
 def test_capture_fetches_pre_fault_and_fault_windows_per_service(tmp_path):
@@ -236,3 +238,11 @@ def test_resanitize_keeps_and_rewrites_legacy_product_catalog_spans(tmp_path):
     assert snapshot.resanitize(tmp_path, NAMES)["spans"] == (1, 1)
     (kept,) = snapshot._read_jsonl_gz(tmp_path / "spans.jsonl.gz")
     assert kept["span_id"] == "pc" and kept["message"] == "Error: Product Catalog Fail"
+
+
+def test_resanitize_drops_fault_announcing_ad_log(tmp_path):
+    ad = lambda body: {"ts": "t", "service": "ad", "severity": "INFO", "severity_number": 9, "body": body, "trace_id": ""}
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [flat_span(span_id="a")])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [ad("High CPU-Load problempattern enabled"), ad("served ad")])
+    assert snapshot.resanitize(tmp_path, NAMES)["logs"] == (2, 1)
+    assert [l["body"] for l in snapshot._read_jsonl_gz(tmp_path / "logs.jsonl.gz")] == ["served ad"]

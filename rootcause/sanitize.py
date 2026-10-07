@@ -6,7 +6,10 @@ from pathlib import Path
 
 from rootcause import config
 
-PHRASES = [r"feature[\s_\-.]?flags?", r"flagd", r"openfeature", r"ofrep", r"flagservice", r"\[redacted\]"]  # last: stubs left by older snapshots
+PHRASES = [r"feature[\s_\-.]?flags?", r"flagd", r"openfeature", r"ofrep", r"flagservice", r"\[redacted\]",  # stubs left by older snapshots
+           # demo services that announce the injected fault in their own telemetry; deliberately narrow so generic
+           # "lock wait timeout" / "server overloaded" / "lock contention" wording from real systems stays.
+           r"problem ?pattern", r"overload simulation", r"lock contention (?:scenario|transaction)"]
 SNAPSHOT_TOOL_FILES = ("metrics.json", "spans.jsonl.gz", "logs.jsonl.gz")  # what agent tools can read
 
 

@@ -8,6 +8,7 @@ def test_known_targets_cover_apps_and_infra_without_hidden():
     assert set(config.APP_SERVICES) <= set(config.KNOWN_TARGETS)
     assert set(config.INFRA_CONTAINERS) <= set(config.KNOWN_TARGETS)
     assert not config.HIDDEN_SERVICES & set(config.KNOWN_TARGETS)
+    assert "load-generator" in config.HIDDEN_SERVICES and "load-generator" not in config.APP_SERVICES
 
 
 def test_cooldown_covers_baseline():
