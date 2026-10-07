@@ -1,6 +1,0 @@
-category: easy
-alert: "Some customers see errors when their basket is cleared after placing an order."
-inject: {flags: {cartFailure: "50%"}}
-truth: {causes: [{accept: [cart], fault_type: errors}]}
-checks:
-  - {service: cart, signal: error_ratio, at_least: 0.02}

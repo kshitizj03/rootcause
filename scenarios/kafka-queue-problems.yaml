@@ -3,4 +3,5 @@ alert: "Order processing downstream of purchases is falling behind."
 inject: {flags: {kafkaQueueProblems: "on"}}
 truth: {causes: [{accept: [kafka, checkout, fraud-detection], fault_type: latency}]}
 checks:
-  - {service: fraud-detection, signal: p95_ms, ratio_at_least: 2}
+  # fraud-detection's normal p95 has periodic 15 s consumer spikes, so latency is a noisy check; the flood of queued messages shows as consumer throughput
+  - {service: fraud-detection, signal: rps, ratio_at_least: 3}

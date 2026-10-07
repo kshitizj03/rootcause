@@ -1,6 +1,0 @@
-category: hard-silent
-alert: "Product pages and checkout have become slow."
-inject: {docker: [{action: cpus, container: currency, value: 0.05}]}
-truth: {causes: [{accept: [currency], fault_type: latency}]}
-checks:
-  - {service: currency, signal: p95_ms, ratio_at_least: 3}

@@ -112,7 +112,7 @@ def test_category_counts():
     for s in loaded:
         by_cat.setdefault(s.category, []).append(s.id)
 
-    expected = {"easy": 4, "hard-cross-service": 3, "hard-silent": 6, "hard-noisy": 2, "hard-two-faults": 2, "control": 4}
+    expected = {"easy": 3, "hard-cross-service": 3, "hard-silent": 6, "hard-noisy": 2, "hard-two-faults": 2, "control": 4}
     for cat, count in expected.items():
         assert len(by_cat.get(cat, [])) == count, f"Category {cat}: expected {count}, got {len(by_cat.get(cat, []))}"
 

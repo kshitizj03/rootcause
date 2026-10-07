@@ -1,0 +1,11 @@
+category: hard-two-faults
+alert: "Pages feel slow and some product pictures take ages to appear."
+# replaces cart-failure-and-ad-high-cpu: cartFailure only breaks emptying the basket (~once per order), invisible in cart's metrics
+inject: {flags: {imageSlowLoad: "5sec", adHighCpu: "on"}}
+truth:
+  causes:
+    - {accept: [frontend-proxy, image-provider], fault_type: latency}
+    - {accept: [ad], fault_type: resource}
+checks:
+  - {service: frontend-proxy, signal: p95_ms, ratio_at_least: 1.5}
+  - {service: ad, signal: cpu_cores, ratio_at_least: 2}

@@ -4,4 +4,5 @@ inject: {flags: {paymentFailure: "50%", loadGeneratorFloodHomepage: "on"}}
 truth: {causes: [{accept: [payment], fault_type: errors}]}
 checks:
   - {service: payment, signal: error_ratio, at_least: 0.2}
-  - {service: frontend, signal: rps, ratio_at_least: 1.5}
+  # the decoy flood ramps up over several minutes, so its mean understates it; check its peak
+  - {service: frontend, signal: rps, stat: max, ratio_at_least: 1.5}
