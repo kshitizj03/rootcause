@@ -29,13 +29,23 @@ def leak_pattern(names):
     return re.compile("|".join(sep_names + PHRASES), re.IGNORECASE)
 
 
-def _redact(obj, pat):
+# Benign strings that would otherwise trip the leak pattern; rewritten (not dropped) before the key-strip and drop test.
+NEUTRAL_REWRITES = [
+    # vendor src/product-catalog/main.go:397 (demo self-reports the flag; a real service says a plain error). Exact demo string,
+    # so case-sensitive; "[redacted]" is the stub older snapshots hold.
+    (re.compile(r"Product Catalog Fail (?:Feature Flag|\[redacted\]) Enabled"), "Product Catalog Fail"),
+]
+
+
+def _rewrite(obj):
     if isinstance(obj, str):
-        return pat.sub("[redacted]", obj)
+        for rx, repl in NEUTRAL_REWRITES:
+            obj = rx.sub(repl, obj)
+        return obj
     if isinstance(obj, list):
-        return [_redact(v, pat) for v in obj]
+        return [_rewrite(v) for v in obj]
     if isinstance(obj, dict):
-        return {_redact(k, pat): _redact(v, pat) for k, v in obj.items()}
+        return {_rewrite(k): _rewrite(v) for k, v in obj.items()}
     return obj
 
 
@@ -64,22 +74,22 @@ def sanitize_spans(spans, names):
     for sp in spans:
         if sp["service"].lower() in config.HIDDEN_SERVICES:
             continue
+        sp = _rewrite(sp)
         attrs = {k: v for k, v in sp["attributes"].items() if not k.startswith("feature_flag")}
         events = [e for e in sp["events"] if not e["name"].startswith("feature_flag")]
         sp = _strip_keys(dict(sp, attributes=attrs, events=events), pat)
         # ponytail: drops whole spans whose remaining content matches; their children lose a parent, fine for diagnosis
         if _matches(sp, pat):
             continue
-        kept.append(_redact(sp, pat))
+        kept.append(sp)
     return kept
 
 
 def sanitize_logs(logs, names):
     pat = leak_pattern(names)
     # drop (not redact) matching records: a "[redacted]" stub still hints that a flag was named.
-    # _redact stays as a backstop; it is a no-op on anything that survives the drop.
-    stripped = (_strip_keys(lg, pat) for lg in logs if lg["service"].lower() not in config.HIDDEN_SERVICES)
-    return [_redact(lg, pat) for lg in stripped if not _matches(lg, pat)]
+    stripped = (_strip_keys(_rewrite(lg), pat) for lg in logs if lg["service"].lower() not in config.HIDDEN_SERVICES)
+    return [lg for lg in stripped if not _matches(lg, pat)]
 
 
 def find_leaks(text, names):

@@ -227,3 +227,12 @@ def test_resanitize_keeps_legacy_flag_key_spans_and_strips_the_key(tmp_path):
     assert counts["spans"] == (2, 1)
     (kept,) = snapshot._read_jsonl_gz(tmp_path / "spans.jsonl.gz")
     assert kept["span_id"] == "legacy" and kept["attributes"] == {"demo.product.count": 10}
+
+
+def test_resanitize_keeps_and_rewrites_legacy_product_catalog_spans(tmp_path):
+    legacy = flat_span(service="frontend", span_id="pc", error=True, message="Error: Product Catalog Fail [redacted] Enabled")
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [legacy])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [])
+    assert snapshot.resanitize(tmp_path, NAMES)["spans"] == (1, 1)
+    (kept,) = snapshot._read_jsonl_gz(tmp_path / "spans.jsonl.gz")
+    assert kept["span_id"] == "pc" and kept["message"] == "Error: Product Catalog Fail"

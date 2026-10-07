@@ -186,3 +186,37 @@ def test_flag_named_log_keys_are_removed_and_the_log_kept_unless_content_matches
     logs = [{"service": "x", "body": "ok", "attributes": {"demo.feature_flag.a": True, "n": {"flagd": 1, "m": 2}}},
             {"service": "x", "body": "adHighCpu", "attributes": {"demo.feature_flag.a": True}}]
     assert sanitize.sanitize_logs(logs, NAMES) == [{"service": "x", "body": "ok", "attributes": {"n": {"m": 2}}}]
+
+
+# --- neutral rewrites: the demo's self-reporting product-catalog error is kept, as a plain error ---
+
+PC_NEW = "Error: Product Catalog Fail Feature Flag Enabled"
+PC_LEGACY = "Error: Product Catalog Fail [redacted] Enabled"
+
+
+def _pc_span(span_id, message, exc):
+    return flat_span(service="frontend", span_id=span_id, error=True, message=message,
+                     attrs={"exception.message": exc})
+
+
+def test_product_catalog_failure_spans_are_kept_and_rewritten_to_a_plain_error():
+    spans = [_pc_span("new", PC_NEW, "13 INTERNAL: " + PC_NEW),
+             _pc_span("legacy", PC_LEGACY, "13 INTERNAL: " + PC_LEGACY)]
+    out = sanitize.sanitize_spans(spans, NAMES)
+    assert [s["span_id"] for s in out] == ["new", "legacy"]
+    for s in out:
+        assert s["message"] == "Error: Product Catalog Fail"
+        assert s["attributes"] == {"exception.message": "13 INTERNAL: Error: Product Catalog Fail"}
+    assert sanitize.find_leaks(json.dumps(out), NAMES) == []
+
+
+def test_product_catalog_failure_logs_and_event_keys_are_rewritten_too():
+    logs = [{"service": "checkout", "body": "failed: " + PC_NEW, "attributes": {PC_LEGACY: 1}}]
+    assert sanitize.sanitize_logs(logs, NAMES) == [
+        {"service": "checkout", "body": "failed: Error: Product Catalog Fail", "attributes": {"Error: Product Catalog Fail": 1}}]
+
+
+def test_rewrite_is_case_sensitive_and_real_flag_names_still_drop_the_span():
+    spans = [_pc_span("lower", "error: product catalog fail feature flag enabled", ""),
+             _pc_span("kafka", "kafkaQueueProblems on", "")]
+    assert sanitize.sanitize_spans(spans, NAMES) == []
