@@ -29,14 +29,13 @@ def test_spans_lose_flag_events_attributes_hidden_services_and_flagd_calls():
     assert sanitize.find_leaks(json.dumps(out), NAMES) == []
 
 
-def test_logs_are_redacted_and_hidden_services_dropped():
+def test_logs_naming_a_flag_are_dropped_and_hidden_services_dropped():
     logs = [{"ts": "t", "service": "checkout", "severity": "INFO", "severity_number": 9,
              "body": "Warning: FeatureFlag 'kafkaQueueProblems' is activated, overloading queue now.", "trace_id": ""},
             {"ts": "t", "service": "flagd", "severity": "INFO", "severity_number": 9, "body": "reload", "trace_id": ""},
             {"ts": "t", "service": "payment", "severity": "ERROR", "severity_number": 17, "body": "Invalid token", "trace_id": "x"}]
     out = sanitize.sanitize_logs(logs, NAMES)
-    assert [l["service"] for l in out] == ["checkout", "payment"]
-    assert "overloading queue now" in out[0]["body"] and "[redacted]" in out[0]["body"]
+    assert [l["service"] for l in out] == ["payment"]
     assert sanitize.find_leaks(json.dumps(out), NAMES) == []
 
 
@@ -52,6 +51,23 @@ def test_scan_snapshot_reads_plain_and_gz_files(tmp_path):
     with gzip.open(tmp_path / "spans.jsonl.gz", "wt", encoding="utf-8") as f:
         f.write(json.dumps({"name": "clean"}) + "\n")
     assert sanitize.scan_snapshot(tmp_path, NAMES) == {"logs.jsonl.gz": ["adhighcpu"]}
+
+
+def test_flagservice_spans_logs_and_leaks_are_caught():
+    spans = [flat_span(service="frontend-proxy", span_id="gone", name="router flagservice egress"),
+             flat_span(service="frontend-proxy", span_id="stays", name="ingress")]
+    assert [s["span_id"] for s in sanitize.sanitize_spans(spans, NAMES)] == ["stays"]
+    logs = [{"ts": "t", "service": "frontend-proxy", "severity": "INFO", "severity_number": 9, "trace_id": "",
+             "body": "POST /flagservice/x.evaluation.v1.Service/ResolveAll HTTP/1.1 200"},
+            {"ts": "t", "service": "frontend-proxy", "severity": "INFO", "severity_number": 9, "trace_id": "",
+             "body": "GET /api/cart HTTP/1.1 200"}]
+    assert [l["body"] for l in sanitize.sanitize_logs(logs, NAMES)] == ["GET /api/cart HTTP/1.1 200"]
+    assert sanitize.find_leaks("POST /flagservice/x", NAMES) == ["flagservice"]
+
+
+def test_log_dropped_when_any_string_field_matches():
+    logs = [{"service": "x", "body": "ok", "attributes": {"k": ["adHighCpu"]}}, {"service": "x", "body": "ok"}]
+    assert sanitize.sanitize_logs(logs, NAMES) == [{"service": "x", "body": "ok"}]
 
 
 def test_redact_handles_unicode_escapes_without_breakage():

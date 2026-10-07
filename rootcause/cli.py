@@ -21,6 +21,8 @@ def build_parser():
     leak.add_argument("paths", nargs="*")
     reval = sub.add_parser("revalidate", help="re-score recorded snapshots against the current scenario checks")
     reval.add_argument("ids", nargs="*")
+    resan = sub.add_parser("resanitize", help="re-apply the current sanitisers to recorded snapshots, then revalidate")
+    resan.add_argument("ids", nargs="*")
     return p
 
 
@@ -101,7 +103,7 @@ def _leak_check(args):
     return 1 if found else 0
 
 
-def _revalidate(args):
+def _revalidate(args, resanitize=False):
     index = Path(config.SNAPSHOTS) / "index.jsonl"
     rows = [json.loads(l) for l in index.read_text(encoding="utf-8").splitlines() if l.strip()] if index.exists() else []
     latest = {r["scenario"]: r for r in rows if r.get("path")}  # later rows overwrite earlier ones
@@ -114,10 +116,15 @@ def _revalidate(args):
     names = sanitize.flag_names()
     all_valid = True
     for i in ids:
+        counts = snapshot.resanitize(latest[i]["path"], names) if resanitize else None
         res = snapshot.validate_snapshot(latest[i]["path"], known[i], names)
         harness._write_index_row(Path(config.SNAPSHOTS), {"scenario": i, "path": latest[i]["path"], "valid": res["valid"],
                                                           "leaks": res["leaks"], "revalidated": True})
-        print(f"{i}: valid={res['valid']} (was {latest[i].get('valid')})")
+        if counts:
+            print(f"{i}: spans {counts['spans'][0]}->{counts['spans'][1]}, logs {counts['logs'][0]}->{counts['logs'][1]}, "
+                  f"valid={res['valid']}")
+        else:
+            print(f"{i}: valid={res['valid']} (was {latest[i].get('valid')})")
         all_valid &= res["valid"]
     return 0 if all_valid else 1
 
@@ -156,4 +163,6 @@ def _dispatch(args):
         return _leak_check(args)
     elif args.cmd == "revalidate":
         return _revalidate(args)
+    elif args.cmd == "resanitize":
+        return _revalidate(args, resanitize=True)
     return 0

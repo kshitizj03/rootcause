@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from helpers import FLAGS
+from helpers import FLAGS, flat_span
 from rootcause import cli, config, env, harness, inject, sanitize, scenarios, snapshot
 
 INFO = ["docker", "info", "--format", "{{.NCPU}}"]
@@ -307,3 +307,54 @@ def test_revalidate_unknown_or_unrecorded_id_exit_2_and_nothing_written(reval, s
 
 def test_revalidate_without_index_exit_2(reval, snaps):
     assert cli.main(["revalidate"]) == 2
+
+
+# --- resanitize ---
+
+def _leaky_snapshot(snaps):
+    path = snaps / "incident__x"
+    path.mkdir()
+    (path / "meta.json").write_text(json.dumps({"alert": "a", "baseline_start": 0, "fault_start": 10, "end": 20, "demo_commit": ""}))
+    (path / "truth.json").write_text(json.dumps({"scenario_id": "s1"}))
+    (path / "metrics.json").write_text(json.dumps({}))
+    snapshot._write_jsonl_gz(path / "spans.jsonl.gz", [
+        flat_span(span_id="a", service="frontend-proxy", name="router flagservice egress"), flat_span(span_id="b")])
+    snapshot._write_jsonl_gz(path / "logs.jsonl.gz", [
+        {"service": "frontend-proxy", "body": "POST /[redacted].v1.Service/ResolveAll via /flagservice/"},
+        {"service": "payment", "body": "Payment failure: card declined"}, {"service": "cart", "body": "ok"}])
+    _index(snaps, {"scenario": "s1", "path": str(path), "valid": True})
+    return path
+
+
+def _snap_bytes(path):
+    return {n: (path / n).read_bytes() for n in ("metrics.json", "meta.json", "truth.json")}
+
+
+def test_resanitize_filters_files_leaves_others_alone_is_idempotent_and_appends_row(snaps, monkeypatch, capsys):
+    monkeypatch.setattr(scenarios, "load_all", lambda: FIXED)
+    real_names = json.loads(FLAGS.read_text(encoding="utf-8"))["flags"].keys()
+    monkeypatch.setattr(sanitize, "flag_names", lambda: sorted(real_names))
+    path = _leaky_snapshot(snaps)
+    untouched = _snap_bytes(path)
+
+    assert cli.main(["resanitize"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["s1: spans 2->1, logs 3->2, valid=True"]
+    snap = snapshot.load(path)
+    assert [s["span_id"] for s in snap["spans"]] == ["b"]
+    assert [l["service"] for l in snap["logs"]] == ["payment", "cart"]
+    assert _snap_bytes(path) == untouched
+    assert _rows(snaps)[1:] == [{"scenario": "s1", "path": str(path), "valid": True, "leaks": {}, "revalidated": True}]
+
+    before = snapshot.load(path)
+    assert cli.main(["resanitize", "s1"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["s1: spans 1->1, logs 2->2, valid=True"]
+    assert snapshot.load(path) == before  # gz bytes differ (mtime header); content must not
+    assert _snap_bytes(path) == untouched and len(_rows(snaps)) == 3
+
+
+def test_resanitize_unknown_id_exit_2_and_nothing_touched(snaps, monkeypatch):
+    monkeypatch.setattr(scenarios, "load_all", lambda: FIXED)
+    path = _leaky_snapshot(snaps)
+    before = (path / "spans.jsonl.gz").read_bytes()
+    assert cli.main(["resanitize", "nope"]) == 2
+    assert (path / "spans.jsonl.gz").read_bytes() == before and len(_rows(snaps)) == 1

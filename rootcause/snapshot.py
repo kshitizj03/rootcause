@@ -56,6 +56,20 @@ def capture(scenario, t_inject, t_end, names, fetch=backends, out_dir=config.SNA
     return {"scenario": scenario.id, "path": str(path), **result}
 
 
+def resanitize(path, names):
+    """Re-apply the CURRENT sanitisers to a recorded snapshot's spans and logs (idempotent filters).
+
+    Returns {"spans": (before, after), "logs": (before, after)}; metrics/meta/truth are never touched."""
+    path, counts = Path(path), {}
+    for name, clean in (("spans", sanitize.sanitize_spans), ("logs", sanitize.sanitize_logs)):
+        file = path / f"{name}.jsonl.gz"
+        rows = _read_jsonl_gz(file)
+        kept = clean(rows, names)
+        _write_jsonl_gz(file, kept)
+        counts[name] = (len(rows), len(kept))
+    return counts
+
+
 def validate_snapshot(path, scenario, names):
     """Score a recorded snapshot against the scenario's CURRENT checks; rewrites validation.json."""
     path = Path(path)

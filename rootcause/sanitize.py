@@ -6,7 +6,7 @@ from pathlib import Path
 
 from rootcause import config
 
-PHRASES = [r"feature[\s_\-.]?flags?", r"flagd", r"openfeature", r"ofrep"]
+PHRASES = [r"feature[\s_\-.]?flags?", r"flagd", r"openfeature", r"ofrep", r"flagservice"]
 SNAPSHOT_TOOL_FILES = ("metrics.json", "spans.jsonl.gz", "logs.jsonl.gz")  # what agent tools can read
 
 
@@ -39,6 +39,16 @@ def _redact(obj, pat):
     return obj
 
 
+def _matches(obj, pat):
+    if isinstance(obj, str):
+        return bool(pat.search(obj))
+    if isinstance(obj, list):
+        return any(_matches(v, pat) for v in obj)
+    if isinstance(obj, dict):
+        return any(_matches(k, pat) or _matches(v, pat) for k, v in obj.items())
+    return False
+
+
 def sanitize_spans(spans, names):
     pat = leak_pattern(names)
     kept = []
@@ -58,7 +68,10 @@ def sanitize_spans(spans, names):
 
 def sanitize_logs(logs, names):
     pat = leak_pattern(names)
-    return [_redact(lg, pat) for lg in logs if lg["service"].lower() not in config.HIDDEN_SERVICES]
+    # drop (not redact) matching records: a "[redacted]" stub still hints that a flag was named.
+    # _redact stays as a backstop; it is a no-op on anything that survives the drop.
+    return [_redact(lg, pat) for lg in logs
+            if lg["service"].lower() not in config.HIDDEN_SERVICES and not _matches(lg, pat)]
 
 
 def find_leaks(text, names):

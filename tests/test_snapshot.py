@@ -66,7 +66,7 @@ def test_capture_writes_sanitised_valid_snapshot(tmp_path):
     assert "truth" not in snap
     assert [s["span_id"] for s in snap["spans"]] == ["a"]
     assert snap["spans"][0]["events"] == []
-    assert any("[redacted]" in l["body"] for l in snap["logs"])
+    assert {l["body"] for l in snap["logs"]} == {"Payment request failed. Invalid token."}  # flag log dropped
 
     # Verify scenario_id and category ARE in truth.json
     truth = snapshot.load_truth(path)
