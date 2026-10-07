@@ -1,6 +1,7 @@
 """Capture an incident's telemetry into a self-contained, sanitised snapshot directory; load it back."""
 import gzip
 import json
+import os
 import time
 from pathlib import Path
 
@@ -56,18 +57,31 @@ def capture(scenario, t_inject, t_end, names, fetch=backends, out_dir=config.SNA
     return {"scenario": scenario.id, "path": str(path), **result}
 
 
-def resanitize(path, names):
+def resanitize(path, names, dry_run=False):
     """Re-apply the CURRENT sanitisers to a recorded snapshot's spans and logs (idempotent filters).
 
-    Returns {"spans": (before, after), "logs": (before, after)}; metrics/meta/truth are never touched."""
-    path, counts = Path(path), {}
+    Both files are read and filtered before anything is written, then swapped in via .tmp + os.replace,
+    so a failure before the swap leaves the originals untouched. metrics/meta/truth are never touched.
+    Returns {"spans": (before, after), "logs": (before, after), "dropped": {"spans": [...], "logs": [...]}};
+    "dropped" is only filled for dry_run."""
+    path, counts, dropped, kept = Path(path), {}, {}, {}
     for name, clean in (("spans", sanitize.sanitize_spans), ("logs", sanitize.sanitize_logs)):
-        file = path / f"{name}.jsonl.gz"
-        rows = _read_jsonl_gz(file)
-        kept = clean(rows, names)
-        _write_jsonl_gz(file, kept)
-        counts[name] = (len(rows), len(kept))
-    return counts
+        rows = _read_jsonl_gz(path / f"{name}.jsonl.gz")
+        kept[name] = clean(rows, names)
+        counts[name] = (len(rows), len(kept[name]))
+        # ponytail: per-row re-run to find what was dropped (rebuilds the pattern each row); dry-run only
+        dropped[name] = [r for r in rows if not clean([r], names)] if dry_run else []
+    if not dry_run:
+        tmps = {n: path / f"{n}.jsonl.gz.tmp" for n in kept}
+        try:
+            for n, tmp in tmps.items():
+                _write_jsonl_gz(tmp, kept[n])
+            for n, tmp in tmps.items():
+                os.replace(tmp, path / f"{n}.jsonl.gz")
+        finally:
+            for tmp in tmps.values():
+                tmp.unlink(missing_ok=True)
+    return {**counts, "dropped": dropped}
 
 
 def validate_snapshot(path, scenario, names):

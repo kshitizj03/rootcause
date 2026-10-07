@@ -78,18 +78,22 @@ def test_redact_handles_unicode_escapes_without_breakage():
     assert json.dumps(out)
 
 
-def test_redact_span_content_name_message_and_event_attributes():
-    spans = [
-        flat_span(service="payment", span_id="s1",
-                  message="adHighCpu occurred",
-                  events=[{"name": "log", "attributes": {"msg": "adHighCpu triggered"}}])
-    ]
+def test_spans_with_a_match_anywhere_are_dropped_not_redacted():
+    spans = [flat_span(span_id="msg", message="adHighCpu occurred"),
+             flat_span(span_id="evt", events=[{"name": "log", "attributes": {"msg": "adHighCpu triggered"}}]),
+             flat_span(span_id="key", attrs={"adHighCpu": "x"}),
+             flat_span(span_id="legacy", message="x [redacted] y"),
+             flat_span(span_id="ok", message="Invalid token")]
     out = sanitize.sanitize_spans(spans, NAMES)
-    assert len(out) == 1
-    kept = out[0]
-    assert "adHighCpu" not in kept["message"]
-    assert "adHighCpu" not in kept["events"][0]["attributes"]["msg"]
+    assert [s["span_id"] for s in out] == ["ok"]
     assert sanitize.find_leaks(json.dumps(out), NAMES) == []
+
+
+def test_legacy_redaction_stubs_are_dropped_and_flagged():
+    logs = [{"service": "checkout", "body": "Warning: [redacted] '[redacted]' is activated, overloading queue now."},
+            {"service": "checkout", "body": "ok"}]
+    assert sanitize.sanitize_logs(logs, NAMES) == [{"service": "checkout", "body": "ok"}]
+    assert sanitize.find_leaks("x [redacted] y", NAMES) == ["[redacted]"]
 
 
 def test_scan_snapshot_raises_filenotfound_for_missing_files(tmp_path):

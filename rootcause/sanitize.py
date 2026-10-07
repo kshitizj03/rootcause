@@ -6,7 +6,7 @@ from pathlib import Path
 
 from rootcause import config
 
-PHRASES = [r"feature[\s_\-.]?flags?", r"flagd", r"openfeature", r"ofrep", r"flagservice"]
+PHRASES = [r"feature[\s_\-.]?flags?", r"flagd", r"openfeature", r"ofrep", r"flagservice", r"\[redacted\]"]  # last: stubs left by older snapshots
 SNAPSHOT_TOOL_FILES = ("metrics.json", "spans.jsonl.gz", "logs.jsonl.gz")  # what agent tools can read
 
 
@@ -55,14 +55,13 @@ def sanitize_spans(spans, names):
     for sp in spans:
         if sp["service"].lower() in config.HIDDEN_SERVICES:
             continue
-        if pat.search(sp["name"]):
-            continue
         attrs = {k: v for k, v in sp["attributes"].items() if not k.startswith("feature_flag")}
-        # ponytail: drops whole spans that call the flag service; their children lose a parent, fine for diagnosis
-        if any(pat.search(str(v)) for v in attrs.values()):
-            continue
         events = [e for e in sp["events"] if not e["name"].startswith("feature_flag")]
-        kept.append(_redact(dict(sp, attributes=attrs, events=events), pat))
+        sp = dict(sp, attributes=attrs, events=events)
+        # ponytail: drops whole spans that match anywhere; their children lose a parent, fine for diagnosis
+        if _matches(sp, pat):
+            continue
+        kept.append(_redact(sp, pat))
     return kept
 
 

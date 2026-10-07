@@ -311,8 +311,8 @@ def test_revalidate_without_index_exit_2(reval, snaps):
 
 # --- resanitize ---
 
-def _leaky_snapshot(snaps):
-    path = snaps / "incident__x"
+def _leaky_snapshot(snaps, name="incident__x"):
+    path = snaps / name
     path.mkdir()
     (path / "meta.json").write_text(json.dumps({"alert": "a", "baseline_start": 0, "fault_start": 10, "end": 20, "demo_commit": ""}))
     (path / "truth.json").write_text(json.dumps({"scenario_id": "s1"}))
@@ -321,8 +321,8 @@ def _leaky_snapshot(snaps):
         flat_span(span_id="a", service="frontend-proxy", name="router flagservice egress"), flat_span(span_id="b")])
     snapshot._write_jsonl_gz(path / "logs.jsonl.gz", [
         {"service": "frontend-proxy", "body": "POST /[redacted].v1.Service/ResolveAll via /flagservice/"},
+        {"service": "checkout", "body": "Warning: [redacted] '[redacted]' is activated, overloading queue now."},
         {"service": "payment", "body": "Payment failure: card declined"}, {"service": "cart", "body": "ok"}])
-    _index(snaps, {"scenario": "s1", "path": str(path), "valid": True})
     return path
 
 
@@ -330,20 +330,26 @@ def _snap_bytes(path):
     return {n: (path / n).read_bytes() for n in ("metrics.json", "meta.json", "truth.json")}
 
 
-def test_resanitize_filters_files_leaves_others_alone_is_idempotent_and_appends_row(snaps, monkeypatch, capsys):
+@pytest.fixture
+def resan(snaps, monkeypatch):
     monkeypatch.setattr(scenarios, "load_all", lambda: FIXED)
-    real_names = json.loads(FLAGS.read_text(encoding="utf-8"))["flags"].keys()
-    monkeypatch.setattr(sanitize, "flag_names", lambda: sorted(real_names))
+    names = sorted(json.loads(FLAGS.read_text(encoding="utf-8"))["flags"])
+    monkeypatch.setattr(sanitize, "flag_names", lambda: names)
     path = _leaky_snapshot(snaps)
-    untouched = _snap_bytes(path)
+    _index(snaps, {"scenario": "s1", "path": str(path), "valid": True})
+    return path
+
+
+def test_resanitize_filters_files_leaves_others_alone_is_idempotent_and_appends_row(resan, snaps, capsys):
+    path, untouched = resan, _snap_bytes(resan)
 
     assert cli.main(["resanitize"]) == 0
-    assert capsys.readouterr().out.splitlines() == ["s1: spans 2->1, logs 3->2, valid=True"]
+    assert capsys.readouterr().out.splitlines() == ["s1: spans 2->1, logs 4->2, valid=True"]
     snap = snapshot.load(path)
     assert [s["span_id"] for s in snap["spans"]] == ["b"]
-    assert [l["service"] for l in snap["logs"]] == ["payment", "cart"]
+    assert [l["service"] for l in snap["logs"]] == ["payment", "cart"]  # incl. legacy-stub log dropped
     assert _snap_bytes(path) == untouched
-    assert _rows(snaps)[1:] == [{"scenario": "s1", "path": str(path), "valid": True, "leaks": {}, "revalidated": True}]
+    assert _rows(snaps)[1:] == [{"scenario": "s1", "path": str(path), "valid": True, "leaks": {}, "resanitized": True}]
 
     before = snapshot.load(path)
     assert cli.main(["resanitize", "s1"]) == 0
@@ -352,9 +358,48 @@ def test_resanitize_filters_files_leaves_others_alone_is_idempotent_and_appends_
     assert _snap_bytes(path) == untouched and len(_rows(snaps)) == 3
 
 
-def test_resanitize_unknown_id_exit_2_and_nothing_touched(snaps, monkeypatch):
-    monkeypatch.setattr(scenarios, "load_all", lambda: FIXED)
-    path = _leaky_snapshot(snaps)
-    before = (path / "spans.jsonl.gz").read_bytes()
+def test_resanitize_unknown_id_exit_2_and_nothing_touched(resan, snaps):
+    before = (resan / "spans.jsonl.gz").read_bytes()
     assert cli.main(["resanitize", "nope"]) == 2
-    assert (path / "spans.jsonl.gz").read_bytes() == before and len(_rows(snaps)) == 1
+    assert (resan / "spans.jsonl.gz").read_bytes() == before and len(_rows(snaps)) == 1
+
+
+def test_resanitize_dry_run_reports_drops_and_writes_nothing(resan, snaps, capsys):
+    files = {n: (resan / n).read_bytes() for n in ("spans.jsonl.gz", "logs.jsonl.gz", "metrics.json")}
+    assert cli.main(["resanitize", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert out.splitlines()[0] == "s1: spans 2->1, logs 4->2"
+    assert "  dropped spans by service: frontend-proxy=1" in out
+    assert "  dropped logs by service: frontend-proxy=1, checkout=1" in out
+    assert "router flagservice egress" in out and "overloading queue now" in out
+    assert {n: (resan / n).read_bytes() for n in files} == files
+    assert not (resan / "validation.json").exists() and len(_rows(snaps)) == 1
+
+
+def test_resanitize_write_failure_leaves_originals_untouched(resan, monkeypatch):
+    before = {n: (resan / n).read_bytes() for n in ("spans.jsonl.gz", "logs.jsonl.gz")}
+    real, calls = snapshot._write_jsonl_gz, []
+
+    def flaky(path, rows):
+        calls.append(path)
+        if len(calls) == 2:
+            raise OSError("disk full")
+        real(path, rows)
+    monkeypatch.setattr(snapshot, "_write_jsonl_gz", flaky)
+    with pytest.raises(OSError):
+        snapshot.resanitize(resan, ["paymentFailure"])
+    assert {n: (resan / n).read_bytes() for n in before} == before
+    assert sorted(p.name for p in resan.iterdir()) == sorted(["meta.json", "truth.json", "metrics.json"] + list(before))
+
+
+def test_resanitize_bad_snapshot_is_reported_skipped_and_exit_nonzero(resan, snaps, capsys, monkeypatch):
+    good = _leaky_snapshot(snaps, "incident__y")
+    (resan / "logs.jsonl.gz").write_bytes(b"not gzip")
+    monkeypatch.setattr(scenarios, "load_all", lambda: FIXED)
+    _index(snaps, {"scenario": "s1", "path": str(resan), "valid": True}, {"scenario": "s2", "path": str(good), "valid": True})
+    spans_before = (resan / "spans.jsonl.gz").read_bytes()
+    assert cli.main(["resanitize"]) == 1
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("s1: error: ") and lines[1] == "s2: spans 2->1, logs 4->2, valid=True"
+    assert (resan / "spans.jsonl.gz").read_bytes() == spans_before
+    assert [r["scenario"] for r in _rows(snaps)[2:]] == ["s2"]  # no row for the failed id

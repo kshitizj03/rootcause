@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 from rootcause import config, env, harness, inject, sanitize, scenarios, snapshot
@@ -23,6 +24,7 @@ def build_parser():
     reval.add_argument("ids", nargs="*")
     resan = sub.add_parser("resanitize", help="re-apply the current sanitisers to recorded snapshots, then revalidate")
     resan.add_argument("ids", nargs="*")
+    resan.add_argument("--dry-run", action="store_true", help="report what would be dropped; write nothing")
     return p
 
 
@@ -104,6 +106,7 @@ def _leak_check(args):
 
 
 def _revalidate(args, resanitize=False):
+    dry_run = resanitize and args.dry_run
     index = Path(config.SNAPSHOTS) / "index.jsonl"
     rows = [json.loads(l) for l in index.read_text(encoding="utf-8").splitlines() if l.strip()] if index.exists() else []
     latest = {r["scenario"]: r for r in rows if r.get("path")}  # later rows overwrite earlier ones
@@ -116,17 +119,38 @@ def _revalidate(args, resanitize=False):
     names = sanitize.flag_names()
     all_valid = True
     for i in ids:
-        counts = snapshot.resanitize(latest[i]["path"], names) if resanitize else None
-        res = snapshot.validate_snapshot(latest[i]["path"], known[i], names)
-        harness._write_index_row(Path(config.SNAPSHOTS), {"scenario": i, "path": latest[i]["path"], "valid": res["valid"],
-                                                          "leaks": res["leaks"], "revalidated": True})
-        if counts:
+        path = latest[i]["path"]
+        try:
+            counts = snapshot.resanitize(path, names, dry_run=dry_run) if resanitize else None
+            if dry_run:
+                _print_dry_run(i, counts)
+                continue
+            res = snapshot.validate_snapshot(path, known[i], names)
+        except (OSError, EOFError, ValueError) as e:  # unreadable/corrupt snapshot: report, keep going, no index row
+            print(f"{i}: error: {type(e).__name__}: {e}")
+            all_valid = False
+            continue
+        harness._write_index_row(Path(config.SNAPSHOTS), {"scenario": i, "path": path, "valid": res["valid"],
+                                                          "leaks": res["leaks"],
+                                                          "resanitized" if resanitize else "revalidated": True})
+        if resanitize:
             print(f"{i}: spans {counts['spans'][0]}->{counts['spans'][1]}, logs {counts['logs'][0]}->{counts['logs'][1]}, "
                   f"valid={res['valid']}")
         else:
             print(f"{i}: valid={res['valid']} (was {latest[i].get('valid')})")
         all_valid &= res["valid"]
     return 0 if all_valid else 1
+
+
+def _print_dry_run(i, counts):
+    print(f"{i}: spans {counts['spans'][0]}->{counts['spans'][1]}, logs {counts['logs'][0]}->{counts['logs'][1]}")
+    for kind, label in (("spans", "name"), ("logs", "body")):
+        rows = counts["dropped"][kind]
+        if rows:
+            by_service = ", ".join(f"{s}={n}" for s, n in Counter(r["service"] for r in rows).most_common())
+            print(f"  dropped {kind} by service: {by_service}")
+            for text, n in Counter(str(r[label])[:100] for r in rows).most_common(3):
+                print(f"    {n}x {text}")
 
 
 def main(argv=None):
