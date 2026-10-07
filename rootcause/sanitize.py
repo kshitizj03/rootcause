@@ -39,6 +39,15 @@ def _redact(obj, pat):
     return obj
 
 
+def _strip_keys(obj, pat):
+    """Remove every dict entry whose KEY matches. Booleans carry no flag name, so a leaky key must go with its value."""
+    if isinstance(obj, list):
+        return [_strip_keys(v, pat) for v in obj]
+    if isinstance(obj, dict):
+        return {k: _strip_keys(v, pat) for k, v in obj.items() if not (isinstance(k, str) and pat.search(k))}
+    return obj
+
+
 def _matches(obj, pat):
     if isinstance(obj, str):
         return bool(pat.search(obj))
@@ -57,8 +66,8 @@ def sanitize_spans(spans, names):
             continue
         attrs = {k: v for k, v in sp["attributes"].items() if not k.startswith("feature_flag")}
         events = [e for e in sp["events"] if not e["name"].startswith("feature_flag")]
-        sp = dict(sp, attributes=attrs, events=events)
-        # ponytail: drops whole spans that match anywhere; their children lose a parent, fine for diagnosis
+        sp = _strip_keys(dict(sp, attributes=attrs, events=events), pat)
+        # ponytail: drops whole spans whose remaining content matches; their children lose a parent, fine for diagnosis
         if _matches(sp, pat):
             continue
         kept.append(_redact(sp, pat))
@@ -69,8 +78,8 @@ def sanitize_logs(logs, names):
     pat = leak_pattern(names)
     # drop (not redact) matching records: a "[redacted]" stub still hints that a flag was named.
     # _redact stays as a backstop; it is a no-op on anything that survives the drop.
-    return [_redact(lg, pat) for lg in logs
-            if lg["service"].lower() not in config.HIDDEN_SERVICES and not _matches(lg, pat)]
+    stripped = (_strip_keys(lg, pat) for lg in logs if lg["service"].lower() not in config.HIDDEN_SERVICES)
+    return [_redact(lg, pat) for lg in stripped if not _matches(lg, pat)]
 
 
 def find_leaks(text, names):

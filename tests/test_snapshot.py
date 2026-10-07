@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from helpers import FLAGS, otlp_payload
+from helpers import FLAGS, flat_span, otlp_payload
 from rootcause import config, sanitize, snapshot
 from rootcause.scenarios import Scenario
 
@@ -216,3 +216,14 @@ def test_validate_snapshot_rescores_stored_metrics_against_changed_checks(tmp_pa
     res = snapshot.validate_snapshot(path, SCENARIO, NAMES)  # original threshold fails again
     assert res["valid"] is False
     assert json.loads((path / "validation.json").read_text(encoding="utf-8"))["valid"] is False
+
+
+def test_resanitize_keeps_legacy_flag_key_spans_and_strips_the_key(tmp_path):
+    spans = [flat_span(span_id="legacy", attrs={"demo.[redacted].recommendation_cache": True, "demo.product.count": 10}),
+             flat_span(span_id="gone", name="router flagservice egress")]
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", spans)
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [])
+    counts = snapshot.resanitize(tmp_path, NAMES)
+    assert counts["spans"] == (2, 1)
+    (kept,) = snapshot._read_jsonl_gz(tmp_path / "spans.jsonl.gz")
+    assert kept["span_id"] == "legacy" and kept["attributes"] == {"demo.product.count": 10}

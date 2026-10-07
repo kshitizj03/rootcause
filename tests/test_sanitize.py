@@ -81,7 +81,6 @@ def test_redact_handles_unicode_escapes_without_breakage():
 def test_spans_with_a_match_anywhere_are_dropped_not_redacted():
     spans = [flat_span(span_id="msg", message="adHighCpu occurred"),
              flat_span(span_id="evt", events=[{"name": "log", "attributes": {"msg": "adHighCpu triggered"}}]),
-             flat_span(span_id="key", attrs={"adHighCpu": "x"}),
              flat_span(span_id="legacy", message="x [redacted] y"),
              flat_span(span_id="ok", message="Invalid token")]
     out = sanitize.sanitize_spans(spans, NAMES)
@@ -162,3 +161,28 @@ def test_hidden_services_case_insensitive_and_span_name_matching():
     ]
     out = sanitize.sanitize_spans(spans, NAMES)
     assert [s["span_id"] for s in out] == [], "Should filter all flagd service/name spans"
+
+
+def test_flag_named_attribute_keys_are_removed_and_the_span_kept():
+    # the recommendation service sets demo.feature_flag.recommendation_cache=True only while the fault is on
+    spans = [flat_span(span_id="new", attrs={"demo.feature_flag.recommendation_cache": True, "demo.product.count": 10}),
+             flat_span(span_id="legacy", attrs={"demo.[redacted].recommendation_cache": True, "demo.product.count": 10}),
+             flat_span(span_id="evt", events=[{"name": "log", "attributes": {"adHighCpu": True, "k": 1}}]),
+             flat_span(span_id="key", attrs={"adHighCpu": "x", "k": 1})]
+    out = sanitize.sanitize_spans(spans, NAMES)
+    assert [s["span_id"] for s in out] == ["new", "legacy", "evt", "key"]
+    assert out[0]["attributes"] == out[1]["attributes"] == {"demo.product.count": 10}
+    assert out[2]["events"][0]["attributes"] == {"k": 1} and out[3]["attributes"] == {"k": 1}
+    assert sanitize.find_leaks(json.dumps(out), NAMES) == []
+
+
+def test_matching_name_or_remaining_value_still_drops_a_span_with_flag_keys():
+    spans = [flat_span(span_id="name", name="router flagservice egress", attrs={"demo.feature_flag.x": True}),
+             flat_span(span_id="val", attrs={"demo.feature_flag.x": True, "note": "adHighCpu"})]
+    assert sanitize.sanitize_spans(spans, NAMES) == []
+
+
+def test_flag_named_log_keys_are_removed_and_the_log_kept_unless_content_matches():
+    logs = [{"service": "x", "body": "ok", "attributes": {"demo.feature_flag.a": True, "n": {"flagd": 1, "m": 2}}},
+            {"service": "x", "body": "adHighCpu", "attributes": {"demo.feature_flag.a": True}}]
+    assert sanitize.sanitize_logs(logs, NAMES) == [{"service": "x", "body": "ok", "attributes": {"n": {"m": 2}}}]
