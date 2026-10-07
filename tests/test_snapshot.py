@@ -273,3 +273,15 @@ def test_resanitize_dry_run_leaves_metrics_alone(tmp_path):
     (tmp_path / "metrics.json").write_text(text)
     assert snapshot.resanitize(tmp_path, NAMES, dry_run=True)["metrics"] == (1, 0)
     assert (tmp_path / "metrics.json").read_text() == text
+
+
+def test_resanitize_removes_stale_tmp_files_and_never_promotes_them(tmp_path):
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [flat_span(span_id="ok")])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [])
+    good = json.dumps({"rps": {"payment": [[1.0, 2.0]]}})
+    (tmp_path / "metrics.json").write_text(good)
+    for n in ("metrics.json.tmp", "spans.jsonl.gz.tmp", "logs.jsonl.gz.tmp"):
+        (tmp_path / n).write_text("junk")
+    assert snapshot.resanitize(tmp_path, NAMES)["metrics"] == (1, 1)
+    assert (tmp_path / "metrics.json").read_text() == good
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["logs.jsonl.gz", "metrics.json", "spans.jsonl.gz"]

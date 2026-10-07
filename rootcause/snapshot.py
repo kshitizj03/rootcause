@@ -67,6 +67,9 @@ def resanitize(path, names, dry_run=False):
     "dropped": {"spans": [...], "logs": [...]}};
     "dropped" is only filled for dry_run."""
     path, counts, dropped, kept = Path(path), {}, {}, {}
+    if not dry_run:  # leftovers of a hard-killed run must never be promoted
+        for stale in ("spans.jsonl.gz.tmp", "logs.jsonl.gz.tmp", "metrics.json.tmp"):
+            (path / stale).unlink(missing_ok=True)
     for name, clean in (("spans", sanitize.sanitize_spans), ("logs", sanitize.sanitize_logs)):
         rows = _read_jsonl_gz(path / f"{name}.jsonl.gz")
         kept[name] = clean(rows, names)
@@ -77,17 +80,18 @@ def resanitize(path, names, dry_run=False):
     clean_metrics = sanitize.sanitize_metrics(metrics)
     count = lambda m: sum(len(v) for v in m.values())
     counts["metrics"] = (count(metrics), count(clean_metrics))
+    changed = counts["metrics"][0] != counts["metrics"][1]
     if not dry_run:
         tmps = {n: path / f"{n}.jsonl.gz.tmp" for n in kept}
         mtmp = path / "metrics.json.tmp"
         try:
             for n, tmp in tmps.items():
                 _write_jsonl_gz(tmp, kept[n])
-            if counts["metrics"][0] != counts["metrics"][1]:
+            if changed:
                 mtmp.write_text(json.dumps(clean_metrics), encoding="utf-8")
             for n, tmp in tmps.items():
                 os.replace(tmp, path / f"{n}.jsonl.gz")
-            if mtmp.exists():
+            if changed:
                 os.replace(mtmp, path / "metrics.json")
         finally:
             for tmp in (*tmps.values(), mtmp):

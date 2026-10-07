@@ -270,3 +270,13 @@ def test_scan_snapshot_flags_hidden_service_series_in_metrics(tmp_path):
         with gzip.open(tmp_path / n, "wt", encoding="utf-8") as f:
             f.write(json.dumps({"name": "clean"}) + "\n")
     assert sanitize.scan_snapshot(tmp_path, NAMES) == {"metrics.json": ["hidden service: load-generator"]}
+
+
+def test_scan_snapshot_flags_hidden_service_spans_and_logs(tmp_path):
+    (tmp_path / "metrics.json").write_text(json.dumps({}))
+    for n, rows in (("spans.jsonl.gz", [flat_span(service="Load-Generator", name="x"), flat_span()]),
+                    ("logs.jsonl.gz", [_log("load-generator", "hello"), _log("cart", "ok")])):
+        with gzip.open(tmp_path / n, "wt", encoding="utf-8") as f:
+            f.write("".join(json.dumps(r) + "\n" for r in rows))
+    assert sanitize.scan_snapshot(tmp_path, NAMES) == {"spans.jsonl.gz": ["hidden service: load-generator"],
+                                                       "logs.jsonl.gz": ["hidden service: load-generator"]}

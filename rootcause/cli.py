@@ -135,7 +135,7 @@ def _revalidate(args, resanitize=False):
                                                           "resanitized" if resanitize else "revalidated": True})
         if resanitize:
             print(f"{i}: spans {counts['spans'][0]}->{counts['spans'][1]}, logs {counts['logs'][0]}->{counts['logs'][1]}, "
-                  f"valid={res['valid']}")
+                  f"metrics {counts['metrics'][0]}->{counts['metrics'][1]}, valid={res['valid']}")
         else:
             print(f"{i}: valid={res['valid']} (was {latest[i].get('valid')})")
         all_valid &= res["valid"]
@@ -143,7 +143,8 @@ def _revalidate(args, resanitize=False):
 
 
 def _print_dry_run(i, counts):
-    print(f"{i}: spans {counts['spans'][0]}->{counts['spans'][1]}, logs {counts['logs'][0]}->{counts['logs'][1]}")
+    print(f"{i}: spans {counts['spans'][0]}->{counts['spans'][1]}, logs {counts['logs'][0]}->{counts['logs'][1]}, "
+          f"metrics {counts['metrics'][0]}->{counts['metrics'][1]}")
     for kind, label in (("spans", "name"), ("logs", "body")):
         rows = counts["dropped"][kind]
         if rows:

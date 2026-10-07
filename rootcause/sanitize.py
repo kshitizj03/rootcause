@@ -117,8 +117,10 @@ def scan_snapshot(path, names):
             text = p.read_text(encoding="utf-8")
         hits = find_leaks(text, names)
         if name == "metrics.json":
-            keys = {k for by_service in json.loads(text).values() for k in by_service}
-            hits += [f"hidden service: {k}" for k in sorted(keys & config.HIDDEN_SERVICES)]
+            services = {k for by_service in json.loads(text).values() for k in by_service}
+        else:
+            services = {str(json.loads(l).get("service", "")).lower() for l in text.splitlines() if l.strip()}
+        hits += [f"hidden service: {k}" for k in sorted(services & config.HIDDEN_SERVICES)]
         if hits:
             found[name] = hits
     return found

@@ -344,7 +344,7 @@ def test_resanitize_filters_files_leaves_others_alone_is_idempotent_and_appends_
     path, untouched = resan, _snap_bytes(resan)
 
     assert cli.main(["resanitize"]) == 0
-    assert capsys.readouterr().out.splitlines() == ["s1: spans 2->1, logs 4->2, valid=True"]
+    assert capsys.readouterr().out.splitlines() == ["s1: spans 2->1, logs 4->2, metrics 0->0, valid=True"]
     snap = snapshot.load(path)
     assert [s["span_id"] for s in snap["spans"]] == ["b"]
     assert [l["service"] for l in snap["logs"]] == ["payment", "cart"]  # incl. legacy-stub log dropped
@@ -353,7 +353,7 @@ def test_resanitize_filters_files_leaves_others_alone_is_idempotent_and_appends_
 
     before = snapshot.load(path)
     assert cli.main(["resanitize", "s1"]) == 0
-    assert capsys.readouterr().out.splitlines() == ["s1: spans 1->1, logs 2->2, valid=True"]
+    assert capsys.readouterr().out.splitlines() == ["s1: spans 1->1, logs 2->2, metrics 0->0, valid=True"]
     assert snapshot.load(path) == before  # gz bytes differ (mtime header); content must not
     assert _snap_bytes(path) == untouched and len(_rows(snaps)) == 3
 
@@ -368,7 +368,7 @@ def test_resanitize_dry_run_reports_drops_and_writes_nothing(resan, snaps, capsy
     files = {n: (resan / n).read_bytes() for n in ("spans.jsonl.gz", "logs.jsonl.gz", "metrics.json")}
     assert cli.main(["resanitize", "--dry-run"]) == 0
     out = capsys.readouterr().out
-    assert out.splitlines()[0] == "s1: spans 2->1, logs 4->2"
+    assert out.splitlines()[0] == "s1: spans 2->1, logs 4->2, metrics 0->0"
     assert "  dropped spans by service: frontend-proxy=1" in out
     assert "  dropped logs by service: frontend-proxy=1, checkout=1" in out
     assert "router flagservice egress" in out and "overloading queue now" in out
@@ -400,6 +400,6 @@ def test_resanitize_bad_snapshot_is_reported_skipped_and_exit_nonzero(resan, sna
     spans_before = (resan / "spans.jsonl.gz").read_bytes()
     assert cli.main(["resanitize"]) == 1
     lines = capsys.readouterr().out.splitlines()
-    assert lines[0].startswith("s1: error: ") and lines[1] == "s2: spans 2->1, logs 4->2, valid=True"
+    assert lines[0].startswith("s1: error: ") and lines[1] == "s2: spans 2->1, logs 4->2, metrics 0->0, valid=True"
     assert (resan / "spans.jsonl.gz").read_bytes() == spans_before
     assert [r["scenario"] for r in _rows(snaps)[2:]] == ["s2"]  # no row for the failed id
