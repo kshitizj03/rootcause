@@ -1,5 +1,5 @@
 category: control
-alert: "Support asks whether anything is wrong with the shop right now."
+alert: "Customers say the shop is returning errors on some pages."
 truth: {causes: []}
 checks:
   - {service: "*", signal: error_ratio, at_most: 0.15}

@@ -1,5 +1,5 @@
 category: control
-alert: "Someone reported seeing an error once at checkout."
+alert: "The storefront has become slow for many customers."
 truth: {causes: []}
 checks:
   - {service: "*", signal: error_ratio, at_most: 0.15}

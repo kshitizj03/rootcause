@@ -14,15 +14,15 @@ Ratio checks compare against the baseline; `(max)` means the peak over the windo
 | Scenario | Category | Valid | Observed signal | Snapshot |
 |---|---|---|---|---|
 | ad-failure | easy | yes | ad error_ratio 0.00245 → 0.0391 | incident__20261002T160026Z |
-| payment-failure-50 | easy | yes | payment error_ratio 0.026 → 0.315 | incident__20261006T211801Z |
+| payment-failure-50 | easy | yes | payment error_ratio 0.0255 → 0.315 | incident__20261006T211801Z |
 | product-catalog-failure | easy | yes | product-catalog error_ratio 0 → 0.027 | incident__20261007T011923Z |
-| kafka-queue-problems | hard-cross-service | yes | fraud-detection rps 0.0856 → 0.793 | incident__20261006T202942Z |
+| kafka-queue-problems | hard-cross-service | yes | fraud-detection rps 0.0869 → 0.793 | incident__20261006T202942Z |
 | payment-unreachable | hard-cross-service | yes | checkout error_ratio 0 → 0.18 | incident__20261006T223025Z |
 | valkey-cart-paused | hard-cross-service | yes | cart error_ratio 0 → 0.376 | incident__20261007T000658Z |
-| ad-high-cpu | hard-silent | yes | ad cpu_cores 0.0105 → 3.28 | incident__20261002T162438Z |
+| ad-high-cpu | hard-silent | yes | ad cpu_cores 0.0104 → 3.28 | incident__20261002T162438Z |
 | checkout-cpu-throttle | hard-silent | yes | checkout p95_ms 1050 → 12500 | incident__20261007T003105Z |
 | email-memory-leak | hard-silent | yes | email mem_mb (max) 82.5 → 102 | incident__20261006T194125Z |
-| image-slow-load | hard-silent | yes | frontend-proxy p95_ms 677 → 2630 | incident__20261006T200534Z |
+| image-slow-load | hard-silent | yes | frontend-proxy p95_ms 676 → 2630 | incident__20261006T200534Z |
 | product-catalog-lock-contention | hard-silent | yes | product-catalog p95_ms 1130 → 11100 | incident__20261006T231841Z |
 | recommendation-cache-leak | hard-silent | yes | recommendation mem_mb (max) 61.9 → 522 | incident__20261006T234249Z |
 | lock-contention-with-flood | hard-noisy | yes | product-catalog p95_ms 778 → 12400; decoy frontend rps (max) 27.8 → 49.3 | incident__20261006T205352Z |
@@ -77,9 +77,22 @@ Each was found by an independent grep or a fault-vs-control differential audit o
 - **load-generator is hidden entirely** (spans, logs, metrics). These are synthetic customers, which production doesn't trace, and its flood task names (`user_flood_home`, "User flooding homepage") revealed that the noisy scenarios' traffic surge is a decoy.
 - Redaction stubs (`[redacted]`) are no longer emitted anywhere. A record that matches is dropped, and the leak scan flags any stub left behind.
 
+- **Envoy fault-injection flags.** frontend-proxy marks the image-slow-load delay with `response_flags: "DI"` ("delay injected") in spans and access logs, which any model that knows Envoy reads as the answer. DI/FI tokens are now **rewritten** out (`DI` → `-`, `DI,DC` → `DC`), so the 5 s latency evidence stays, and the leak scan flags any left over. This was found by the final whole-branch review.
+- **A timing tell in meta.json.** `end - fault_start` was exactly 300.000 s for controls but 300.002–301.4 s for faults, because the injection time was counted in the window. The harness now takes `t_inject` after the injection completes and computes `t_end = t_inject + settle`. All 20 snapshots were migrated to `end = fault_start + 300`, and log lines past the new end were trimmed: 135 lines in ad-high-cpu, none elsewhere. Backup: `data/backup/pre-meta-fix/`.
+- **Control alerts were giveaways.** The controls were phrased as one-off or past events ("felt slow earlier today"), while every fault alert was sustained and present. They now use the same style as the fault alerts (for example "Some customers report that their orders are failing at checkout."), and the 4 control snapshots' meta alerts were updated to match.
+
+## Data hygiene
+
+- The OpenSearch query for a service also matched other service names (`frontend` matched frontend-proxy), and recommendation emits every log line twice. New captures keep only the queried service's rows and drop exact duplicates. Stored snapshots were de-duplicated with resanitize, about 520 rows each, the same in controls and faults. 5–10 cross-matched frontend-proxy rows per snapshot can't be told apart after the fact; they occur equally in every snapshot.
+- Spans run past `meta.end` in every snapshot, controls included, by up to about 60 s, because Jaeger returns whole traces. That reflects trace length, a genuine symptom, so it is not trimmed. Week-2 tools should select traces by root-span start time.
+- The newest-first caps (50 traces and 200 logs per service per window) mean busy services' pre-fault logs cover only the last 15–50 s before injection. This is a known ceiling for the week-3 tools.
+- Controls are checked only for being quiet on errors (every service's error_ratio ≤ 0.15). That is a deliberately loose "no incident" bar; false alarms are scored by the agent's verdict, not by this check.
+- Agent tools may read **only** meta.json, metrics.json, spans.jsonl.gz and logs.jsonl.gz. validation.json, truth.json, index.jsonl and this file all name the answer.
+
 ## Judgement calls (deliberate, revisit if the evaluation suggests otherwise)
 
 - **Kept:** recommendation's "get_product_list: cache hit/miss" logs. They appear only during the cache-leak fault, because the cache only exists then. They are the service's real behaviour under the fault, not an announcement, and a real incident caused by enabling a cache would show the same logs.
 - **Kept:** `python-requests` user agents in proxy access logs. They appear in every snapshot, controls included, so they say nothing about the fault.
 - Substring matching over-redacts a little: flag stems such as `adFailure` match inside `ReadFailure` or `upload.failure`. This errs on the safe side, and the dry runs showed no such drops in the real data.
 - Container IPs differ between recording sessions (stack restarts). They are not fault-specific, and each agent run sees a single snapshot.
+- Alert specificity varies. The email alert ("order confirmation messages") and the image alerts ("product pictures") all but name the service, although both are hard-silent. This is kept as-is and will feed the planned vague-vs-specific alert ablation.
