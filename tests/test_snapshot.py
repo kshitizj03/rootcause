@@ -163,7 +163,7 @@ def test_capture_fetches_pre_fault_and_fault_windows_per_service(tmp_path):
     def os_logs(query, start, end, size):
         log_calls.append((query, start, end, size))
         phase = "pre" if end <= T_INJECT else "fault"
-        return [{"@timestamp": "t", "resource": {"service.name": "cart"}, "severity": {"text": "INFO", "number": 9},
+        return [{"@timestamp": "t", "resource": {"service.name": query.split('"')[1]}, "severity": {"text": "INFO", "number": 9},
                  "body": f"{phase} {start} {i}"} for i in range(size)]
 
     def prom_range(query, start, end, step):
@@ -300,3 +300,46 @@ def test_latest_rows_newest_row_with_a_path_wins(tmp_path):
     assert snapshot.latest_rows(index) == {"a": rows[2], "b": rows[1]}
     assert snapshot.latest_rows(index, ["b", "zzz"]) == {"b": rows[1]}
     assert snapshot.latest_rows(tmp_path / "missing.jsonl") == {}
+
+
+# --- log capture: exact service match, exact duplicates removed ---
+
+def _os_row(service, body, ts="t1"):
+    return {"@timestamp": ts, "resource": {"service.name": service}, "severity": {"text": "INFO", "number": 9},
+            "body": body}
+
+
+def test_capture_logs_keep_only_the_queried_service_and_drop_exact_duplicates(tmp_path):
+    fetch = fake_fetch()
+
+    def os_logs(query, start, end, size):
+        if start < T_INJECT:  # pre-fault window: nothing
+            return []
+        if query == 'resource.service.name:"frontend"':  # the query also matches frontend-proxy
+            return [_os_row("frontend", "GET /"), _os_row("frontend-proxy", "proxied GET /")]
+        if query == 'resource.service.name:"recommendation"':  # emitted twice
+            return [_os_row("recommendation", "rec ok")] * 2 + [_os_row("recommendation", "rec ok", ts="t2")]
+        return []
+
+    fetch.os_logs = os_logs
+    out = snapshot.capture(SCENARIO, T_INJECT, T_END, NAMES, fetch=fetch, out_dir=tmp_path)
+    logs = snapshot.load(out["path"])["logs"]
+    assert sorted((l["service"], l["body"], l["ts"]) for l in logs) == [
+        ("frontend", "GET /", "t1"), ("recommendation", "rec ok", "t1"), ("recommendation", "rec ok", "t2")]
+    # frontend-proxy keeps its own logs when queried as itself
+    fetch.os_logs = lambda q, s, e, n: [_os_row("frontend-proxy", "own")] if q.endswith('"frontend-proxy"') and s >= T_INJECT else []
+    out = snapshot.capture(SCENARIO, T_INJECT, T_END, NAMES, fetch=fetch, out_dir=tmp_path / "again")
+    assert [l["service"] for l in snapshot.load(out["path"])["logs"]] == ["frontend-proxy"]
+
+
+def test_resanitize_drops_exact_duplicate_logs_only(tmp_path):
+    a, b = _log_row("cart", "same", "t1"), _log_row("cart", "same", "t2")
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [a, dict(a), b, dict(b, severity="ERROR")])
+    counts = snapshot.resanitize(tmp_path, NAMES)
+    assert counts["logs"] == (4, 3)
+    assert snapshot._read_jsonl_gz(tmp_path / "logs.jsonl.gz") == [a, b, dict(b, severity="ERROR")]
+
+
+def _log_row(service, body, ts):
+    return {"ts": ts, "service": service, "severity": "INFO", "severity_number": 9, "body": body, "trace_id": ""}

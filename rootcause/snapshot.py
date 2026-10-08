@@ -19,6 +19,17 @@ def _read_jsonl_gz(path):
         return [json.loads(line) for line in f]
 
 
+def _dedupe_logs(logs):
+    """Drop exact duplicates (same ts, service, body, severity, trace_id); the first one stays."""
+    seen, out = set(), []
+    for lg in logs:
+        key = tuple(lg.get(k) for k in ("ts", "service", "body", "severity", "trace_id"))
+        if key not in seen:
+            seen.add(key)
+            out.append(lg)
+    return out
+
+
 def latest_rows(index_path, scenario_ids=None):
     """{scenario id: newest index.jsonl row that has a path}; rows without a path (failed captures) are skipped.
     scenario_ids, if given, restricts the result to those ids. A missing index gives {}."""
@@ -46,7 +57,9 @@ def capture(scenario, t_inject, t_end, names, fetch=backends, out_dir=config.SNA
     for service in config.KNOWN_TARGETS:
         query = f'resource.service.name:"{service}"'
         for start, end in windows:
-            logs += [backends.flatten_log(src) for src in fetch.os_logs(query, start, end, config.LOGS_PER_SERVICE)]
+            rows = (backends.flatten_log(src) for src in fetch.os_logs(query, start, end, config.LOGS_PER_SERVICE))
+            logs += [r for r in rows if r["service"] == service]  # the query also matches e.g. frontend-proxy
+    logs = _dedupe_logs(logs)  # some services (recommendation) emit every line twice
 
     spans, logs = sanitize.sanitize_spans(spans, names), sanitize.sanitize_logs(logs, names)
 
@@ -81,7 +94,7 @@ def resanitize(path, names, dry_run=False):
             (path / stale).unlink(missing_ok=True)
     for name, clean in (("spans", sanitize.sanitize_spans), ("logs", sanitize.sanitize_logs)):
         rows = _read_jsonl_gz(path / f"{name}.jsonl.gz")
-        kept[name] = clean(rows, names)
+        kept[name] = _dedupe_logs(clean(rows, names)) if name == "logs" else clean(rows, names)
         counts[name] = (len(rows), len(kept[name]))
         # ponytail: per-row re-run to find what was dropped (rebuilds the pattern each row); dry-run only
         dropped[name] = [r for r in rows if not clean([r], names)] if dry_run else []
