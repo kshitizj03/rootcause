@@ -10,7 +10,9 @@ PHRASES = [r"feature[\s_\-.]?flags?", r"flagd", r"openfeature", r"ofrep", r"flag
            # demo services that announce the injected fault in their own telemetry; deliberately narrow so generic
            # "lock wait timeout" / "server overloaded" / "lock contention" wording from real systems stays.
            r"\bproblempattern\b", r"overload simulation", r"\block contention (?:scenario|transaction)\b"]
-SNAPSHOT_TOOL_FILES = ("metrics.json", "spans.jsonl.gz", "logs.jsonl.gz")  # what agent tools can read
+# TOOL BOUNDARY: agent tools may read ONLY meta.json plus these files. validation.json, truth.json, index.jsonl and the
+# repository (scenarios/, NOTES.md) name the answer and must never be exposed to an agent.
+SNAPSHOT_TOOL_FILES = ("metrics.json", "spans.jsonl.gz", "logs.jsonl.gz")  # what agent tools can read (besides meta.json)
 
 
 def flag_names(flags_file=config.FLAGS_FILE):
