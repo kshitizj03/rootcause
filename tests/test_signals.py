@@ -23,6 +23,17 @@ def test_restarts_counts_uptime_drops():
     assert signals.restarts(pts, 100, 150) is None  # no in-window points
 
 
+def test_window_end_tolerates_one_second_of_float_error():
+    pts = [[0, 1.0], [10, 3.0], [10.9, 5.0], [11.5, 100.0]]
+    assert signals.window_stat(pts, 0, 10, "max") == 5.0  # 10.9 is within EDGE_TOLERANCE_S of the end; 11.5 is not
+    assert signals.window_stat([[100.000001, 7.0]], 0, 100) == 7.0
+
+
+def test_restarts_include_a_drop_within_tolerance_of_the_window_end():
+    assert signals.restarts([[0, 100], [10, 110], [10.5, 3]], 0, 10) == 1
+    assert signals.restarts([[0, 100], [10, 110], [12, 3]], 0, 10) == 0
+
+
 def test_evaluate_absolute_ratio_and_star_checks():
     metrics = {"error_ratio": {"payment": series(0.0, 0.5), "cart": series(0.0, 0.0)},
                "p95_ms": {"product-catalog": series(10, 45)}}

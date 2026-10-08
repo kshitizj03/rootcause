@@ -24,6 +24,12 @@ def mark_restored(t, state_file=config.STATE_FILE):
     state_file.write_text(json.dumps({"last_restore": t}), encoding="utf-8")
 
 
+def _write_dirty(state_file, error, t):
+    state_file = Path(state_file)
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(json.dumps({"dirty": True, "t": t, "error": error}), encoding="utf-8")
+
+
 def wait_cooldown(now=time.time, sleep=time.sleep, state_file=config.STATE_FILE):
     state_file = Path(state_file)
     t_now = now()  # Compute once, use for all time calculations
@@ -52,13 +58,16 @@ def wait_cooldown(now=time.time, sleep=time.sleep, state_file=config.STATE_FILE)
 def record(scenario, names, injector, fetch=backends, now=time.time, sleep=time.sleep,
            state_file=config.STATE_FILE, out_dir=config.SNAPSHOTS, demo_commit=""):
     wait_cooldown(now, sleep, state_file)
-    t_inject = now()
+    # In-flight marker: only a successful restore's mark_restored clears it, so a hard kill leaves the state dirty.
+    _write_dirty(state_file, f"in flight: {scenario.id}", now())
     summary = None
     in_flight = None
     try:
         injector.apply(scenario.inject)
+        # Taken after apply and t_end computed, so meta timing doesn't encode how long apply took (control vs fault).
+        t_inject = now()
+        t_end = t_inject + scenario.settle_s
         sleep(scenario.settle_s)
-        t_end = now()
         sleep(config.INGEST_LAG_S)
         summary = snapshot.capture(scenario, t_inject, t_end, names, fetch, out_dir, demo_commit)
         return summary
@@ -70,11 +79,9 @@ def record(scenario, names, injector, fetch=backends, now=time.time, sleep=time.
             injector.restore()
         except Exception as restore_error:
             # Restore failed: write dirty state and raise RestoreError
-            state_file = Path(state_file)
             error_msg = f"{type(restore_error).__name__}: {restore_error}"
             try:
-                state_file.parent.mkdir(parents=True, exist_ok=True)
-                state_file.write_text(json.dumps({"dirty": True, "t": now(), "error": error_msg}), encoding="utf-8")
+                _write_dirty(state_file, error_msg, now())
             except Exception as write_error:
                 # State file write/mkdir failed: append to message
                 error_msg = f"{error_msg}; state file NOT written: {type(write_error).__name__}: {write_error}"

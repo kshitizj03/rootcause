@@ -32,7 +32,7 @@ def fetch_series(prom_range, start, end, step):
 
 
 def window_stat(points, start, end, stat="mean"):
-    vals = [v for t, v in points if start <= t <= end]
+    vals = [v for t, v in points if start <= t <= end + config.EDGE_TOLERANCE_S]
     if not vals:
         return None
     return max(vals) if stat == "max" else sum(vals) / len(vals)
@@ -42,7 +42,7 @@ def restarts(points, start, end):
     """Uptime drops inside [start, end]; the last point before start is included so a restart right at the
     window edge still counts. Returns None if no in-window points exist."""
     before = [v for t, v in points if t < start][-1:]
-    vals = before + [v for t, v in points if start <= t <= end]
+    vals = before + [v for t, v in points if start <= t <= end + config.EDGE_TOLERANCE_S]
     if not vals or (len(vals) == 1 and before):  # Only a before point, no in-window data
         return None
     return sum(1 for a, b in zip(vals, vals[1:]) if b < a)

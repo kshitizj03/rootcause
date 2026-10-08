@@ -57,36 +57,72 @@ def test_restore_happens_even_when_capture_fails(tmp_path):
     assert (tmp_path / "state.json").exists()
 
 
-def test_t_end_captured_before_ingest_lag_sleep(tmp_path):
-    """t_end passed to capture equals clock time right after settle, before ingest lag sleep."""
+class SlowInjector(FakeInjector):
+    """apply() takes `delay` seconds of fake time, like a slow docker/flag write."""
+    def __init__(self, clock, delay, **kw):
+        super().__init__(**kw)
+        self.clock, self.delay = clock, delay
+
+    def apply(self, injection):
+        super().apply(injection)
+        self.clock.t += self.delay
+
+
+def test_t_inject_taken_after_apply_and_t_end_is_computed(tmp_path):
+    """meta timing must not encode how long apply took: t_end == t_inject + settle_s exactly, t_inject after apply."""
     clock = Clock()
     harness.mark_restored(clock.t - config.COOLDOWN_S - 1, tmp_path / "state.json")
-    clock.sleeps.clear()
-    t_inject_start = clock.t
+    start, seen = clock.t, {}
 
-    captured_t_end = None
     def recording_capture(scenario, t_inject, t_end, names, fetch, out_dir, demo_commit=""):
-        nonlocal captured_t_end
-        captured_t_end = t_end
-        # Return a valid-looking summary
+        seen.update(t_inject=t_inject, t_end=t_end, now=clock.t)
         return {"scenario": scenario.id, "path": str(out_dir / "incident__123"), "valid": True,
                 "results": [], "leaks": {}}
 
-    # Temporarily replace snapshot.capture
     original_capture = snapshot.capture
     snapshot.capture = recording_capture
     try:
-        harness.record(SCENARIO, NAMES, FakeInjector(), fetch=fake_fetch(t_inject=clock.t), now=clock.now,
-                      sleep=clock.sleep, state_file=tmp_path / "state.json", out_dir=tmp_path / "snaps")
-        # t_end should equal t_inject + settle_s (captured right after settle, before ingest_lag)
-        # Flow: t_inject=100_000, sleep(180), t_end=100_180, sleep(60), capture
-        expected_t_end = t_inject_start + SCENARIO.settle_s
-        assert captured_t_end == expected_t_end, f"t_end {captured_t_end} != expected {expected_t_end}"
-        # Verify t_end is strictly before time after ingest_lag
-        time_after_lag = expected_t_end + config.INGEST_LAG_S
-        assert captured_t_end < time_after_lag, f"t_end {captured_t_end} should be < {time_after_lag}"
+        harness.record(SCENARIO, NAMES, SlowInjector(clock, 7.3), fetch=fake_fetch(t_inject=clock.t), now=clock.now,
+                       sleep=clock.sleep, state_file=tmp_path / "state.json", out_dir=tmp_path / "snaps")
     finally:
         snapshot.capture = original_capture
+    assert seen["t_inject"] == start + 7.3                         # after apply returned
+    assert seen["t_end"] == seen["t_inject"] + SCENARIO.settle_s   # computed, exactly
+    assert seen["now"] == seen["t_end"] + config.INGEST_LAG_S      # still sleeps settle + ingest lag before capture
+
+
+def test_in_flight_marker_written_before_apply_and_cleared_by_restore(tmp_path):
+    clock, state_file, seen = Clock(), tmp_path / "state.json", {}
+    harness.mark_restored(clock.t - config.COOLDOWN_S - 1, state_file)
+
+    class Peek(FakeInjector):
+        def apply(self, injection):
+            seen["state"] = json.loads(state_file.read_text(encoding="utf-8"))
+            super().apply(injection)
+
+    run(tmp_path, clock, Peek())
+    assert seen["state"]["dirty"] is True and seen["state"]["error"] == f"in flight: {SCENARIO.id}"
+    assert seen["state"]["t"] == clock.t - SCENARIO.settle_s - config.INGEST_LAG_S
+    assert json.loads(state_file.read_text(encoding="utf-8")) == {"last_restore": clock.t}
+
+
+def test_in_flight_marker_survives_when_the_run_is_killed(tmp_path):
+    """A hard kill skips restore/mark_restored: the leftover marker blocks the next run until reset-flags."""
+    clock, state_file = Clock(), tmp_path / "state.json"
+    harness.mark_restored(clock.t - config.COOLDOWN_S - 1, state_file)
+
+    class Killed(BaseException):
+        pass
+
+    class Dies(FakeInjector):
+        def restore(self):
+            raise Killed
+
+    with pytest.raises(Killed):
+        run(tmp_path, clock, Dies())
+    assert json.loads(state_file.read_text(encoding="utf-8"))["dirty"] is True
+    with pytest.raises(harness.DirtyStateError, match="in flight"):
+        harness.wait_cooldown(clock.now, clock.sleep, state_file)
 
 
 def test_restore_failure_writes_dirty_state_and_raises_restore_error(tmp_path):

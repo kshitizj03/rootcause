@@ -32,6 +32,7 @@ BASELINE_S = 15 * 60
 SETTLE_S = 300              # fault runs this long before capture
 INGEST_LAG_S = 60           # metrics pushed ~once a minute; wait before capture to get last minute
 RAMP_S = 60                 # skip the first minute of the fault when judging its signal
+EDGE_TOLERANCE_S = 1.0      # points this close past a window end still count (float error at the edge)
 STEP_S = 15                 # metric resolution in snapshots
 CAPTURE_LOOKBACK_S = 300    # spans/logs captured from 5 minutes before injection
 TRACES_PER_SERVICE = 50
