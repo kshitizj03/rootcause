@@ -39,6 +39,34 @@ NEUTRAL_REWRITES = [
     (re.compile(r"Product Catalog Fail (?:Feature Flag|\[redacted\]) Enabled"), "Product Catalog Fail"),
 ]
 
+# Envoy's fault filter marks injected delays/aborts with DI/FI in RESPONSE_FLAGS ("delay injected"): the answer for
+# image-slow-load. Rewritten, not dropped, so the latency evidence survives. Access-log form: `" 200 DI via_upstream`.
+FAULT_FLAGS = {"DI", "FI"}
+_ACCESS_FLAGS = re.compile(r'(" \d{1,3} )([A-Z]{1,3}(?:,[A-Z]{1,3})*)(?= )')
+
+
+def _drop_fault_flags(flags):
+    return ",".join(f for f in flags.split(",") if f not in FAULT_FLAGS) or "-"
+
+
+NEUTRAL_REWRITES.append((_ACCESS_FLAGS, lambda m: m.group(1) + _drop_fault_flags(m.group(2))))
+
+
+def _is_flags_key(k):
+    return isinstance(k, str) and (k == "response_flags" or k.endswith(".response_flags"))
+
+
+def _has_fault_flag(obj):
+    """True if obj still holds an Envoy DI/FI flag, in a response_flags value or an access-log flags field."""
+    if isinstance(obj, str):
+        return any(set(m.group(2).split(",")) & FAULT_FLAGS for m in _ACCESS_FLAGS.finditer(obj))
+    if isinstance(obj, list):
+        return any(_has_fault_flag(v) for v in obj)
+    if isinstance(obj, dict):
+        return any(bool(set(v.split(",")) & FAULT_FLAGS) if _is_flags_key(k) and isinstance(v, str) else _has_fault_flag(v)
+                   for k, v in obj.items())
+    return False
+
 
 def _rewrite(obj):
     if isinstance(obj, str):
@@ -48,7 +76,8 @@ def _rewrite(obj):
     if isinstance(obj, list):
         return [_rewrite(v) for v in obj]
     if isinstance(obj, dict):
-        return {_rewrite(k): _rewrite(v) for k, v in obj.items()}
+        return {_rewrite(k): _drop_fault_flags(v) if _is_flags_key(k) and isinstance(v, str) else _rewrite(v)
+                for k, v in obj.items()}
     return obj
 
 
@@ -119,7 +148,10 @@ def scan_snapshot(path, names):
         if name == "metrics.json":
             services = {k for by_service in json.loads(text).values() for k in by_service}
         else:
-            services = {str(json.loads(l).get("service", "")).lower() for l in text.splitlines() if l.strip()}
+            rows = [json.loads(l) for l in text.splitlines() if l.strip()]
+            services = {str(r.get("service", "")).lower() for r in rows}
+            if any(_has_fault_flag(r) for r in rows):  # scan-only: the sanitiser rewrites these, never drops
+                hits.append("fault-injection flag")
         hits += [f"hidden service: {k}" for k in sorted(services & config.HIDDEN_SERVICES)]
         if hits:
             found[name] = hits

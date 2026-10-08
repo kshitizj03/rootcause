@@ -280,3 +280,49 @@ def test_scan_snapshot_flags_hidden_service_spans_and_logs(tmp_path):
             f.write("".join(json.dumps(r) + "\n" for r in rows))
     assert sanitize.scan_snapshot(tmp_path, NAMES) == {"spans.jsonl.gz": ["hidden service: load-generator"],
                                                        "logs.jsonl.gz": ["hidden service: load-generator"]}
+
+
+# --- Envoy fault-injection flags (DI/FI) name the answer; rewritten, not dropped ---
+
+ACCESS = '[2026-09-25T15:05:08.927Z] "GET /images/products/X.jpg HTTP/1.1" {} {} via_upstream - "-" 0 2313 3 2 "-" "Mozilla/5.0"'
+
+
+def test_response_flags_attribute_loses_fault_injection_tokens():
+    cases = {"DI": "-", "DI,DC": "DC", "DC,DI": "DC", "FI": "-", "-": "-", "UF": "UF", "DC": "DC"}
+    spans = [flat_span(service="frontend-proxy", span_id=f"s{i}", attrs={"response_flags": v})
+             for i, v in enumerate(cases)]
+    out = sanitize.sanitize_spans(spans, NAMES)
+    assert [s["attributes"]["response_flags"] for s in out] == list(cases.values())
+
+
+def test_access_log_flags_field_loses_fault_injection_tokens():
+    cases = [("200", "DI", "200", "-"), ("0", "DI,DC", "0", "DC"), ("0", "DC,DI", "0", "DC"),
+             ("503", "FI", "503", "-"), ("200", "-", "200", "-"), ("503", "UF", "503", "UF")]
+    logs = [_log("frontend-proxy", ACCESS.format(c, f)) for c, f, _, _ in cases]
+    out = sanitize.sanitize_logs(logs, NAMES)
+    assert [l["body"] for l in out] == [ACCESS.format(c, f) for _, _, c, f in cases]
+
+
+def test_bare_di_elsewhere_is_left_alone():
+    body = 'user said "DI" and status 200 DI is a word; GET /DI HTTP/1.1'
+    assert sanitize.sanitize_logs([_log("cart", body)], NAMES)[0]["body"] == body
+    sp = flat_span(attrs={"other": "DI"})
+    assert sanitize.sanitize_spans([sp], NAMES)[0]["attributes"] == {"other": "DI"}
+
+
+def test_scan_snapshot_flags_leftover_fault_injection_flags(tmp_path):
+    (tmp_path / "metrics.json").write_text(json.dumps({}))
+    rows = {"spans.jsonl.gz": [flat_span(service="frontend-proxy", attrs={"response_flags": "DI,DC"})],
+            "logs.jsonl.gz": [_log("frontend-proxy", ACCESS.format("200", "DI"))]}
+    for n, r in rows.items():
+        with gzip.open(tmp_path / n, "wt", encoding="utf-8") as f:
+            f.write("".join(json.dumps(x) + "\n" for x in r))
+    assert sanitize.scan_snapshot(tmp_path, NAMES) == {"spans.jsonl.gz": ["fault-injection flag"],
+                                                       "logs.jsonl.gz": ["fault-injection flag"]}
+    # sanitised rows are clean; a flagged record is rewritten, not dropped
+    for n, fn in (("spans.jsonl.gz", sanitize.sanitize_spans), ("logs.jsonl.gz", sanitize.sanitize_logs)):
+        clean = fn(rows[n], NAMES)
+        assert len(clean) == 1
+        with gzip.open(tmp_path / n, "wt", encoding="utf-8") as f:
+            f.write("".join(json.dumps(x) + "\n" for x in clean))
+    assert sanitize.scan_snapshot(tmp_path, NAMES) == {}
