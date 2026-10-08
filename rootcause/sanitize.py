@@ -44,7 +44,7 @@ NEUTRAL_REWRITES = [
 # Envoy's fault filter marks injected delays/aborts with DI/FI in RESPONSE_FLAGS ("delay injected"): the answer for
 # image-slow-load. Rewritten, not dropped, so the latency evidence survives. Access-log form: `" 200 DI via_upstream`.
 FAULT_FLAGS = {"DI", "FI"}
-_ACCESS_FLAGS = re.compile(r'(" \d{1,3} )([A-Z]{1,3}(?:,[A-Z]{1,3})*)(?= )')
+_ACCESS_FLAGS = re.compile(r'(" \d{1,3} )([A-Z]+(?:,[A-Z]+)*)(?= )')
 
 
 def _drop_fault_flags(flags):
