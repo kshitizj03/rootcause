@@ -19,6 +19,15 @@ def _read_jsonl_gz(path):
         return [json.loads(line) for line in f]
 
 
+def latest_rows(index_path, scenario_ids=None):
+    """{scenario id: newest index.jsonl row that has a path}; rows without a path (failed captures) are skipped.
+    scenario_ids, if given, restricts the result to those ids. A missing index gives {}."""
+    index = Path(index_path)
+    rows = [json.loads(l) for l in index.read_text(encoding="utf-8").splitlines() if l.strip()] if index.exists() else []
+    latest = {r["scenario"]: r for r in rows if r.get("path")}  # later rows overwrite earlier ones
+    return latest if scenario_ids is None else {i: latest[i] for i in scenario_ids if i in latest}
+
+
 def capture(scenario, t_inject, t_end, names, fetch=backends, out_dir=config.SNAPSHOTS, demo_commit=""):
     baseline_start = t_inject - config.BASELINE_S
     metrics = signals.fetch_series(fetch.prom_range, baseline_start, t_end, config.STEP_S)

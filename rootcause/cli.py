@@ -36,8 +36,17 @@ def reset_stack(injector=None, run=inject._run):
         injector.restore()
     except Exception as e:
         errors.append(str(e))
-    undo = sorted({(a["action"], a["container"])
-                   for s in scenarios.load_all() for a in s.inject.get("docker") or []})
+    try:
+        undo = sorted({(a["action"], a["container"])
+                       for s in scenarios.load_all() for a in s.inject.get("docker") or []})
+    except Exception as e:  # can't tell which containers scenarios touch: undo every running known target instead
+        errors.append(f"scenarios: {e}")
+        try:
+            running = set(run(["docker", "ps", "--format", "{{.Names}}"]).split())
+        except (subprocess.CalledProcessError, OSError) as e:
+            errors.append(f"docker ps: {e}")
+            running = set()
+        undo = sorted((a, t) for t in config.KNOWN_TARGETS if t in running for a in ("pause", "cpus"))
     ncpu = None
     if any(action == "cpus" for action, _ in undo):
         try:
@@ -61,7 +70,10 @@ def reset_stack(injector=None, run=inject._run):
     harness.mark_restored(time.time(), config.STATE_FILE)
 
 
-def _is_dirty():
+def _needs_reset():
+    """A failed restore (dirty state) or a flag-file backup left by a killed run means the stack isn't clean."""
+    if Path(str(config.FLAGS_FILE) + ".orig").exists():
+        return True
     try:
         return bool(json.loads(Path(config.STATE_FILE).read_text(encoding="utf-8")).get("dirty"))
     except (OSError, ValueError, AttributeError):
@@ -107,9 +119,7 @@ def _leak_check(args):
 
 def _revalidate(args, resanitize=False):
     dry_run = resanitize and args.dry_run
-    index = Path(config.SNAPSHOTS) / "index.jsonl"
-    rows = [json.loads(l) for l in index.read_text(encoding="utf-8").splitlines() if l.strip()] if index.exists() else []
-    latest = {r["scenario"]: r for r in rows if r.get("path")}  # later rows overwrite earlier ones
+    latest = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl")
     known = {s.id: s for s in scenarios.load_all()}
     ids = args.ids or [i for i in latest if i in known]
     unknown = [i for i in ids if i not in known or i not in latest]
@@ -166,8 +176,8 @@ def main(argv=None):
 def _dispatch(args):
     if args.cmd == "up":
         env.compose("up", "-d", "--quiet-pull")
-        if _is_dirty():
-            print("state is dirty (a previous restore failed): run `python -m rootcause reset-flags` first",
+        if _needs_reset():
+            print("state is dirty (a previous restore failed or the flag file backup is left over): run `python -m rootcause reset-flags` first",
                   file=sys.stderr)
             return 3
         # a fresh stack has no clean 15-minute baseline yet: the first record waits the full cool-down

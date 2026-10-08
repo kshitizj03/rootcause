@@ -285,3 +285,18 @@ def test_resanitize_removes_stale_tmp_files_and_never_promotes_them(tmp_path):
     assert snapshot.resanitize(tmp_path, NAMES)["metrics"] == (1, 1)
     assert (tmp_path / "metrics.json").read_text() == good
     assert sorted(p.name for p in tmp_path.iterdir()) == ["logs.jsonl.gz", "metrics.json", "spans.jsonl.gz"]
+
+
+# --- latest_rows: newest index row per scenario, rows without a path skipped ---
+
+def test_latest_rows_newest_row_with_a_path_wins(tmp_path):
+    index = tmp_path / "index.jsonl"
+    rows = [{"scenario": "a", "path": "p1", "valid": False},
+            {"scenario": "b", "path": "q1", "valid": True},
+            {"scenario": "a", "path": "p2", "valid": True},
+            {"scenario": "a", "valid": False, "error": "capture failed"},   # no path: skipped, p2 stays latest
+            {"scenario": "c", "valid": False, "error": "never captured"}]   # only pathless rows: absent
+    index.write_text("\n".join(json.dumps(r) for r in rows) + "\n\n", encoding="utf-8")
+    assert snapshot.latest_rows(index) == {"a": rows[2], "b": rows[1]}
+    assert snapshot.latest_rows(index, ["b", "zzz"]) == {"b": rows[1]}
+    assert snapshot.latest_rows(tmp_path / "missing.jsonl") == {}

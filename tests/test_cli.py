@@ -26,6 +26,7 @@ FIXED = [sc("s1", [{"action": "pause", "container": "valkey-cart"}]),
 def state(tmp_path, monkeypatch):
     f = tmp_path / "state.json"
     monkeypatch.setattr(config, "STATE_FILE", f)
+    monkeypatch.setattr(config, "FLAGS_FILE", tmp_path / "demo.flagd.json")
     return f
 
 
@@ -91,6 +92,14 @@ def test_up_does_not_clear_dirty_state(state, monkeypatch, capsys):
     assert "reset-flags" in capsys.readouterr().err
 
 
+def test_up_refuses_when_a_flags_backup_is_left_over(state, monkeypatch, capsys):
+    config.FLAGS_FILE.with_name(config.FLAGS_FILE.name + ".orig").write_text("{}")
+    monkeypatch.setattr(env, "compose", lambda *a: None)
+    assert cli.main(["up"]) == 3
+    assert not state.exists()
+    assert "reset-flags" in capsys.readouterr().err
+
+
 # --- reset-flags ---
 
 def test_reset_undoes_flags_and_docker_and_clears_dirty_state(stack, state):
@@ -140,6 +149,30 @@ def test_reset_oserror_does_not_abort_remaining_undos(stack, state):
         reset(stack, fake_run(calls, fail))
     assert ["docker", "unpause", "valkey-cart"] in calls
     assert json.loads(state.read_text())["dirty"] is True
+
+
+def test_reset_with_unloadable_scenarios_still_undoes_every_running_known_target(stack, state, monkeypatch):
+    def broken():
+        raise ValueError("bad yaml in x.yaml")
+    monkeypatch.setattr(scenarios, "load_all", broken)
+    calls = []
+
+    def run(cmd):
+        calls.append(cmd)
+        if cmd == INFO:
+            return "16\n"
+        if cmd == ["docker", "ps", "--format", "{{.Names}}"]:
+            return "kafka\ncurrency\nnot-a-target\n"
+        if cmd[1] == "unpause" and cmd[2] == "currency":
+            raise subprocess.CalledProcessError(1, cmd, stderr="Container currency is not paused")
+        return ""
+
+    with pytest.raises(RuntimeError, match="bad yaml in x.yaml"):
+        reset(stack, run)
+    undos = [c for c in calls if c[1] in ("update", "unpause")]
+    assert undos == [["docker", "update", "--cpus", "16", "currency"], ["docker", "update", "--cpus", "16", "kafka"],
+                     ["docker", "unpause", "currency"], ["docker", "unpause", "kafka"]]
+    assert json.loads(state.read_text())["dirty"] is True  # an error occurred, so still dirty
 
 
 @pytest.mark.parametrize("bad", ["", "abc\n", "0\n"])
