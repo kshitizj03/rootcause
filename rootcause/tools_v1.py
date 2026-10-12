@@ -41,7 +41,7 @@ def service_map(snap, limit=20):
     edges = defaultdict(lambda: {"calls_before": 0, "calls_after": 0, "errors_before": 0, "errors_after": 0})
     for s in snap["spans"]:
         parent = by_id.get(s["parent_id"])
-        if not parent or parent["service"] == s["service"] or s["start_ms"] < oldest:
+        if not parent or parent["service"] == s["service"] or s["start_ms"] < oldest:  # only the child span's age is filtered
             continue
         e = edges[(parent["service"], s["service"])]
         when = "after" if s["start_ms"] >= t0 else "before"
@@ -58,7 +58,7 @@ def service_map(snap, limit=20):
 
 TOOLS = {**tools.TOOLS, "top_changes": top_changes, "service_health": service_health, "service_map": service_map}
 SCHEMAS = tools.SCHEMAS + [
-    {"type": "function", "function": {"name": "top_changes", "description": "Start here. Every service's signals ranked by how much they changed from the 15 minutes before the alert to after it (error_ratio, p95_ms, mem_mb peak, cpu_cores, restarts; rps only with include_load).",
+    {"type": "function", "function": {"name": "top_changes", "description": f"Start here. Every service's signals ranked by how much they changed from the {config.BASELINE_S // 60} minutes before the alert to after it (error_ratio, p95_ms, mem_mb peak, cpu_cores, restarts; rps only with include_load).",
                                       "parameters": {"type": "object", "properties": {"n": {"type": "integer"}, "include_load": {"type": "boolean"}}}}},
     {"type": "function", "function": {"name": "service_health", "description": "All signals of one service, before vs after the alert, with the change.",
                                       "parameters": {"type": "object", "properties": {"service": {"type": "string"}}, "required": ["service"]}}},
