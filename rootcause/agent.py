@@ -143,7 +143,7 @@ class Agent:
         try:
             return self._solve(snap, info), info
         except openai.APIStatusError as e:
-            if not 400 <= e.status_code < 500 or e.status_code == 429:  # 429 / 5xx are the endpoint's trouble: retried upstream
+            if e.status_code not in (400, 422):  # everything else (429, 5xx, 401/403/404 config) must stop the batch, not be scored
                 raise
             # the conversation itself was rejected (e.g. an invalid turn): retrying cannot help, so it scores as a failure
             info["error"] = f"{type(e).__name__}: {e}"

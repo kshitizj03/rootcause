@@ -229,3 +229,23 @@ def test_code_version_is_short_sha_with_dirty_marker(monkeypatch):
 def test_code_version_is_unknown_without_git(monkeypatch):
     monkeypatch.setattr(evaluate.subprocess, "run", _fake_git({"rev-parse": FileNotFoundError("git"), "status": ""}))
     assert evaluate.code_version() == "unknown"
+
+
+def test_errors_column_is_the_scenario_balanced_share_of_error_records(tmp_path):
+    d = tmp_path / "x"
+    d.mkdir()
+    score = {"correct": 0.0, "top3": False, "fault_type_ok": False, "false_alarm": False, "abstained": True}
+    # p1: 1 of 4 records errored (0.25); p2: 1 of 1 (1.0) -> balanced 0.625, not 2/5
+    for sid, k, err in [("p1", 0, "BadRequestError: x"), ("p1", 1, None), ("p1", 2, None), ("p1", 3, None), ("p2", 0, "BadRequestError: y")]:
+        (d / f"{sid}__{k}.json").write_text(json.dumps({"scenario": sid, "category": "easy", "run": k, "score": score, "error": err}))
+    row = evaluate.summarise("x", out_dir=tmp_path)[0]
+    assert row["errors"] == 0.625
+    assert evaluate.format_summary([row]).splitlines()[0].endswith("| errors |")
+    assert evaluate.format_summary([row]).splitlines()[2].endswith("| 0.62 |")
+
+
+def test_errors_column_is_a_dash_when_the_solver_never_sets_error(tmp_path):
+    write_recs(tmp_path / "x", [("p1", "easy", 0)])
+    row = evaluate.summarise("x", out_dir=tmp_path)[0]
+    assert row["errors"] is None
+    assert evaluate.format_summary([row]).splitlines()[2].endswith("| - |")

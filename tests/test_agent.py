@@ -244,8 +244,7 @@ def test_models_records_the_model_that_served_the_response():
 
 
 @pytest.mark.parametrize("err", [status_error(openai.BadRequestError, 400, "invalid function_call turn"),
-                                 status_error(openai.UnprocessableEntityError, 422),
-                                 status_error(openai.APIStatusError, 413)])
+                                 status_error(openai.UnprocessableEntityError, 422)])
 def test_client_errors_the_conversation_causes_are_scored_not_retried(err):
     a, llm, clock = make([Msg(tool_calls=[tool_call("list_services", {})]), err], min_interval=0)
     report, info = a.solve(SNAP)
@@ -309,3 +308,12 @@ def test_wait_s_totals_throttle_and_backoff_sleeps():
                        min_interval=4.5)
     _, info = a.solve(SNAP)
     assert info["wait_s"] == sum(clock.sleeps) and info["wait_s"] >= 15
+
+
+@pytest.mark.parametrize("err", [status_error(openai.AuthenticationError, 401), status_error(openai.PermissionDeniedError, 403),
+                                 status_error(openai.NotFoundError, 404), status_error(openai.APIStatusError, 413)])
+def test_config_style_client_errors_propagate_and_stop_the_batch(err):
+    a, llm, _ = make([err], min_interval=0)
+    with pytest.raises(type(err)):
+        a.solve(SNAP)
+    assert len(llm.requests) == 1

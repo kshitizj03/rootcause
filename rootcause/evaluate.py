@@ -83,7 +83,8 @@ def _row(category, recs, expected=None):
             "top3": rate(lambda r: r["score"]["top3"]),
             "fault_type": rate(lambda r: r["score"]["fault_type_ok"]),
             "false_alarm": rate(lambda r: r["score"]["false_alarm"]),
-            "abstain": rate(lambda r: r["score"]["abstained"])}
+            "abstain": rate(lambda r: r["score"]["abstained"]),
+            "errors": rate(lambda r: None if "error" not in r else r["error"] is not None)}  # None: solver never sets it
 
 
 ORDER = ["easy", "hard-cross-service", "hard-silent", "hard-noisy", "hard-two-faults", "control"]
@@ -105,8 +106,8 @@ def summarise(solver_name, out_dir=RUNS_DIR, expected=None):
 
 def format_summary(rows):
     fmt = lambda x: "-" if x is None else f"{x:.2f}"
-    out = ["| category | scenarios | runs | accuracy (mean +/- sd) | top-3 | fault type (cause+type) | false alarm | abstain |",
-           "|---|---|---|---|---|---|---|---|"]
+    out = ["| category | scenarios | runs | accuracy (mean +/- sd) | top-3 | fault type (cause+type) | false alarm | abstain | errors |",
+           "|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         lo, hi = r["records_min"], r["records_max"]  # runs per scenario: "3-5" flags a partial batch
         runs = str(lo) if lo == hi else f"{lo}-{hi}"
@@ -115,6 +116,6 @@ def format_summary(rows):
         control = r["category"] == "control"
         out.append(f"| {r['category']} | {scenarios_} | {runs} | {fmt(r['accuracy_mean'])} +/- "
                    f"{fmt(r['accuracy_std'])} | {'-' if control else fmt(r['top3'])} | {fmt(r['fault_type'])} | "
-                   f"{fmt(r['false_alarm']) if control else '-'} | {fmt(r['abstain'])} |")
+                   f"{fmt(r['false_alarm']) if control else '-'} | {fmt(r['abstain'])} | {fmt(r['errors'])} |")
     out.append("two-fault: accuracy = fraction of causes found; top-3 = both causes found")
     return "\n".join(out)
