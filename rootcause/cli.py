@@ -12,7 +12,7 @@ try:
 except ImportError:
     OpenAIError = ()  # `except ()` catches nothing
 
-from rootcause import config, env, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot
+from rootcause import config, env, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot, tracing
 
 
 def _heuristic_solver():
@@ -85,6 +85,8 @@ def build_parser():
     ev = sub.add_parser("eval", help="run a solver over the recorded snapshots and score it")
     ev.add_argument("solver", choices=list(SOLVERS))
     ev.add_argument("--runs", type=int, default=1)
+    ev.add_argument("--trace", choices=["off", "otlp", "file"], default="off",
+                    help="self-trace the agent with OpenTelemetry GenAI spans (otlp: localhost:4318, file: data/agent_traces.jsonl)")
     ev.add_argument("ids", nargs="*")
     sm = sub.add_parser("summary", help="print the per-category score table for a solver's recorded runs")
     sm.add_argument("solver", choices=list(SOLVERS))
@@ -232,6 +234,15 @@ def _print_dry_run(i, counts):
 
 
 def _eval(args):
+    provider = tracing.setup(args.trace)  # before the solver (and its agent) is built; None when off
+    try:
+        return _eval_traced(args)
+    finally:
+        if provider is not None:
+            provider.shutdown()
+
+
+def _eval_traced(args):
     name, solve, stop_on = SOLVERS[args.solver]()
     out = evaluate.run(name, solve, runs=args.runs, ids=args.ids or None, stop_on=stop_on)
     print(f"{out['completed']} new runs" + (f"; stopped: {out['stopped']}" if out["stopped"] else ""))

@@ -5,9 +5,12 @@ rate limits back off, a per-day quota falls back to the next model and finally r
 can stop cleanly and resume later."""
 import os
 import time
+from contextlib import contextmanager
 
 import openai
 from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 
 from rootcause import config, tools
 from rootcause.score import Report, parse_report
@@ -94,12 +97,26 @@ def _per_day(err):
 
 class Agent:
     def __init__(self, llm=None, models=MODELS, max_steps=MAX_STEPS, min_interval=MIN_INTERVAL_S,
-                 sleep=time.sleep, clock=time.monotonic, toolset=tools, system=SYSTEM, name=NAME, attempts=ATTEMPTS):
-        """toolset: any object/module with SCHEMAS and call(snap, name, raw_args); system/name label an agent variant."""
+                 sleep=time.sleep, clock=time.monotonic, toolset=tools, system=SYSTEM, name=NAME, attempts=ATTEMPTS, tracer=None):
+        """toolset: any object/module with SCHEMAS and call(snap, name, raw_args); system/name label an agent variant.
+        tracer: OpenTelemetry tracer for self-tracing (a no-op unless a provider is installed)."""
+        self.tracer = tracer or trace.get_tracer("rootcause.agent")
         self.llm, self.models, self.max_steps = llm, list(models), max_steps
         self.toolset, self.system, self.name = toolset, system, name
         self.min_interval, self.sleep, self.clock = min_interval, sleep, clock
         self.exhausted, self._last, self.attempts = set(), None, attempts
+
+    @contextmanager
+    def _span(self, name, attrs):
+        """A span that, on failure, records only the exception type (messages can echo request content)."""
+        with self.tracer.start_as_current_span(name, attributes=attrs, record_exception=False,
+                                               set_status_on_exception=False) as span:
+            try:
+                yield span
+            except BaseException as e:
+                span.set_status(Status(StatusCode.ERROR))
+                span.set_attribute("error.type", type(e).__name__)
+                raise
 
     def _wait(self, info, seconds):
         self.sleep(seconds)
@@ -126,7 +143,16 @@ class Agent:
             for attempt in range(self.attempts):
                 self._throttle(info)
                 try:
-                    r = self.llm.chat.completions.create(model=model, **kw)
+                    with self._span(f"chat {model}", {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "gcp.gemini",
+                                                      "gen_ai.request.model": model}) as span:
+                        r = self.llm.chat.completions.create(model=model, **kw)
+                        if not r.choices:  # not a usable answer: no usage counted, retry like a server error
+                            raise EmptyResponse(f"{model} returned no choices")
+                        pt = getattr(r.usage, "prompt_tokens", 0) or 0
+                        ct = getattr(r.usage, "completion_tokens", 0) or 0
+                        served = getattr(r, "model", None) or model  # what actually answered, not what was asked for
+                        span.set_attributes({"gen_ai.response.model": served, "gen_ai.usage.input_tokens": pt,
+                                             "gen_ai.usage.output_tokens": ct})
                 except RateLimitError as e:
                     last = e
                     if _per_day(e):
@@ -134,18 +160,13 @@ class Agent:
                         break
                     self._backoff(info, attempt)
                     continue
-                except (InternalServerError, APITimeoutError, APIConnectionError) as e:
+                except (InternalServerError, APITimeoutError, APIConnectionError, EmptyResponse) as e:
                     last = e
                     self._backoff(info, attempt)
                     continue
-                if not r.choices:  # not a usable answer: no usage counted, retry like a server error
-                    last = EmptyResponse(f"{model} returned no choices")
-                    self._backoff(info, attempt)
-                    continue
                 info["requests"] += 1
-                info["prompt_tokens"] += getattr(r.usage, "prompt_tokens", 0) or 0
-                info["completion_tokens"] += getattr(r.usage, "completion_tokens", 0) or 0
-                served = getattr(r, "model", None) or model  # what actually answered, not what was asked for
+                info["prompt_tokens"] += pt
+                info["completion_tokens"] += ct
                 if served not in info["models"]:
                     info["models"].append(served)
                 return r.choices[0].message
@@ -168,6 +189,13 @@ class Agent:
                 return Report("insufficient_evidence")
 
     def solve(self, snap):
+        with self._span(f"invoke_agent {self.name}", {"gen_ai.operation.name": "invoke_agent",
+                                                      "gen_ai.agent.name": self.name}) as span:
+            report, info = self._solve_scored(snap)
+            span.set_attributes({"rootcause.verdict": report.verdict, "rootcause.requests": info["requests"]})
+            return report, info
+
+    def _solve_scored(self, snap):
         # steps = tool calls executed; turns = model requests inside the tool loop (a turn may hold several tool calls);
         # requests = every successful model request, including the repair / step-limit final ones
         info = {"solver": self.name, "models": [], "steps": 0, "turns": 0, "requests": 0, "prompt_tokens": 0,
@@ -194,7 +222,9 @@ class Agent:
             if not m.tool_calls:
                 return self._final(msgs, info, m.content or "")
             for tc in m.tool_calls:
-                out = self.toolset.call(snap, tc.function.name, tc.function.arguments)
+                with self._span(f"execute_tool {tc.function.name}", {"gen_ai.operation.name": "execute_tool",
+                                                                     "gen_ai.tool.name": tc.function.name}):
+                    out = self.toolset.call(snap, tc.function.name, tc.function.arguments)
                 info["steps"] += 1
                 info["transcript"].append({"tool": tc.function.name, "args": tc.function.arguments, "output": out})
                 msgs.append({"role": "tool", "tool_call_id": tc.id, "content": out})
