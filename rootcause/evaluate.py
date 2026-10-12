@@ -4,7 +4,7 @@ The solver only ever receives snapshot.load(path); truth.json is read after solv
 import json
 import statistics
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from rootcause import config, scenarios, snapshot
@@ -35,8 +35,8 @@ def run(solver_name, solve, runs=1, ids=None, out_dir=RUNS_DIR, stop_on=(), cloc
                 report, info = solve(snap)
             except stop_on as e:  # e.g. the daily free-tier quota: stop cleanly, resume tomorrow
                 return {"completed": done, "stopped": f"{type(e).__name__}: {e}"}
-            rec = {"scenario": sid, "category": category, "run": k, "seconds": clock() - t0,
-                   "report": report_to_dict(report), "score": score(report, snapshot.load_truth(path)), **info}
+            rec = {**info, "scenario": sid, "category": category, "run": k, "seconds": clock() - t0,  # info first: it can't overwrite these
+                   "report": report_to_dict(report), "score": score(report, snapshot.load_truth(path))}
             tmp = f.with_suffix(".tmp")
             tmp.write_text(json.dumps(rec, indent=1), encoding="utf-8")
             tmp.replace(f)  # a crash mid-write never leaves a half record that resume would skip
@@ -51,7 +51,9 @@ def _row(category, recs):
     accs = [sum(v) / len(v) for v in by_run.values()]
     ft = [r["score"]["fault_type_ok"] for r in recs if r["score"]["fault_type_ok"] is not None]
     mean = lambda xs: sum(xs) / len(xs) if xs else None
-    return {"category": category, "scenarios": len({r["scenario"] for r in recs}), "runs": len(by_run),
+    per_scenario = Counter(r["scenario"] for r in recs).values()  # uneven when a batch stopped part-way
+    return {"category": category, "scenarios": len(per_scenario), "runs": len(by_run),
+            "records_min": min(per_scenario), "records_max": max(per_scenario),
             "accuracy_mean": mean(accs), "accuracy_std": statistics.pstdev(accs) if accs else None,
             "top3": mean([float(r["score"]["top3"]) for r in recs]),
             "fault_type": mean([float(x) for x in ft]),
@@ -76,10 +78,12 @@ def summarise(solver_name, out_dir=RUNS_DIR):
 
 def format_summary(rows):
     fmt = lambda x: "-" if x is None else f"{x:.2f}"
-    out = ["| category | scenarios | runs | accuracy (mean ± sd) | top-3 | fault type | false alarm | abstain |",
+    out = ["| category | scenarios | runs | accuracy (mean +/- sd) | top-3 | fault type | false alarm | abstain |",
            "|---|---|---|---|---|---|---|---|"]
     for r in rows:
-        out.append(f"| {r['category']} | {r['scenarios']} | {r['runs']} | {fmt(r['accuracy_mean'])} ± "
+        lo, hi = r["records_min"], r["records_max"]  # runs per scenario: "3-5" flags a partial batch
+        runs = str(lo) if lo == hi else f"{lo}-{hi}"
+        out.append(f"| {r['category']} | {r['scenarios']} | {runs} | {fmt(r['accuracy_mean'])} +/- "
                    f"{fmt(r['accuracy_std'])} | {fmt(r['top3'])} | {fmt(r['fault_type'])} | "
                    f"{fmt(r['false_alarm'])} | {fmt(r['abstain'])} |")
     return "\n".join(out)

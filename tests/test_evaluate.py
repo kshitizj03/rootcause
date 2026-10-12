@@ -97,3 +97,42 @@ def test_summarise_means_and_spread_over_runs(tmp_path):
     assert rows["control"]["false_alarm"] == 0.5 and rows["control"]["fault_type"] is None
     assert rows["all incidents"]["accuracy_mean"] == 0.75
     assert "| easy |" in evaluate.format_summary(list(rows.values()))
+
+
+# --- cleanup: partial batches, record layout, console-safe table ---
+
+def write_recs(d, recs):
+    d.mkdir(exist_ok=True)
+    for sid, cat, k in recs:
+        score = {"correct": 1.0, "top3": True, "fault_type_ok": True, "false_alarm": False, "abstained": False}
+        (d / f"{sid}__{k}.json").write_text(json.dumps({"scenario": sid, "category": cat, "run": k, "score": score}))
+
+
+def test_summarise_exposes_uneven_records_per_scenario(tmp_path):
+    write_recs(tmp_path / "x", [("p1", "easy", 0), ("p1", "easy", 1), ("p1", "easy", 2), ("p2", "easy", 0)])
+    rows = {r["category"]: r for r in evaluate.summarise("x", out_dir=tmp_path)}
+    assert (rows["easy"]["records_min"], rows["easy"]["records_max"]) == (1, 3)
+    assert (rows["all incidents"]["records_min"], rows["all incidents"]["records_max"]) == (1, 3)
+    table = evaluate.format_summary(list(rows.values()))
+    assert "| easy | 2 | 1-3 |" in table
+
+
+def test_even_runs_show_a_single_number(tmp_path):
+    write_recs(tmp_path / "x", [("p1", "easy", 0), ("p1", "easy", 1), ("p2", "easy", 0), ("p2", "easy", 1)])
+    rows = evaluate.summarise("x", out_dir=tmp_path)
+    assert (rows[0]["records_min"], rows[0]["records_max"]) == (2, 2)
+    assert "| easy | 2 | 2 |" in evaluate.format_summary(rows)
+
+
+def test_table_is_ascii_for_the_windows_console(tmp_path):
+    write_recs(tmp_path / "x", [("p1", "easy", 0)])
+    table = evaluate.format_summary(evaluate.summarise("x", out_dir=tmp_path))
+    assert "+/-" in table and "±" not in table and table.isascii()
+
+
+def test_solver_info_cannot_overwrite_record_fields(lib):
+    evaluate.run("evil", lambda snap: (Report("no_incident"), {"scenario": "x", "category": "y", "run": 99, "seconds": -1,
+                                                                 "report": "r", "score": "s", "extra": 1}), out_dir=lib / "runs")
+    rec = json.loads((lib / "runs" / "evil" / "pay__0.json").read_text())
+    assert (rec["scenario"], rec["category"], rec["run"]) == ("pay", "easy", 0)
+    assert rec["seconds"] >= 0 and isinstance(rec["report"], dict) and isinstance(rec["score"], dict) and rec["extra"] == 1
