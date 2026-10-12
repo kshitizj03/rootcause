@@ -225,8 +225,7 @@ def _eval(args):
 
 
 def _print_summary(name, solver, split="all"):
-    in_split = {"all": lambda i: True, "tune": lambda i: i not in config.HELDOUT, "heldout": lambda i: i in config.HELDOUT}[split]
-    expected = dict(Counter(s.category for s in scenarios.load_all() if in_split(s.id)))  # library scenarios in the split
+    expected = dict(Counter(s.category for s in scenarios.load_all() if evaluate.in_split(s.id, split)))  # library scenarios in the split
     rows = evaluate.summarise(name, expected=expected, split=split)
     print(evaluate.format_summary(rows) if rows else f"no runs recorded for {solver} ({split})")
 
