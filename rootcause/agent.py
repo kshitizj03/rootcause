@@ -62,12 +62,12 @@ def _per_day(err):
 
 class Agent:
     def __init__(self, llm=None, models=MODELS, max_steps=MAX_STEPS, min_interval=MIN_INTERVAL_S,
-                 sleep=time.sleep, clock=time.monotonic, toolset=tools, system=SYSTEM, name=NAME):
+                 sleep=time.sleep, clock=time.monotonic, toolset=tools, system=SYSTEM, name=NAME, attempts=ATTEMPTS):
         """toolset: any object/module with SCHEMAS and call(snap, name, raw_args); system/name label an agent variant."""
         self.llm, self.models, self.max_steps = llm, list(models), max_steps
         self.toolset, self.system, self.name = toolset, system, name
         self.min_interval, self.sleep, self.clock = min_interval, sleep, clock
-        self.exhausted, self._last = set(), None
+        self.exhausted, self._last, self.attempts = set(), None, attempts
 
     def _wait(self, info, seconds):
         self.sleep(seconds)
@@ -81,7 +81,7 @@ class Agent:
         self._last = self.clock()
 
     def _backoff(self, info, attempt):
-        if attempt < ATTEMPTS - 1:  # only sleep if another attempt on the same model follows
+        if attempt < self.attempts - 1:  # only sleep if another attempt on the same model follows
             self._wait(info, 15 * 2 ** attempt)
 
     def _chat(self, info, **kw):
@@ -91,7 +91,7 @@ class Agent:
         for model in self.models:
             if model in self.exhausted:
                 continue
-            for attempt in range(ATTEMPTS):
+            for attempt in range(self.attempts):
                 self._throttle(info)
                 try:
                     r = self.llm.chat.completions.create(model=model, **kw)
@@ -143,7 +143,9 @@ class Agent:
         try:
             return self._solve(snap, info), info
         except openai.APIStatusError as e:
-            if e.status_code not in (400, 422):  # everything else (429, 5xx, 401/403/404 config) must stop the batch, not be scored
+            # everything else (429, 5xx, 401/403/404 config) must stop the batch, not be scored. Gemini also reports a bad or
+            # expired key as 400, and a 400 before the model has answered once can't be the conversation's fault.
+            if e.status_code not in (400, 422) or info["requests"] == 0 or "api key" in str(e).lower():
                 raise
             # the conversation itself was rejected (e.g. an invalid turn): retrying cannot help, so it scores as a failure
             info["error"] = f"{type(e).__name__}: {e}"

@@ -317,3 +317,22 @@ def test_config_style_client_errors_propagate_and_stop_the_batch(err):
     with pytest.raises(type(err)):
         a.solve(SNAP)
     assert len(llm.requests) == 1
+
+
+def test_a_400_before_the_model_ever_answered_stops_the_batch():
+    a, _, _ = make([status_error(openai.BadRequestError, 400, "invalid tool schema")], min_interval=0)
+    with pytest.raises(openai.BadRequestError):
+        a.solve(SNAP)
+
+
+def test_a_bad_api_key_400_mid_conversation_stops_the_batch():
+    err = status_error(openai.BadRequestError, 400, "API key not valid. Please pass a valid API key.")
+    a, _, _ = make([Msg(tool_calls=[tool_call("list_services", {})]), err], min_interval=0)
+    with pytest.raises(openai.BadRequestError):
+        a.solve(SNAP)
+
+
+def test_attempts_per_model_is_configurable():
+    a, llm, clock = make([server_error()] * 4 + [Msg(content=FINAL)], min_interval=0, models=agent.MODELS[:1], attempts=5)
+    report, _ = a.solve(SNAP)
+    assert report.verdict == "incident" and clock.sleeps == [15, 30, 60, 120]

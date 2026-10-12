@@ -522,7 +522,7 @@ def test_eval_agent_pins_the_batch_to_one_model(monkeypatch):
     _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 0, "stopped": None})
     monkeypatch.setattr(agent, "Agent", FakeAgent)
     assert cli.main(["eval", "agent"]) == 0
-    assert built == {"models": agent.MODELS[:1]}  # a per-day quota must stop the batch, not switch models mid-table
+    assert built == {"models": agent.MODELS[:1], "attempts": 5}  # a per-day quota must stop the batch, not switch models mid-table
 
 
 def test_eval_and_summary_resolve_solvers_through_the_solvers_table(monkeypatch, capsys):
