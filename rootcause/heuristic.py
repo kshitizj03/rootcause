@@ -2,7 +2,7 @@
 from rootcause import summary
 from rootcause.score import Cause, Report
 
-THRESHOLD = 1.0  # the signal must at least double (score = relative rise); fixed a priori, never tuned to results
+THRESHOLD = 1.0  # relative rise >= 1.0 against max(baseline, floor); fixed a priori, never tuned to results
 RANKED = ("error_ratio", "p95_ms", "mem_mb", "cpu_cores", "restarts")  # rps is load, not a fault signal
 
 
