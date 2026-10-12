@@ -1,0 +1,5 @@
+category: control
+alert: "Product pages are loading slowly for some users right now."
+truth: {causes: []}
+checks:
+  - {service: "*", signal: error_ratio, at_most: 0.15}

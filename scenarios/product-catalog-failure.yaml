@@ -1,0 +1,6 @@
+category: easy
+alert: "Opening one particular product shows an error page."
+inject: {flags: {productCatalogFailure: "on"}}
+truth: {causes: [{accept: [product-catalog], fault_type: errors}]}
+checks:
+  - {service: product-catalog, signal: error_ratio, at_least: 0.01}

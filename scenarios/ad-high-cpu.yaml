@@ -1,0 +1,6 @@
+category: hard-silent
+alert: "The storefront feels slower than usual on some pages."
+inject: {flags: {adHighCpu: "on"}}
+truth: {causes: [{accept: [ad], fault_type: resource}]}
+checks:
+  - {service: ad, signal: cpu_cores, ratio_at_least: 2}

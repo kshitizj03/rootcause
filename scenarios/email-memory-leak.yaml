@@ -1,0 +1,7 @@
+category: hard-silent
+alert: "Customers say order confirmation messages arrive late or not at all."
+inject: {flags: {emailMemoryLeak: "1000x"}}
+truth: {causes: [{accept: [email], fault_type: resource}]}
+checks:
+  # email's container limit is 100 MiB on a ~77 MB baseline, so a 1.5x peak is impossible; 1000x reaches ~1.2x in 5 min
+  - {service: email, signal: mem_mb, stat: max, ratio_at_least: 1.15}

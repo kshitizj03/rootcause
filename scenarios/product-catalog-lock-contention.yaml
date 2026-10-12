@@ -1,0 +1,6 @@
+category: hard-silent
+alert: "Browsing the storefront has become sluggish."
+inject: {flags: {productCatalogLockContention: "on"}}
+truth: {causes: [{accept: [product-catalog], fault_type: latency}]}
+checks:
+  - {service: product-catalog, signal: p95_ms, ratio_at_least: 2}

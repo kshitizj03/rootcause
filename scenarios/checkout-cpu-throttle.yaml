@@ -1,0 +1,8 @@
+category: hard-silent
+alert: "Placing an order has become slow for many customers."
+# replaces currency-cpu-throttle: currency uses ~0.01 cores and docker's minimum cap is 0.01, so it can't be throttled;
+# the order service uses ~0.16 cores, so a 0.03 cap starves it
+inject: {docker: [{action: cpus, container: checkout, value: 0.03}]}
+truth: {causes: [{accept: [checkout], fault_type: latency}]}
+checks:
+  - {service: checkout, signal: p95_ms, ratio_at_least: 2}

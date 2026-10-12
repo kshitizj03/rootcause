@@ -1,0 +1,8 @@
+category: hard-noisy
+alert: "The site has become slow during a traffic surge."
+inject: {flags: {productCatalogLockContention: "on", loadGeneratorFloodHomepage: "on"}}
+truth: {causes: [{accept: [product-catalog], fault_type: latency}]}
+checks:
+  - {service: product-catalog, signal: p95_ms, ratio_at_least: 2}
+  # the decoy flood ramps up over several minutes, so its mean understates it; check its peak
+  - {service: frontend, signal: rps, stat: max, ratio_at_least: 1.5}
