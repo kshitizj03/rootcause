@@ -72,6 +72,8 @@ def build_parser():
     sm = sub.add_parser("summary", help="print the per-category score table for a solver's recorded runs")
     sm.add_argument("solver", choices=list(SOLVERS))
     sm.add_argument("--split", choices=["all", "tune", "heldout"], default="all")
+    mc = sub.add_parser("mcp", help="serve the v1 tools for one snapshot over MCP (stdio)")
+    mc.add_argument("path")
     return p
 
 
@@ -272,4 +274,7 @@ def _dispatch(args):
         return _eval(args)
     elif args.cmd == "summary":
         _print_summary(SOLVERS[args.solver]()[0], args.solver, args.split)
+    elif args.cmd == "mcp":
+        from rootcause import mcp_server
+        return mcp_server.main([args.path])
     return 0
