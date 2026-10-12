@@ -77,8 +77,18 @@ traces), `search_traces`, `get_trace`, `search_logs`, `query_metrics` (allow-lis
 return the valid options.
 
 ### 8. Agent
-A plain Python tool loop with Gemini (retry + fallback) and a pydantic-validated report:
-`root_cause_services`, `fault_type`, `evidence[]`, `confidence`, or "no incident".
+A plain Python tool loop with Gemini (retry + fallback) and a pydantic-validated report with one of three verdicts:
+- `incident`: up to 3 ranked `causes` (each `service` + `fault_type`), `evidence[]` and `confidence` (0–1);
+- `no_incident`;
+- `insufficient_evidence`: the agent abstains instead of guessing.
+
+### 8b. Scoring rules (fixed before any scoring run; never tuned to results)
+- **Single-cause incident** (easy, cross-service, silent, noisy): **correct** iff the top-ranked cause's service is in the scenario's `accept` list. Top-3 accuracy is also reported. Naming a noisy scenario's decoy first is wrong.
+- **Two-fault incident:** credit is the fraction of true causes matched by any listed cause (0, ½ or 1). "Fully correct" means 1.
+- **Control:** correct iff the verdict is `no_incident`. Any `incident` verdict is a **false alarm**.
+- **Fault type:** correct iff the matched cause's `fault_type` equals the truth's (errors / latency / resource).
+- **Abstention:** `insufficient_evidence` is wrong in plain accuracy. It is left out of the covered set in the accuracy-vs-coverage curve.
+- The heuristic is scored by the same code. It always answers (`incident` with its top-ranked services, or `no_incident` when nothing beats its threshold).
 
 ### 9. Evidence checker
 Confirms the cited trace IDs, metrics and log lines exist in the snapshot, and reports a
@@ -87,8 +97,13 @@ Confirms the cited trace IDs, metrics and log lines exist in the snapshot, and r
 ### 10. Evaluation report
 Per category, **heuristic vs. agent**: root-cause accuracy, fault-type accuracy, false-alarm rate
 (controls), grounded evidence, steps, time and requests. Each is given as **mean ± spread over 5+
-runs**. Ablations: naive vs. change-aware tools, with and without the anti-anchoring prompt, and
-Flash-Lite vs. Flash (subset, quota permitting). The **free-tier limits hit** are documented.
+runs**. Ablations: naive vs. change-aware tools, with and without the anti-anchoring prompt,
+**vague vs. specific alert text** (same snapshots), and Flash-Lite vs. Flash (subset, quota permitting).
+The **free-tier limits hit** are documented. Also reported:
+- **accuracy vs. coverage**: accuracy when the agent answers only above a confidence threshold, using `confidence` and abstentions;
+- **tokens per run** and **cost per correct diagnosis**, priced at list rates even though the runs are free.
+
+**Held-out set.** Before any prompt or tool tuning (week 3), one scenario per category (6 of 20) is frozen as held-out. It is not looked at during tuning and is reported separately from the tuning set.
 
 ### 11. Replay website (the hero, since there's no live demo)
 For each incident: the symptom, then each tool call and its output, then the evidence, the verdict,
@@ -102,9 +117,9 @@ OTel GenAI spans for the agent's LLM and tool calls, sent to the same Jaeger.
 Symptom → a small **decision model** scores "which service is the root cause?" over the compressed
 telemetry summary → if confident, answer (with evidence checked); otherwise hand off to the Gemini
 agent, which keeps full tool access and gets the suspects only as hints.
-- **Candidate: Hunch** (Antares Labs; Apache-2.0; 0.6B/1.7B, runs locally on the RTX 3060; free, no quota).
+- **Candidate: Laya** (convaiinnovations; Apache-2.0; 421M ModernBERT encoder; typed `choice` questions with per-option probabilities; local on the RTX 3060 or a CPU; free, no quota). It fits a "which service?" choice better than a generative model. Its own benchmarks show near-chance zero-shot accuracy on unfamiliar decision tasks and miscalibrated confidence until temperature-fitted, and the English checkpoint reads at most 512 tokens. **No fine-tuning or calibration on the benchmark incidents** (that would leak). Fallback candidate: Hunch (Antares Labs; Apache-2.0; 0.6B/1.7B).
 - Jev (TypeSafe AI) was tested on 2026-09-26: Vercel AI Gateway returned 403 "requires a valid credit card on file", so it is dropped unless a card is added.
-- **Entry test (~30 min, on the saved snapshots):** does it beat the heuristic? Known risks from its own documentation: trained on intent/moderation data (not ops), and input wording moved ~33% of its answers (the anchoring risk).
+- **Entry test (~30 min, on the saved snapshots):** does it beat the heuristic? Laya gets the same compressed summary the heuristic uses, zero-shot, over all 20 snapshots (with `no_incident` as an option). It earns the cascade experiment only if it beats the heuristic; otherwise its failure to transfer is reported as a finding.
 - If it earns a place: report heuristic vs decision model vs agent vs cascade (accuracy, cost, latency, % escalated), with the confidence threshold calibrated on held-out incidents.
 
 ## Out of scope
@@ -113,8 +128,8 @@ Auto-fixing · Kubernetes · Slack/PagerDuty bots · paid models · fine-tuning 
 ## Build order and milestones (~4–5 weeks part-time)
 | Week | Deliverable | Done when |
 |---|---|---|
-| 1 | Environment + harness + snapshots + sanitiser + leak test | 20 incidents captured, signal-validated, leak test passes |
-| 2 | Heuristic baseline + agent v0 | Both scored on all snapshots (5 runs each for the agent) |
+| 1 ✅ | Environment + harness + snapshots + sanitiser + leak test | **Done 2026-10-08:** 20 snapshots (16 faults + 4 controls), all valid, leak-check clean; see scenarios/NOTES.md |
+| 2 | Scoring harness + heuristic baseline + agent v0 | Both scored on all 20 snapshots (5 runs each for the agent) |
 | 3 | Change-aware tools (MCP) + evidence checker + agent v1 | v1 vs v0 vs heuristic per category |
 | 4 | Evaluation report + ablations + self-tracing | Report with means, spreads and charts |
 | 5 | Replay website + README + demo video + resume bullets | Public repo ready |
