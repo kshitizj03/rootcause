@@ -64,6 +64,7 @@ def build_parser():
     ev.add_argument("ids", nargs="*")
     sm = sub.add_parser("summary", help="print the per-category score table for a solver's recorded runs")
     sm.add_argument("solver", choices=list(SOLVERS))
+    sm.add_argument("--split", choices=["all", "tune", "heldout"], default="all")
     return p
 
 
@@ -214,9 +215,11 @@ def _eval(args):
     return 0
 
 
-def _print_summary(name, solver):
-    rows = evaluate.summarise(name, expected=dict(Counter(c for _, c, _ in evaluate.targets())))  # scenarios in the library
-    print(evaluate.format_summary(rows) if rows else f"no runs recorded for {solver}")
+def _print_summary(name, solver, split="all"):
+    in_split = {"all": lambda i: True, "tune": lambda i: i not in config.HELDOUT, "heldout": lambda i: i in config.HELDOUT}[split]
+    expected = dict(Counter(s.category for s in scenarios.load_all() if in_split(s.id)))  # library scenarios in the split
+    rows = evaluate.summarise(name, expected=expected, split=split)
+    print(evaluate.format_summary(rows) if rows else f"no runs recorded for {solver} ({split})")
 
 
 def main(argv=None):
@@ -261,5 +264,5 @@ def _dispatch(args):
     elif args.cmd == "eval":
         return _eval(args)
     elif args.cmd == "summary":
-        _print_summary(SOLVERS[args.solver]()[0], args.solver)
+        _print_summary(SOLVERS[args.solver]()[0], args.solver, args.split)
     return 0

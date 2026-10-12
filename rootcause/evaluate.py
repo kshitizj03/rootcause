@@ -90,10 +90,15 @@ def _row(category, recs, expected=None):
 ORDER = ["easy", "hard-cross-service", "hard-silent", "hard-noisy", "hard-two-faults", "control"]
 
 
-def summarise(solver_name, out_dir=RUNS_DIR, expected=None):
-    """expected: {category: number of scenarios in the library}, to show how complete each row is."""
+def summarise(solver_name, out_dir=RUNS_DIR, expected=None, split=None):
+    """expected: {category: number of scenarios in the library}, to show how complete each row is.
+    split: None/"all", "tune" (not config.HELDOUT) or "heldout"."""
     expected = expected or {}
     recs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((Path(out_dir) / solver_name).glob("*.json"))]
+    if split == "tune":
+        recs = [r for r in recs if r["scenario"] not in config.HELDOUT]
+    elif split == "heldout":
+        recs = [r for r in recs if r["scenario"] in config.HELDOUT]
     by_cat = defaultdict(list)
     for r in recs:
         by_cat[r["category"]].append(r)
