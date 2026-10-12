@@ -5,7 +5,7 @@ import json
 import statistics
 import subprocess
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from rootcause import config, evidence, scenarios, snapshot
@@ -102,6 +102,11 @@ def in_split(scenario_id, split):
     if split in ("tune", "heldout"):
         return (scenario_id in config.HELDOUT) == (split == "heldout")
     raise ValueError(f"unknown split {split!r}")
+
+
+def expected_counts(split="all"):
+    """{category: number of library scenarios in the split}, to show how complete each summary row is."""
+    return dict(Counter(s.category for s in scenarios.load_all() if in_split(s.id, split)))
 
 
 def load_records(solver_name, out_dir=RUNS_DIR, split=None):

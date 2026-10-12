@@ -89,6 +89,7 @@ def build_parser():
     sm = sub.add_parser("summary", help="print the per-category score table for a solver's recorded runs")
     sm.add_argument("solver", choices=list(SOLVERS))
     sm.add_argument("--split", choices=["all", "tune", "heldout"], default="all")
+    sub.add_parser("report", help="write docs/results/report.md and figures from all recorded runs")
     mc = sub.add_parser("mcp", help="serve the v1 tools for one snapshot over MCP (stdio)")
     mc.add_argument("path")
     return p
@@ -242,8 +243,7 @@ def _eval(args):
 
 
 def _print_summary(name, solver, split="all"):
-    expected = dict(Counter(s.category for s in scenarios.load_all() if evaluate.in_split(s.id, split)))  # library scenarios in the split
-    rows = evaluate.summarise(name, expected=expected, split=split)
+    rows = evaluate.summarise(name, expected=evaluate.expected_counts(split), split=split)
     print(evaluate.format_summary(rows) if rows else f"no runs recorded for {solver} ({split})")
 
 
@@ -290,6 +290,9 @@ def _dispatch(args):
         return _eval(args)
     elif args.cmd == "summary":
         _print_summary(SOLVERS[args.solver]()[0], args.solver, args.split)
+    elif args.cmd == "report":
+        from rootcause import report
+        print(report.build())
     elif args.cmd == "mcp":
         from rootcause import mcp_server
         return mcp_server.main([args.path])
