@@ -336,3 +336,10 @@ def test_attempts_per_model_is_configurable():
     a, llm, clock = make([server_error()] * 4 + [Msg(content=FINAL)], min_interval=0, models=agent.MODELS[:1], attempts=5)
     report, _ = a.solve(SNAP)
     assert report.verdict == "incident" and clock.sleeps == [15, 30, 60, 120]
+
+
+def test_v1_prompt_keeps_v0_priors_and_asks_for_structured_evidence():
+    for sentence in ("often NOT the cause", "It is possible that nothing is actually wrong"):
+        assert sentence in agent.SYSTEM and sentence in agent.SYSTEM_V1
+    assert '"kind": "metric"' in agent.SYSTEM_V1 and "top_changes" in agent.SYSTEM_V1
+    assert agent.NAME_V1 == "agent-v1"

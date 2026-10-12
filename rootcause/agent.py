@@ -31,6 +31,18 @@ SYSTEM = (
     ' "confidence": <0..1>}'
 )
 
+NAME_V1 = "agent-v1"
+SYSTEM_V1 = SYSTEM.replace(
+    ' "evidence": ["<short facts you observed>"],\n',
+    ' "evidence": [  // cite what you saw so it can be checked:\n'
+    '   {"kind": "metric", "service": "<service>", "signal": "<signal>", "claim": "<before -> after>"},\n'
+    '   {"kind": "trace", "trace_id": "<id>", "service": "<service>", "claim": "<what the trace shows>"},\n'
+    '   {"kind": "log", "service": "<service>", "quote": "<exact text copied from a log line>"}],\n'
+).replace("Use the tools to look at the telemetry, ",
+          "Use the tools to look at the telemetry (start with top_changes and service_map), ")
+if SYSTEM_V1 == SYSTEM:  # a silent no-op replacement must fail loudly (asserts are stripped under -O)
+    raise ValueError("SYSTEM_V1: evidence or telemetry text no longer matches SYSTEM")
+
 
 class QuotaExhausted(RuntimeError):
     """Every model's daily free-tier quota is used up."""

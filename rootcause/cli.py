@@ -25,7 +25,14 @@ def _agent_solver():
     return agent.NAME, agent.Agent(models=agent.MODELS[:1], attempts=5).solve, (agent.QuotaExhausted,)
 
 
-SOLVERS = {"heuristic": _heuristic_solver, "agent": _agent_solver}  # CLI name -> factory of (record name, solve, stop_on)
+def _agent_v1_solver():
+    from rootcause import agent, tools_v1
+    a = agent.Agent(models=agent.MODELS[:1], attempts=5, toolset=tools_v1, system=agent.SYSTEM_V1, name=agent.NAME_V1)
+    return agent.NAME_V1, a.solve, (agent.QuotaExhausted,)
+
+
+SOLVERS = {"heuristic": _heuristic_solver, "agent": _agent_solver,
+           "agent-v1": _agent_v1_solver}  # CLI name -> factory of (record name, solve, stop_on)
 
 
 class _Subparser(argparse.ArgumentParser):

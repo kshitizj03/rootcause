@@ -545,3 +545,20 @@ def test_summary_passes_the_library_scenario_counts_per_category(monkeypatch):
     monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: got.update(expected=expected) or [])
     assert cli.main(["summary", "heuristic"]) == 0
     assert got["expected"] == {"easy": 2, "control": 1}
+
+
+def test_agent_v1_solver_uses_v1_tools_and_prompt(monkeypatch):
+    from rootcause import agent, tools_v1
+    built = {}
+
+    class Fake:
+        def __init__(self, **kw):
+            built.update(kw)
+
+        def solve(self, snap):
+            raise AssertionError("not called")
+
+    monkeypatch.setattr(agent, "Agent", Fake)
+    name, _, stop_on = cli.SOLVERS["agent-v1"]()
+    assert name == "agent-v1" and stop_on == (agent.QuotaExhausted,)
+    assert built["toolset"] is tools_v1 and built["system"] == agent.SYSTEM_V1 and built["models"] == agent.MODELS[:1]
