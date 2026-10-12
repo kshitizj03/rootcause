@@ -7,6 +7,11 @@ import time
 from collections import Counter
 from pathlib import Path
 
+try:
+    from openai import OpenAIError  # the Gemini client's base error; the CLI still works without openai installed
+except ImportError:
+    OpenAIError = ()  # `except ()` catches nothing
+
 from rootcause import config, env, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot
 
 
@@ -193,14 +198,25 @@ def _eval(args):
         name, solve, stop_on = agent.NAME, agent.Agent().solve, (agent.QuotaExhausted,)
     out = evaluate.run(name, solve, runs=args.runs, ids=args.ids or None, stop_on=stop_on)
     print(f"{out['completed']} new runs" + (f"; stopped: {out['stopped']}" if out["stopped"] else ""))
-    print(evaluate.format_summary(evaluate.summarise(name)))
-    return 0 if not out["stopped"] else 4
+    _print_summary(name, args.solver)
+    if out["stopped"]:
+        print("re-run the same command after the quota resets to resume")
+        return 4
+    return 0
+
+
+def _print_summary(name, solver):
+    rows = evaluate.summarise(name)
+    print(evaluate.format_summary(rows) if rows else f"no runs recorded for {solver}")
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
     try:
         return _dispatch(args)
+    except OpenAIError as e:  # API failure after retries/fallback; the stack is fine, so no reset hint
+        print(f"Gemini API error: {e}", file=sys.stderr)
+        return 5
     except RuntimeError as e:  # includes harness.DirtyStateError / RestoreError
         print(f"error: {e} -- run `python -m rootcause reset-flags` to reset the stack", file=sys.stderr)
         return 3
@@ -237,5 +253,5 @@ def _dispatch(args):
         return _eval(args)
     elif args.cmd == "summary":
         name = "heuristic" if args.solver == "heuristic" else "agent-v0"
-        print(evaluate.format_summary(evaluate.summarise(name)))
+        _print_summary(name, args.solver)
     return 0

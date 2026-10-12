@@ -456,3 +456,48 @@ def test_eval_heuristic_runs_and_prints_summary(monkeypatch, capsys):
     assert cli.main(["eval", "heuristic"]) == 0
     assert calls == {"name": "heuristic", "runs": 1, "ids": None}
     assert "TABLE" in capsys.readouterr().out
+
+
+# --- cleanup: eval exit codes and summary messages ---
+
+def _stub_eval(monkeypatch, run):
+    from rootcause import evaluate
+    monkeypatch.setattr(evaluate, "run", run)
+    monkeypatch.setattr(evaluate, "summarise", lambda name: [{"category": "easy"}])
+    monkeypatch.setattr(evaluate, "format_summary", lambda rows: "TABLE")
+
+
+def test_eval_quota_stop_exits_4_and_says_how_to_resume(monkeypatch, capsys):
+    _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 2, "stopped": "QuotaExhausted: daily"})
+    assert cli.main(["eval", "agent"]) == 4
+    out = capsys.readouterr().out
+    assert "stopped: QuotaExhausted: daily" in out and "re-run the same command after the quota resets to resume" in out
+
+
+def test_eval_gemini_api_error_exits_5_without_the_reset_hint(monkeypatch, capsys):
+    import openai
+
+    def boom(*a, **k):
+        raise openai.OpenAIError("no choices")
+    _stub_eval(monkeypatch, boom)
+    assert cli.main(["eval", "agent"]) == 5
+    err = capsys.readouterr().err
+    assert "Gemini API error: no choices" in err and "reset-flags" not in err
+
+
+def test_stack_runtime_errors_still_exit_3_with_the_hint(monkeypatch, capsys):
+    from rootcause import evaluate
+
+    def boom(*a, **k):
+        raise RuntimeError("stack broke")
+    monkeypatch.setattr(evaluate, "run", boom)
+    assert cli.main(["eval", "heuristic"]) == 3
+    assert "reset-flags" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("solver", ["heuristic", "agent"])
+def test_summary_with_no_records_says_so(monkeypatch, capsys, solver):
+    from rootcause import evaluate
+    monkeypatch.setattr(evaluate, "summarise", lambda name: [])
+    assert cli.main(["summary", solver]) == 0
+    assert f"no runs recorded for {solver}" in capsys.readouterr().out
