@@ -32,7 +32,10 @@ def make_report(d):
     conf = d.get("confidence", 0.0)
     if isinstance(conf, bool) or not isinstance(conf, (int, float)):
         raise ValueError("confidence must be a number between 0 and 1")
-    evidence = tuple(str(e) for e in (d.get("evidence") or []))
+    evidence = d.get("evidence") or []
+    if isinstance(evidence, str):
+        evidence = [evidence]
+    evidence = tuple(str(e) for e in evidence)
     causes = ()
     if verdict == "incident":
         raw = d.get("causes") or []
@@ -42,7 +45,10 @@ def make_report(d):
         for c in raw[:MAX_CAUSES]:
             if not isinstance(c, dict):
                 raise ValueError("each cause must be an object with service and fault_type")
-            service = str(c.get("service", "")).strip().lower()
+            service = c.get("service")
+            if not isinstance(service, str):
+                raise ValueError("cause service must be a non-empty string")
+            service = re.sub(r"[\s_]+", "-", service.strip().lower())
             fault_type = str(c.get("fault_type", "")).strip().lower()
             if not service:
                 raise ValueError("cause service must be a non-empty string")
@@ -54,16 +60,22 @@ def make_report(d):
 
 
 def parse_report(text):
-    """Extract the JSON object from model text (fences/prose allowed) and validate it."""
+    """Find the model's final answer in text (fences/prose allowed): the last JSON object with a "verdict"."""
     text = re.sub(r"```(?:json)?", "", text or "")
-    start, end = text.find("{"), text.rfind("}")
-    if start < 0 or end < start:
+    decoder = json.JSONDecoder()
+    found = []
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(text, i)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and "verdict" in obj:
+            found.append(obj)
+    if not found:
         raise ValueError("no JSON object found in the answer")
-    try:
-        d = json.loads(text[start:end + 1])
-    except json.JSONDecodeError as e:
-        raise ValueError(f"answer is not valid JSON: {e}") from e
-    return make_report(d)
+    return make_report(found[-1])
 
 
 def report_to_dict(r):
@@ -90,6 +102,7 @@ def score(report, truth):
                 "fault_type_ok": bool(correct) and report.causes[0].fault_type == causes[0]["fault_type"],
                 "false_alarm": False, "abstained": False}
     used, matched = set(), []
+    # ponytail: greedy distinct matching; fault_type_ok is order-dependent when two true causes share a service. Fine for disjoint accept lists; use optimal matching if overlapping scenarios are added.
     for tc in causes:  # each reported cause may match at most one true cause
         hit = next((i for i, c in enumerate(report.causes) if i not in used and c.service in set(tc["accept"])), None)
         if hit is not None:
