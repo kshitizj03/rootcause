@@ -451,7 +451,8 @@ def test_eval_heuristic_runs_and_prints_summary(monkeypatch, capsys):
     from rootcause import evaluate
     calls = {}
     monkeypatch.setattr(evaluate, "run", lambda name, solve, runs, ids, stop_on=(): calls.update(name=name, runs=runs, ids=ids) or {"completed": 3, "stopped": None})
-    monkeypatch.setattr(evaluate, "summarise", lambda name: [{"category": "easy"}])
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None: [{"category": "easy"}])
+    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
     monkeypatch.setattr(evaluate, "format_summary", lambda rows: "TABLE")
     assert cli.main(["eval", "heuristic"]) == 0
     assert calls == {"name": "heuristic", "runs": 1, "ids": None}
@@ -463,7 +464,8 @@ def test_eval_heuristic_runs_and_prints_summary(monkeypatch, capsys):
 def _stub_eval(monkeypatch, run):
     from rootcause import evaluate
     monkeypatch.setattr(evaluate, "run", run)
-    monkeypatch.setattr(evaluate, "summarise", lambda name: [{"category": "easy"}])
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None: [{"category": "easy"}])
+    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
     monkeypatch.setattr(evaluate, "format_summary", lambda rows: "TABLE")
 
 
@@ -498,6 +500,47 @@ def test_stack_runtime_errors_still_exit_3_with_the_hint(monkeypatch, capsys):
 @pytest.mark.parametrize("solver", ["heuristic", "agent"])
 def test_summary_with_no_records_says_so(monkeypatch, capsys, solver):
     from rootcause import evaluate
-    monkeypatch.setattr(evaluate, "summarise", lambda name: [])
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None: [])
+    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
     assert cli.main(["summary", solver]) == 0
     assert f"no runs recorded for {solver}" in capsys.readouterr().out
+
+
+# --- final review: one model per eval batch, one SOLVERS table, expected scenario counts ---
+
+def test_eval_agent_pins_the_batch_to_one_model(monkeypatch):
+    from rootcause import agent
+    built = {}
+
+    class FakeAgent:
+        def __init__(self, **kw):
+            built.update(kw)
+
+        def solve(self, snap):
+            raise AssertionError("not called")
+
+    _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 0, "stopped": None})
+    monkeypatch.setattr(agent, "Agent", FakeAgent)
+    assert cli.main(["eval", "agent"]) == 0
+    assert built == {"models": agent.MODELS[:1]}  # a per-day quota must stop the batch, not switch models mid-table
+
+
+def test_eval_and_summary_resolve_solvers_through_the_solvers_table(monkeypatch, capsys):
+    from rootcause import evaluate
+    seen = {}
+    solve = lambda snap: None
+    monkeypatch.setattr(cli, "SOLVERS", {"heuristic": lambda: ("renamed", solve, ("stop",))})
+    monkeypatch.setattr(evaluate, "run", lambda name, s, runs, ids, stop_on=(): seen.update(run=(name, s, stop_on)) or {"completed": 0, "stopped": None})
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None: seen.setdefault("summ", []).append(name) or [])
+    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
+    assert cli.main(["eval", "heuristic"]) == 0 and cli.main(["summary", "heuristic"]) == 0
+    assert seen["run"] == ("renamed", solve, ("stop",)) and seen["summ"] == ["renamed", "renamed"]
+
+
+def test_summary_passes_the_library_scenario_counts_per_category(monkeypatch):
+    from rootcause import evaluate
+    got = {}
+    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [("a", "easy", "p"), ("b", "easy", "p"), ("c", "control", "p")])
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None: got.update(expected=expected) or [])
+    assert cli.main(["summary", "heuristic"]) == 0
+    assert got["expected"] == {"easy": 2, "control": 1}

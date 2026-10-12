@@ -15,6 +15,19 @@ except ImportError:
 from rootcause import config, env, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot
 
 
+def _heuristic_solver():
+    return "heuristic", heuristic.solve, ()
+
+
+def _agent_solver():
+    from rootcause import agent  # imported lazily: only the agent needs the Gemini client
+    # one model per batch: a per-day quota stops the run (resume tomorrow) instead of silently mixing models in the table
+    return agent.NAME, agent.Agent(models=agent.MODELS[:1]).solve, (agent.QuotaExhausted,)
+
+
+SOLVERS = {"heuristic": _heuristic_solver, "agent": _agent_solver}  # CLI name -> factory of (record name, solve, stop_on)
+
+
 class _Subparser(argparse.ArgumentParser):
     """Python 3.11's argparse gives a trailing `nargs="*"` positional [] when an option comes between it and the
     previous positional (`eval agent --runs 5 some-id`); intermixed parsing lets options and positionals interleave."""
@@ -46,11 +59,11 @@ def build_parser():
     resan.add_argument("ids", nargs="*")
     resan.add_argument("--dry-run", action="store_true", help="report what would be dropped; write nothing")
     ev = sub.add_parser("eval", help="run a solver over the recorded snapshots and score it")
-    ev.add_argument("solver", choices=["heuristic", "agent"])
+    ev.add_argument("solver", choices=list(SOLVERS))
     ev.add_argument("--runs", type=int, default=1)
     ev.add_argument("ids", nargs="*")
     sm = sub.add_parser("summary", help="print the per-category score table for a solver's recorded runs")
-    sm.add_argument("solver", choices=["heuristic", "agent"])
+    sm.add_argument("solver", choices=list(SOLVERS))
     return p
 
 
@@ -191,11 +204,7 @@ def _print_dry_run(i, counts):
 
 
 def _eval(args):
-    if args.solver == "heuristic":
-        name, solve, stop_on = "heuristic", heuristic.solve, ()
-    else:
-        from rootcause import agent  # imported lazily: only the agent needs the Gemini client
-        name, solve, stop_on = agent.NAME, agent.Agent().solve, (agent.QuotaExhausted,)
+    name, solve, stop_on = SOLVERS[args.solver]()
     out = evaluate.run(name, solve, runs=args.runs, ids=args.ids or None, stop_on=stop_on)
     print(f"{out['completed']} new runs" + (f"; stopped: {out['stopped']}" if out["stopped"] else ""))
     _print_summary(name, args.solver)
@@ -206,7 +215,7 @@ def _eval(args):
 
 
 def _print_summary(name, solver):
-    rows = evaluate.summarise(name)
+    rows = evaluate.summarise(name, expected=dict(Counter(c for _, c, _ in evaluate.targets())))  # scenarios in the library
     print(evaluate.format_summary(rows) if rows else f"no runs recorded for {solver}")
 
 
@@ -252,6 +261,5 @@ def _dispatch(args):
     elif args.cmd == "eval":
         return _eval(args)
     elif args.cmd == "summary":
-        name = "heuristic" if args.solver == "heuristic" else "agent-v0"
-        _print_summary(name, args.solver)
+        _print_summary(SOLVERS[args.solver]()[0], args.solver)
     return 0
