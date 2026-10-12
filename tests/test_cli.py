@@ -436,3 +436,23 @@ def test_resanitize_bad_snapshot_is_reported_skipped_and_exit_nonzero(resan, sna
     assert lines[0].startswith("s1: error: ") and lines[1] == "s2: spans 2->1, logs 4->2, metrics 0->0, valid=True"
     assert (resan / "spans.jsonl.gz").read_bytes() == spans_before
     assert [r["scenario"] for r in _rows(snaps)[2:]] == ["s2"]  # no row for the failed id
+
+
+def test_eval_and_summary_commands_parse():
+    p = cli.build_parser()
+    a = p.parse_args(["eval", "heuristic"])
+    assert (a.cmd, a.solver, a.runs, a.ids) == ("eval", "heuristic", 1, [])
+    a = p.parse_args(["eval", "agent", "--runs", "5", "payment-failure-50"])
+    assert (a.solver, a.runs, a.ids) == ("agent", 5, ["payment-failure-50"])
+    assert p.parse_args(["summary", "heuristic"]).solver == "heuristic"
+
+
+def test_eval_heuristic_runs_and_prints_summary(monkeypatch, capsys):
+    from rootcause import evaluate
+    calls = {}
+    monkeypatch.setattr(evaluate, "run", lambda name, solve, runs, ids, stop_on=(): calls.update(name=name, runs=runs, ids=ids) or {"completed": 3, "stopped": None})
+    monkeypatch.setattr(evaluate, "summarise", lambda name: [{"category": "easy"}])
+    monkeypatch.setattr(evaluate, "format_summary", lambda rows: "TABLE")
+    assert cli.main(["eval", "heuristic"]) == 0
+    assert calls == {"name": "heuristic", "runs": 1, "ids": None}
+    assert "TABLE" in capsys.readouterr().out

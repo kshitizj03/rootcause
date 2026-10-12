@@ -7,12 +7,27 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from rootcause import config, env, harness, inject, sanitize, scenarios, snapshot
+from rootcause import config, env, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot
+
+
+class _Subparser(argparse.ArgumentParser):
+    """Python 3.11's argparse gives a trailing `nargs="*"` positional [] when an option comes between it and the
+    previous positional (`eval agent --runs 5 some-id`); intermixed parsing lets options and positionals interleave."""
+    _intermixed = False
+
+    def parse_known_args(self, args=None, namespace=None):
+        if self._intermixed:  # parse_known_intermixed_args calls back into parse_known_args
+            return super().parse_known_args(args, namespace)
+        self._intermixed = True
+        try:
+            return self.parse_known_intermixed_args(args, namespace)
+        finally:
+            self._intermixed = False
 
 
 def build_parser():
     p = argparse.ArgumentParser(prog="rootcause")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd", required=True, parser_class=_Subparser)
     for name in ("up", "down", "status", "list", "reset-flags"):
         sub.add_parser(name)
     rec = sub.add_parser("record", help="inject scenarios and capture snapshots")
@@ -25,6 +40,12 @@ def build_parser():
     resan = sub.add_parser("resanitize", help="re-apply the current sanitisers to recorded snapshots, then revalidate")
     resan.add_argument("ids", nargs="*")
     resan.add_argument("--dry-run", action="store_true", help="report what would be dropped; write nothing")
+    ev = sub.add_parser("eval", help="run a solver over the recorded snapshots and score it")
+    ev.add_argument("solver", choices=["heuristic", "agent"])
+    ev.add_argument("--runs", type=int, default=1)
+    ev.add_argument("ids", nargs="*")
+    sm = sub.add_parser("summary", help="print the per-category score table for a solver's recorded runs")
+    sm.add_argument("solver", choices=["heuristic", "agent"])
     return p
 
 
@@ -164,6 +185,18 @@ def _print_dry_run(i, counts):
                 print(f"    {n}x {text}")
 
 
+def _eval(args):
+    if args.solver == "heuristic":
+        name, solve, stop_on = "heuristic", heuristic.solve, ()
+    else:
+        from rootcause import agent  # imported lazily: only the agent needs the Gemini client
+        name, solve, stop_on = agent.NAME, agent.Agent().solve, (agent.QuotaExhausted,)
+    out = evaluate.run(name, solve, runs=args.runs, ids=args.ids or None, stop_on=stop_on)
+    print(f"{out['completed']} new runs" + (f"; stopped: {out['stopped']}" if out["stopped"] else ""))
+    print(evaluate.format_summary(evaluate.summarise(name)))
+    return 0 if not out["stopped"] else 4
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
     try:
@@ -200,4 +233,9 @@ def _dispatch(args):
         return _revalidate(args)
     elif args.cmd == "resanitize":
         return _revalidate(args, resanitize=True)
+    elif args.cmd == "eval":
+        return _eval(args)
+    elif args.cmd == "summary":
+        name = "heuristic" if args.solver == "heuristic" else "agent-v0"
+        print(evaluate.format_summary(evaluate.summarise(name)))
     return 0
