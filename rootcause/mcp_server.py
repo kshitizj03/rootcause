@@ -12,6 +12,9 @@ from mcp.server.stdio import stdio_server
 from rootcause import snapshot, tools_v1
 
 
+FILES = ("meta.json", "metrics.json", "spans.jsonl.gz", "logs.jsonl.gz")
+
+
 def build_server(snap, toolset=tools_v1):
     async def on_list_tools(ctx, params):
         return types.ListToolsResult(tools=[
@@ -23,7 +26,9 @@ def build_server(snap, toolset=tools_v1):
         return types.CallToolResult(content=[types.TextContent(type="text", text=text)],
                                     isError=text.startswith('{"error"'))
 
-    return Server("rootcause", on_list_tools=on_list_tools, on_call_tool=on_call_tool)
+    instructions = (f"Incident alert: {snap['meta']['alert']}. Times are seconds relative to the alert (t=0). "
+                    "Start with top_changes and service_map.")
+    return Server("rootcause", instructions=instructions, on_list_tools=on_list_tools, on_call_tool=on_call_tool)
 
 
 async def serve(path, toolset=tools_v1):
@@ -34,8 +39,11 @@ async def serve(path, toolset=tools_v1):
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    if len(argv) != 1 or not (Path(argv[0]) / "meta.json").exists():
-        print("usage: python -m rootcause.mcp_server <snapshot-dir>  (a directory containing meta.json)", file=sys.stderr)
+    missing = [f for f in FILES if len(argv) == 1 and not (Path(argv[0]) / f).exists()]
+    if len(argv) != 1 or missing:
+        print("usage: python -m rootcause.mcp_server <snapshot-dir>  (a recorded snapshot directory)", file=sys.stderr)
+        for f in missing:
+            print(f"missing {f}", file=sys.stderr)
         return 2
     anyio.run(serve, argv[0])
     return 0

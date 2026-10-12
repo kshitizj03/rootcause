@@ -25,21 +25,24 @@ async def session_calls(path, calls):
                                    cwd=str(config.ROOT))
     async with stdio_client(params) as (r, w):
         async with ClientSession(r, w) as s:
-            await s.initialize()
-            names = [t.name for t in (await s.list_tools()).tools]
-            results = [await s.call_tool(n, a) for n, a in calls]
-    return names, results
+            with anyio.fail_after(60):
+                init = await s.initialize()
+                names = [t.name for t in (await s.list_tools()).tools]
+                results = [await s.call_tool(n, a) for n, a in calls]
+    return init, names, results
 
 
 def test_mcp_output_equals_in_process_output(tmp_path):
     path = make_snapshot(tmp_path / "incident__x")
-    calls = [("top_changes", {}), ("service_health", {"service": "payment"}), ("nope", {})]
-    names, results = anyio.run(session_calls, path, calls)
+    calls = [("top_changes", {}), ("service_health", {"service": "payment"}), ("nope", {}), ("service_health", {}),
+             ("get_metric", {"service": "payment", "signal": "nope"})]
+    init, names, results = anyio.run(session_calls, path, calls)
     snap = snapshot.load(path)
     assert sorted(names) == sorted(tools_v1.TOOLS)
     for (n, a), res in zip(calls, results):
         assert res.content[0].text == tools_v1.call(snap, n, a)
-    assert results[0].is_error is False and results[2].is_error is True
+    assert [r.is_error for r in results] == [False, False, True, True, True]
+    assert "Incident alert: x." in init.instructions and "t=0" in init.instructions and "top_changes" in init.instructions
 
 
 def test_server_never_reads_answer_files():
@@ -50,3 +53,11 @@ def test_server_never_reads_answer_files():
 def test_bad_path_exits_with_usage(tmp_path, capsys):
     assert mcp_server.main([str(tmp_path / "nope")]) == 2
     assert "usage" in capsys.readouterr().err
+
+
+def test_missing_snapshot_file_names_it(tmp_path, capsys):
+    path = make_snapshot(tmp_path / "incident__x")
+    (path / "logs.jsonl.gz").unlink()
+    assert mcp_server.main([str(path)]) == 2
+    err = capsys.readouterr().err
+    assert "usage" in err and "missing logs.jsonl.gz" in err
