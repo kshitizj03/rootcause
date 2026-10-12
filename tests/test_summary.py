@@ -1,11 +1,13 @@
-from rootcause import summary
+import pytest
+
+from rootcause import signals, summary
 
 META = {"baseline_start": 0.0, "fault_start": 900.0, "end": 1200.0}
 
 
-def series(base, fault, step=15):
-    pts = [[float(t), base] for t in range(0, 900, step)]
-    return pts + [[float(t), fault] for t in range(900, 1215, step)]
+def series(base, fault):
+    # baseline covers t=0..900 (the sample at fault_start is pre-fault traffic); fault starts at 915
+    return [[float(t), base] for t in range(0, 901, 15)] + [[float(t), fault] for t in range(915, 1215, 15)]
 
 
 def snap(metrics):
@@ -47,3 +49,11 @@ def test_services_without_data_in_a_window_are_skipped():
 def test_rps_rows_have_no_fault_type():
     row = summary.changes(snap({"rps": {"frontend": series(20.0, 40.0)}}))[0]
     assert row["fault_type"] is None and row["direction"] == "up"
+
+
+def test_point_exactly_at_fault_start_counts_toward_the_baseline():
+    # Same window semantics as signals.window_stat: the sample at t=fault_start is in the baseline (0..900 inclusive)
+    pts = [[float(t), 0.0] for t in range(0, 900, 15)] + [[900.0, 0.3]] + [[float(t), 0.3] for t in range(915, 1215, 15)]
+    row = summary.changes(snap({"error_ratio": {"payment": pts}}))[0]
+    assert row["baseline"] == signals.window_stat(pts, 0.0, 900.0)
+    assert row["baseline"] == pytest.approx(0.3 / 61)
