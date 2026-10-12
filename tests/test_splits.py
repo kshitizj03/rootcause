@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from rootcause import cli, config, evaluate, scenarios
 
 
@@ -31,7 +33,16 @@ def test_summarise_filters_by_split(tmp_path, monkeypatch):
 def test_summary_command_reports_empty_split(monkeypatch, capsys):
     monkeypatch.setattr(evaluate, "summarise", lambda *a, **k: [])
     assert cli.main(["summary", "heuristic", "--split", "heldout"]) == 0
-    assert "no runs recorded" in capsys.readouterr().out
+    assert "no runs recorded for heuristic (heldout)" in capsys.readouterr().out
+
+
+def test_in_split(monkeypatch):
+    monkeypatch.setattr(config, "HELDOUT", ("b",))
+    assert [evaluate.in_split(i, s) for s in (None, "all") for i in "ab"] == [True] * 4
+    assert [evaluate.in_split(i, "tune") for i in "ab"] == [True, False]
+    assert [evaluate.in_split(i, "heldout") for i in "ab"] == [False, True]
+    with pytest.raises(ValueError):
+        evaluate.in_split("a", "held-out")
 
 
 def test_summary_expected_counts_respect_the_split(monkeypatch):
