@@ -22,6 +22,31 @@ class Report:
     confidence: float = 0.0
 
 
+_EVIDENCE_FIELDS = {"metric": ("service", "signal"), "trace": ("trace_id",), "log": ("service", "quote")}
+
+
+def _service(s):
+    return re.sub(r"[\s_]+", "-", s.strip().lower())
+
+
+def _evidence_item(e):
+    """Strings stay strings; dicts become a checkable item, or a text item if they aren't one. Never raises."""
+    if isinstance(e, str):
+        return e
+    kind = e.get("kind") if isinstance(e, dict) else None
+    need = _EVIDENCE_FIELDS.get(kind)
+    if need is None or not all(isinstance(e.get(f), str) and e.get(f).strip() for f in need):
+        return {"kind": "text", "text": json.dumps(e, default=str)}
+    item = {"kind": kind, **{f: e[f].strip() for f in need}}
+    if "service" in item:
+        item["service"] = _service(item["service"])
+    if kind == "trace":
+        item["service"] = _service(e["service"]) if isinstance(e.get("service"), str) and e["service"].strip() else None
+    if kind in ("metric", "trace"):
+        item["claim"] = str(e.get("claim", ""))
+    return item
+
+
 def make_report(d):
     """Validate a dict (e.g. parsed model output) into a Report; raises ValueError naming the problem."""
     if not isinstance(d, dict):
@@ -35,7 +60,7 @@ def make_report(d):
     evidence = d.get("evidence") or []
     if isinstance(evidence, str):
         evidence = [evidence]
-    evidence = tuple(str(e) for e in evidence)
+    evidence = tuple(_evidence_item(e) for e in evidence)
     causes = ()
     if verdict == "incident":
         raw = d.get("causes") or []
@@ -48,7 +73,7 @@ def make_report(d):
             service = c.get("service")
             if not isinstance(service, str):
                 raise ValueError("cause service must be a non-empty string")
-            service = re.sub(r"[\s_]+", "-", service.strip().lower())
+            service = _service(service)
             fault_type = str(c.get("fault_type", "")).strip().lower()
             if not service:
                 raise ValueError("cause service must be a non-empty string")

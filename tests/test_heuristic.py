@@ -18,7 +18,8 @@ def test_names_the_service_whose_fault_signal_rose_most():
                                  "p95_ms": {"frontend": series(100.0, 130.0)}}))
     assert r.verdict == "incident"
     assert r.causes == (Cause("payment", "errors"), Cause("checkout", "errors"))
-    assert 0.9 < r.confidence < 1.0 and "payment error_ratio" in r.evidence[0]
+    assert 0.9 < r.confidence < 1.0
+    assert r.evidence[0]["kind"] == "metric" and r.evidence[0]["service"] == "payment" and r.evidence[0]["signal"] == "error_ratio"
 
 
 def test_traffic_and_falling_signals_are_ignored():

@@ -18,7 +18,8 @@ def diagnose(snap, threshold=THRESHOLD):
             causes.append(Cause(r["service"], r["fault_type"]))
         if len(causes) == 3:
             break
-    evidence = tuple(f"{r['service']} {r['signal']} {r['baseline']:.3g} -> {r['value']:.3g}" for r in rows[:3])
+    evidence = tuple({"kind": "metric", "service": r["service"], "signal": r["signal"],
+                      "claim": f"{r['baseline']:.3g} -> {r['value']:.3g}"} for r in rows[:3])
     top = rows[0]["score"]
     return Report("incident", tuple(causes), evidence, top / (1 + top))
 

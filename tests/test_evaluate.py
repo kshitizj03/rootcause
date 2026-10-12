@@ -249,3 +249,15 @@ def test_errors_column_is_a_dash_when_the_solver_never_sets_error(tmp_path):
     row = evaluate.summarise("x", out_dir=tmp_path)[0]
     assert row["errors"] is None
     assert evaluate.format_summary([row]).splitlines()[2].endswith("| - |")
+
+
+def test_records_store_the_evidence_check_and_summary_reports_grounded(lib):
+    def solve(snap):
+        return Report("incident", (Cause("payment", "errors"),), ("free text",), 0.5), {}
+
+    evaluate.run("g", solve, out_dir=lib / "runs")
+    rec = json.loads((lib / "runs" / "g" / "pay__0.json").read_text())
+    assert rec["evidence_check"] == {"items": [{"kind": "text", "grounded": False, "reason": "free text is not checkable"}],
+                                     "grounded": 0, "total": 1}
+    rows = {r["category"]: r for r in evaluate.summarise("g", lib / "runs")}
+    assert rows["easy"]["grounded"] == 0.0

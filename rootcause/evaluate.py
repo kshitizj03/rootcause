@@ -8,7 +8,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-from rootcause import config, scenarios, snapshot
+from rootcause import config, evidence, scenarios, snapshot
 from rootcause.score import report_to_dict, score
 
 RUNS_DIR = config.DATA / "runs"
@@ -49,7 +49,8 @@ def run(solver_name, solve, runs=1, ids=None, out_dir=RUNS_DIR, stop_on=(), cloc
             except stop_on as e:  # e.g. the daily free-tier quota: stop cleanly, resume tomorrow
                 return {"completed": done, "stopped": f"{type(e).__name__}: {e}"}
             rec = {**info, "scenario": sid, "category": category, "run": k, "seconds": clock() - t0, "code": code,  # info first: it can't overwrite these
-                   "report": report_to_dict(report), "score": score(report, snapshot.load_truth(path))}
+                   "report": report_to_dict(report), "score": score(report, snapshot.load_truth(path)),
+                   "evidence_check": evidence.check(report, snap)}
             tmp = f.with_suffix(".tmp")
             tmp.write_text(json.dumps(rec, indent=1), encoding="utf-8")
             tmp.replace(f)  # a crash mid-write never leaves a half record that resume would skip
@@ -84,6 +85,8 @@ def _row(category, recs, expected=None):
             "fault_type": rate(lambda r: r["score"]["fault_type_ok"]),
             "false_alarm": rate(lambda r: r["score"]["false_alarm"]),
             "abstain": rate(lambda r: r["score"]["abstained"]),
+            "grounded": rate(lambda r: None if not r.get("evidence_check", {}).get("total")
+                             else r["evidence_check"]["grounded"] / r["evidence_check"]["total"]),
             "errors": rate(lambda r: None if "error" not in r else r["error"] is not None)}  # None: solver never sets it
 
 
@@ -111,8 +114,8 @@ def summarise(solver_name, out_dir=RUNS_DIR, expected=None, split=None):
 
 def format_summary(rows):
     fmt = lambda x: "-" if x is None else f"{x:.2f}"
-    out = ["| category | scenarios | runs | accuracy (mean +/- sd) | top-3 | fault type (cause+type) | false alarm | abstain | errors |",
-           "|---|---|---|---|---|---|---|---|---|"]
+    out = ["| category | scenarios | runs | accuracy (mean +/- sd) | top-3 | fault type (cause+type) | false alarm | abstain | grounded | errors |",
+           "|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         lo, hi = r["records_min"], r["records_max"]  # runs per scenario: "3-5" flags a partial batch
         runs = str(lo) if lo == hi else f"{lo}-{hi}"
@@ -121,6 +124,6 @@ def format_summary(rows):
         control = r["category"] == "control"
         out.append(f"| {r['category']} | {scenarios_} | {runs} | {fmt(r['accuracy_mean'])} +/- "
                    f"{fmt(r['accuracy_std'])} | {'-' if control else fmt(r['top3'])} | {fmt(r['fault_type'])} | "
-                   f"{fmt(r['false_alarm']) if control else '-'} | {fmt(r['abstain'])} | {fmt(r['errors'])} |")
+                   f"{fmt(r['false_alarm']) if control else '-'} | {fmt(r['abstain'])} | {fmt(r['grounded'])} | {fmt(r['errors'])} |")
     out.append("two-fault: accuracy = fraction of causes found; top-3 = both causes found")
     return "\n".join(out)
