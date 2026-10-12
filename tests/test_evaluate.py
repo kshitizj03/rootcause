@@ -3,7 +3,7 @@ import json
 import pytest
 
 from rootcause import config, evaluate, scenarios, snapshot
-from rootcause.score import Cause, Report
+from rootcause.score import Cause, Report, make_report
 
 from helpers import FIXTURES  # noqa: F401  (keeps tests/ on sys.path as elsewhere)
 
@@ -261,3 +261,23 @@ def test_records_store_the_evidence_check_and_summary_reports_grounded(lib):
                                      "grounded": 0, "total": 1}
     rows = {r["category"]: r for r in evaluate.summarise("g", lib / "runs")}
     assert rows["easy"]["grounded"] == 0.0
+
+
+def test_metric_evidence_survives_the_record_json_round_trip(lib):
+    item = {"kind": "metric", "service": "payment", "signal": "error_ratio", "claim": "0 -> 0.3"}
+
+    def solve(snap):
+        return make_report({"verdict": "incident", "causes": [{"service": "payment", "fault_type": "errors"}],
+                            "evidence": [item], "confidence": 0.5}), {}
+
+    evaluate.run("m", solve, out_dir=lib / "runs")
+    rec = json.loads((lib / "runs" / "m" / "pay__0.json").read_text())
+    assert rec["report"]["evidence"] == [item] and rec["evidence_check"]["total"] == 1
+
+
+def test_grounded_is_none_without_evidence_and_shown_in_the_table(lib):
+    evaluate.run("n", lambda snap: (Report("no_incident"), {}), out_dir=lib / "runs")
+    rows = evaluate.summarise("n", lib / "runs")
+    assert all(r["grounded"] is None for r in rows)
+    table = evaluate.format_summary(rows).splitlines()
+    assert "| grounded | errors |" in table[0] and table[2].endswith("| - | - |")

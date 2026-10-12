@@ -45,3 +45,50 @@ def test_each_kind_is_checked_against_the_snapshot():
 
 def test_empty_evidence():
     assert evidence.check(Report("no_incident"), SNAP) == {"items": [], "grounded": 0, "total": 0}
+
+
+def mk(*items):
+    return make_report({"verdict": "no_incident", "evidence": list(items)})
+
+
+def test_normalisation_survives_odd_shapes():
+    assert [e["kind"] for e in mk({"kind": ["x"]}, {"kind": {}}, {"kind": None}).evidence] == ["text"] * 3
+    assert make_report({"verdict": "no_incident", "evidence": 5}).evidence == ({"kind": "text", "text": "5"},)
+    r = make_report({"verdict": "no_incident",
+                     "evidence": {"kind": "metric", "service": "a", "signal": "rps", "claim": "c"}})
+    assert r.evidence == ({"kind": "metric", "service": "a", "signal": "rps", "claim": "c"},)
+    assert mk({"kind": " Metric ", "service": "a", "signal": "rps"}).evidence[0]["kind"] == "metric"
+    assert mk({"kind": "trace", "trace_id": "t", "service": 5}).evidence[0]["kind"] == "text"
+    assert mk({"kind": "trace", "trace_id": "t"}).evidence[0]["service"] is None
+
+
+def test_evidence_is_capped_in_count_and_text_length():
+    assert len(mk(*["x"] * 50).evidence) == 20
+    e = mk({"kind": "log", "service": "a", "quote": "q" * 900}, {"kind": "metric", "service": "a", "signal": "rps",
+                                                                  "claim": "c" * 900}).evidence
+    assert len(e[0]["quote"]) == 500 and len(e[1]["claim"]) == 500
+
+
+def test_citations_must_fall_inside_the_incident_window():
+    snap = {**SNAP,
+            "spans": SNAP["spans"] + [{**SNAP["spans"][0], "trace_id": "old", "start_ms": 100000.0}],
+            "logs": SNAP["logs"] + [{**SNAP["logs"][0], "ts": "1970-01-01T00:05:00Z", "body": "baseline only line"},
+                                    {**SNAP["logs"][0], "service": "cart", "body": "only cart says this"}]}
+    r = report({"kind": "log", "service": "payment", "quote": "baseline only line"},
+               {"kind": "trace", "trace_id": "old", "service": "payment"},
+               {"kind": "log", "service": "payment", "quote": "only cart says this"})
+    assert [i["grounded"] for i in evidence.check(r, snap)["items"]] == [False, False, False]
+
+
+def test_restarts_citation_is_grounded_by_an_uptime_drop():
+    up = [[float(t), float(t)] for t in range(0, 1080, 15)] + [[1080.0, 5.0], [1095.0, 20.0]]
+    snap = {**SNAP, "metrics": {"uptime_s": {"email": up}}}
+    r = report({"kind": "metric", "service": "email", "signal": "restarts", "claim": "restarted"})
+    assert evidence.check(r, snap)["grounded"] == 1
+
+
+def test_heuristic_evidence_is_all_grounded():
+    from rootcause import heuristic
+    r = heuristic.diagnose(SNAP)
+    c = evidence.check(r, SNAP)
+    assert c["total"] >= 1 and c["grounded"] == c["total"]

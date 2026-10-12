@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass
 VERDICTS = ("incident", "no_incident", "insufficient_evidence")
 FAULT_TYPES = ("errors", "latency", "resource")
 MAX_CAUSES = 3
+MAX_EVIDENCE = 20
+MAX_TEXT = 500
 
 
 @dataclass(frozen=True)
@@ -34,16 +36,21 @@ def _evidence_item(e):
     if isinstance(e, str):
         return e
     kind = e.get("kind") if isinstance(e, dict) else None
+    kind = kind.strip().lower() if isinstance(kind, str) else None
     need = _EVIDENCE_FIELDS.get(kind)
-    if need is None or not all(isinstance(e.get(f), str) and e.get(f).strip() for f in need):
-        return {"kind": "text", "text": json.dumps(e, default=str)}
+    ok = lambda v: isinstance(v, str) and v.strip()
+    if need is None or not all(ok(e.get(f)) for f in need) or (kind == "trace" and e.get("service") is not None
+                                                               and not ok(e["service"])):
+        return {"kind": "text", "text": json.dumps(e, default=str)[:MAX_TEXT]}
     item = {"kind": kind, **{f: e[f].strip() for f in need}}
     if "service" in item:
         item["service"] = _service(item["service"])
     if kind == "trace":
-        item["service"] = _service(e["service"]) if isinstance(e.get("service"), str) and e["service"].strip() else None
+        item["service"] = _service(e["service"]) if e.get("service") is not None else None
     if kind in ("metric", "trace"):
-        item["claim"] = str(e.get("claim", ""))
+        item["claim"] = str(e.get("claim", ""))[:MAX_TEXT]
+    if kind == "log":
+        item["quote"] = item["quote"][:MAX_TEXT]
     return item
 
 
@@ -58,9 +65,9 @@ def make_report(d):
     if isinstance(conf, bool) or not isinstance(conf, (int, float)):
         raise ValueError("confidence must be a number between 0 and 1")
     evidence = d.get("evidence") or []
-    if isinstance(evidence, str):
+    if not isinstance(evidence, (list, tuple)):
         evidence = [evidence]
-    evidence = tuple(_evidence_item(e) for e in evidence)
+    evidence = tuple(_evidence_item(e) for e in evidence[:MAX_EVIDENCE])
     causes = ()
     if verdict == "incident":
         raw = d.get("causes") or []
