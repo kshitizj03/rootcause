@@ -58,3 +58,38 @@ def test_change_tools_on_sparse_snapshots():
     empty = {"meta": SNAP["meta"], "metrics": {}, "spans": [], "logs": []}
     assert json.loads(tools_v1.call(empty, "top_changes", {})) ["changes"] == []
     assert json.loads(tools_v1.call(empty, "service_map", {}))["edges"] == []
+
+
+def test_service_with_one_sided_metrics_is_surfaced_not_hidden():
+    late = {"error_ratio": {**SNAP["metrics"]["error_ratio"], "late": [[float(t), 0.2] for t in range(915, 1215, 15)]}}
+    snap = dict(SNAP, metrics=late)
+    r = json.loads(tools_v1.call(snap, "top_changes", {}))
+    assert r["incomplete"] == ["late"] and all(c["service"] != "late" for c in r["changes"])
+    assert out("top_changes")["incomplete"] == []
+    h = json.loads(tools_v1.call(snap, "service_health", {"service": "late"}))
+    assert h["signals"] == [] and "no complete before/after" in h["note"] and "error" not in h
+    snap_spans = dict(SNAP, spans=SNAP["spans"] + [span("z", "", "ghost", 1)])  # known via spans only, no metrics
+    assert json.loads(tools_v1.call(snap_spans, "service_health", {"service": "ghost"}))["signals"] == []
+
+
+def test_service_map_ranks_vanished_edges_after_error_edges_before_stable_ones():
+    spans = SNAP["spans"] + [span("f", "", "checkout", -30, trace="t3"), span("g", "f", "cart", -29, trace="t3"),
+                             span("h", "", "checkout", 20, trace="t4"), span("i", "h", "inventory", 21, trace="t4"),
+                             span("j", "", "checkout", 30, trace="t5"), span("k", "j", "inventory", 31, trace="t5"),
+                             span("l", "", "checkout", -20, trace="t6"), span("m", "l", "inventory", -19, trace="t6")]
+    edges = json.loads(tools_v1.call(dict(SNAP, spans=spans), "service_map", {}))["edges"]
+    assert [e["callee"] for e in edges] == ["payment", "cart", "inventory"]
+    assert edges[1]["stopped"] is True and "stopped" not in edges[0] and "stopped" not in edges[2]
+
+
+def test_n_and_limit_are_clamped_and_include_load_accepts_strings():
+    assert len(out("top_changes", {"n": 0})["changes"]) == 1 and len(out("top_changes", {"n": -5})["changes"]) == 1
+    assert len(out("top_changes", {"n": 10**6, "include_load": True})["changes"]) == 4  # 4 rows exist, cap is 40
+    assert len(out("service_map", {"limit": 0})["edges"]) == 1
+    assert any(c["signal"] == "rps" for c in out("top_changes", {"include_load": "true"})["changes"])
+    assert all(c["signal"] != "rps" for c in out("top_changes", {"include_load": "false"})["changes"])
+
+
+def test_top_changes_note_uses_config_windows_and_warns_about_vanished_services():
+    note = out("top_changes")["note"]
+    assert "15 min before" in note and "60 s after" in note and "stopped reporting" in note

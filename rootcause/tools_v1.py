@@ -3,7 +3,7 @@
 Reads only a loaded snapshot (meta, metrics, spans, logs). t < 0 is before the alert, t >= 0 after it."""
 from collections import defaultdict
 
-from rootcause import summary, tools
+from rootcause import config, summary, tools
 
 
 def _fmt(row):
@@ -15,12 +15,19 @@ def _fmt(row):
 def top_changes(snap, n=10, include_load=False):
     n = max(1, min(40, int(10 if n is None else n)))
     rows = [r for r in summary.changes(snap) if include_load is True or str(include_load).lower() == "true" or r["signal"] != "rps"]
-    return {"changes": [_fmt(r) for r in rows[:n]],
-            "note": "change = |after - before| / max(before, small floor); before = 15 min before the alert, after = from 1 min after it"}
+    seen = {r["service"] for r in summary.changes(snap)}
+    incomplete = sorted({s for series in snap["metrics"].values() for s in series} - seen)
+    return {"changes": [_fmt(r) for r in rows[:n]], "incomplete": incomplete,
+            "note": f"change = |after - before| / max(before, small floor); before = {config.BASELINE_S // 60} min before the alert, "
+                    f"after = from {config.RAMP_S} s after it; after = 0 can mean the service stopped reporting, not recovery. "
+                    "incomplete = services with metrics but no complete before/after windows"}
 
 
 def service_health(snap, service):
     rows = [r for r in summary.changes(snap) if r["service"] == service]
+    if not rows and service in tools._services(snap):
+        return {"service": service, "signals": [],
+                "note": "no complete before/after metric windows for this service (it may have started or stopped reporting around the alert)"}
     if not rows:
         return {"error": f"no metrics for {service!r}", "valid_services": tools._services(snap)}
     return {"service": service, "signals": [_fmt(r) for r in rows]}
@@ -39,9 +46,13 @@ def service_map(snap, limit=20):
         when = "after" if s["start_ms"] >= t0 else "before"
         e[f"calls_{when}"] += 1
         e[f"errors_{when}"] += bool(s["error"])
-    ranked = sorted(edges.items(), key=lambda kv: (-(kv[1]["errors_after"] - kv[1]["errors_before"]), -kv[1]["calls_after"], kv[0]))
+    for e in edges.values():
+        if e["calls_before"] > 0 and e["calls_after"] == 0:
+            e["stopped"] = True
+    ranked = sorted(edges.items(), key=lambda kv: (-(kv[1]["errors_after"] - kv[1]["errors_before"]),
+                                                   -(kv[1]["calls_before"] if kv[1]["calls_after"] == 0 else 0), -kv[1]["calls_after"], kv[0]))
     return {"edges": [{"caller": a, "callee": b, **v} for (a, b), v in ranked[:limit]],
-            "note": "edges from parent/child spans across services; before = t < 0, after = t >= 0"}
+            "note": "edges from parent/child spans across services; before = t < 0, after = t >= 0; stopped = calls vanished after the alert"}
 
 
 TOOLS = {**tools.TOOLS, "top_changes": top_changes, "service_health": service_health, "service_map": service_map}
