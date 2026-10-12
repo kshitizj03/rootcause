@@ -25,14 +25,31 @@ def _agent_solver():
     return agent.NAME, agent.Agent(models=agent.MODELS[:1], attempts=5).solve, (agent.QuotaExhausted,)
 
 
-def _agent_v1_solver():
+def _v1_agent(system, name):
     from rootcause import agent, tools_v1
-    a = agent.Agent(models=agent.MODELS[:1], attempts=5, toolset=tools_v1, system=agent.SYSTEM_V1, name=agent.NAME_V1)
-    return agent.NAME_V1, a.solve, (agent.QuotaExhausted,)
+    return agent.Agent(models=agent.MODELS[:1], attempts=5, toolset=tools_v1, system=system, name=name)
+
+
+def _agent_v1_solver():
+    from rootcause import agent
+    return agent.NAME_V1, _v1_agent(agent.SYSTEM_V1, agent.NAME_V1).solve, (agent.QuotaExhausted,)
+
+
+def _agent_v1_nopriors_solver():
+    from rootcause import agent
+    return "agent-v1-nopriors", _v1_agent(agent.SYSTEM_V1_NOPRIORS, "agent-v1-nopriors").solve, (agent.QuotaExhausted,)
+
+
+def _agent_v1_vague_solver():
+    from rootcause import agent
+    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-vague")
+    solve = lambda snap: a.solve({**snap, "meta": {**snap["meta"], "alert": agent.VAGUE_ALERT}})
+    return "agent-v1-vague", solve, (agent.QuotaExhausted,)
 
 
 SOLVERS = {"heuristic": _heuristic_solver, "agent": _agent_solver,
-           "agent-v1": _agent_v1_solver}  # CLI name -> factory of (record name, solve, stop_on)
+           "agent-v1": _agent_v1_solver, "agent-v1-nopriors": _agent_v1_nopriors_solver,
+           "agent-v1-vague": _agent_v1_vague_solver}  # CLI name -> factory of (record name, solve, stop_on)
 
 
 class _Subparser(argparse.ArgumentParser):

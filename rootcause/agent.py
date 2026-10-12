@@ -55,6 +55,14 @@ SYSTEM_V1 = _replace_once(_replace_once(
 SYSTEM_V1 += ("\nCite evidence as metric, trace or log items like those above; each one is checked against the "
               "telemetry, so copy service names, trace ids and log text exactly.")
 
+# Ablations of v1 (each changes exactly one thing)
+SYSTEM_V1_NOPRIORS = _replace_once(_replace_once(
+    SYSTEM_V1,
+    "The alert describes a user-visible symptom; the service it mentions is often NOT the cause, so follow errors "
+    "and latency to where they originate. ", ""),
+    "It is possible that nothing is actually wrong. ", "")
+VAGUE_ALERT = "Users report that something is wrong with the shop."
+
 
 class QuotaExhausted(RuntimeError):
     """Every model's daily free-tier quota is used up."""
