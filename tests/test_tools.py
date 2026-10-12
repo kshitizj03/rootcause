@@ -173,3 +173,10 @@ def test_schemas_describe_windows_and_severity_numbers():
         assert props["since"]["type"] == "number" and props["until"]["type"] == "number"
     desc = by_name["search_logs"]["description"]
     assert "17 = ERROR" in desc and "13 = WARN" in desc and "9 = INFO" in desc and "no severity" in desc
+
+
+def test_explicit_nulls_for_optional_arguments_use_defaults():
+    r = out("search_logs", {"service": "payment", "limit": None, "min_severity": None, "text": None})
+    assert r["total"] == 2
+    r = out("search_traces", {"service": "payment", "limit": None})
+    assert r["spans_found"] == 2

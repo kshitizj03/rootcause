@@ -215,7 +215,7 @@ def main(argv=None):
     try:
         return _dispatch(args)
     except OpenAIError as e:  # API failure after retries/fallback; the stack is fine, so no reset hint
-        print(f"Gemini API error: {e}", file=sys.stderr)
+        print(f"Gemini API error: {e} -- completed runs are kept; re-run the same command to resume", file=sys.stderr)
         return 5
     except RuntimeError as e:  # includes harness.DirtyStateError / RestoreError
         print(f"error: {e} -- run `python -m rootcause reset-flags` to reset the stack", file=sys.stderr)

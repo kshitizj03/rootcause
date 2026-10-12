@@ -19,8 +19,8 @@ def _epoch(ts):
     return datetime.strptime(head, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp() + float("0." + (frac or "0"))
 
 
-def _limit(limit):
-    return max(1, min(200, int(limit)))
+def _limit(limit, default):
+    return max(1, min(200, int(default if limit is None else limit)))  # models often send explicit nulls
 
 
 def _flag(x):
@@ -61,7 +61,7 @@ def get_metric(snap, service, signal):
 
 
 def search_traces(snap, service, errors_only=False, limit=10, since=None, until=None):
-    limit, errors_only, (lo, hi) = _limit(limit), _flag(errors_only), _window(since, until)
+    limit, errors_only, (lo, hi) = _limit(limit, 10), _flag(errors_only), _window(since, until)
     t0 = snap["meta"]["fault_start"]
     spans = [s for s in snap["spans"] if s["service"] == service and (s["error"] or not errors_only)
              and lo <= s["start_ms"] / 1000 - t0 <= hi]
@@ -88,7 +88,7 @@ def get_trace(snap, trace_id):
 
 
 def search_logs(snap, service, text="", min_severity=0, limit=20, since=None, until=None):
-    limit, min_severity, (lo, hi) = _limit(limit), int(min_severity), _window(since, until)
+    limit, min_severity, (lo, hi) = _limit(limit, 20), int(min_severity or 0), _window(since, until)
     t0, needle = snap["meta"]["fault_start"], str(text or "").lower()
     logs = [lg for lg in snap["logs"] if lg["service"] == service and needle in str(lg["body"]).lower()
             and (lg["severity_number"] or 0) >= min_severity and lo <= _epoch(lg["ts"]) - t0 <= hi]
