@@ -122,14 +122,15 @@ SCHEMAS = [
 TRUNCATED = ' ... [truncated: reduce limit or add a text/time filter]'
 
 
-def call(snap, name, raw_args):
+def call(snap, name, raw_args, registry=None):
     """Run one tool by name; never raises. Returns JSON text capped at MAX_TOOL_CHARS."""
+    registry = TOOLS if registry is None else registry
     try:
-        if name not in TOOLS:
-            out = {"error": f"unknown tool {name!r}", "valid_tools": sorted(TOOLS)}
+        if name not in registry:
+            out = {"error": f"unknown tool {name!r}", "valid_tools": sorted(registry)}
         else:
             args = json.loads(raw_args or "{}") if isinstance(raw_args, str) else dict(raw_args or {})
-            out = TOOLS[name](snap, **args)
+            out = registry[name](snap, **args)
         text = json.dumps(out)
     except Exception as e:  # model-supplied names/args can fail in many ways (e.g. OverflowError on limit=1e999)
         text = json.dumps({"error": f"bad call to {name!r}: {type(e).__name__}: {e}"})
