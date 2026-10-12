@@ -10,7 +10,7 @@ from contextlib import contextmanager
 import openai
 from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
 from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
+from opentelemetry.trace import Status, StatusCode, SpanKind
 
 from rootcause import config, tools
 from rootcause.score import Report, parse_report
@@ -107,9 +107,10 @@ class Agent:
         self.exhausted, self._last, self.attempts = set(), None, attempts
 
     @contextmanager
-    def _span(self, name, attrs):
+    def _span(self, name, attrs, kind=None):
         """A span that, on failure, records only the exception type (messages can echo request content)."""
-        with self.tracer.start_as_current_span(name, attributes=attrs, record_exception=False,
+        kw = {} if kind is None else {"kind": kind}
+        with self.tracer.start_as_current_span(name, attributes=attrs, record_exception=False, **kw,
                                                set_status_on_exception=False) as span:
             try:
                 yield span
@@ -144,7 +145,7 @@ class Agent:
                 self._throttle(info)
                 try:
                     with self._span(f"chat {model}", {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "gcp.gemini",
-                                                      "gen_ai.request.model": model}) as span:
+                                                      "gen_ai.request.model": model}, kind=SpanKind.CLIENT) as span:
                         r = self.llm.chat.completions.create(model=model, **kw)
                         if not r.choices:  # not a usable answer: no usage counted, retry like a server error
                             raise EmptyResponse(f"{model} returned no choices")
@@ -222,8 +223,8 @@ class Agent:
             if not m.tool_calls:
                 return self._final(msgs, info, m.content or "")
             for tc in m.tool_calls:
-                with self._span(f"execute_tool {tc.function.name}", {"gen_ai.operation.name": "execute_tool",
-                                                                     "gen_ai.tool.name": tc.function.name}):
+                tool = tc.function.name if tc.function.name in {s["function"]["name"] for s in self.toolset.SCHEMAS} else "unknown"  # no model text in spans
+                with self._span(f"execute_tool {tool}", {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": tool}):
                     out = self.toolset.call(snap, tc.function.name, tc.function.arguments)
                 info["steps"] += 1
                 info["transcript"].append({"tool": tc.function.name, "args": tc.function.arguments, "output": out})

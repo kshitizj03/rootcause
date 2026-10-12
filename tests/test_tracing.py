@@ -71,3 +71,12 @@ def test_eval_trace_flag_defaults_to_off():
     from rootcause import cli
     assert cli.build_parser().parse_args(["eval", "agent"]).trace == "off"
     assert cli.build_parser().parse_args(["eval", "agent", "--trace", "file"]).trace == "file"
+
+
+def test_chat_spans_are_client_spans_and_unknown_tools_are_not_named():
+    from opentelemetry.trace import SpanKind
+    a, exporter = traced_agent([Msg(tool_calls=[tool_call("made_up_tool", {})]), Msg(content=FINAL)])
+    a.solve(SNAP)
+    spans = exporter.get_finished_spans()
+    assert all(s.kind == SpanKind.CLIENT for s in spans if s.name.startswith("chat "))
+    assert [s.name for s in spans if s.name.startswith("execute_tool")] == ["execute_tool unknown"]

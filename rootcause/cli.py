@@ -12,7 +12,7 @@ try:
 except ImportError:
     OpenAIError = ()  # `except ()` catches nothing
 
-from rootcause import config, env, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot, tracing
+from rootcause import config, env, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot
 
 
 def _heuristic_solver():
@@ -234,6 +234,7 @@ def _print_dry_run(i, counts):
 
 
 def _eval(args):
+    from rootcause import tracing  # lazy: only eval needs the OpenTelemetry SDK
     provider = tracing.setup(args.trace)  # before the solver (and its agent) is built; None when off
     try:
         return _eval_traced(args)
