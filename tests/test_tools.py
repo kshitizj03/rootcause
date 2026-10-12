@@ -1,6 +1,8 @@
 import inspect
 import json
 
+import pytest
+
 from rootcause import tools
 
 T0 = 1000.0
@@ -92,3 +94,82 @@ def test_schemas_cover_every_tool():
 def test_tools_never_touch_answer_files():
     src = inspect.getsource(tools)
     assert "truth" not in src and "validation" not in src and "index.jsonl" not in src
+
+
+# --- cleanup: time windows, text=None, coercions, schema, never-raises ---
+
+def spread_logs(n, severity=None):
+    return [{"ts": f"1970-01-01T00:{(1000 + i) // 60:02d}:{(1000 + i) % 60:02d}.000Z", "service": "payment", "severity": "INFO",
+             "severity_number": severity, "body": f"line {i}", "trace_id": ""} for i in range(n)]
+
+
+def test_search_logs_time_window_is_inclusive_and_keeps_order():
+    r = out("search_logs", {"service": "payment", "since": 0})
+    assert [s["t"] for s in r["samples"]] == [10] and r["total"] == 1
+    r = out("search_logs", {"service": "payment", "until": -50})
+    assert [s["t"] for s in r["samples"]] == [-100]  # the INFO line at t=-99.5 (rounded)
+    r = out("search_logs", {"service": "payment", "since": -99.5, "until": 10})  # floats; both ends inclusive
+    assert r["total"] == 2 and [s["t"] for s in r["samples"]] == sorted(s["t"] for s in r["samples"])
+
+
+def test_search_logs_returns_last_limit_of_the_filtered_window():
+    snap = dict(SNAP, logs=spread_logs(100))  # t = 0..99
+    r = json.loads(tools.call(snap, "search_logs", {"service": "payment", "since": 10, "until": 60, "limit": 5}))
+    assert r["total"] == 51 and [s["t"] for s in r["samples"]] == [56, 57, 58, 59, 60]
+
+
+def test_search_logs_null_severity_lines_only_appear_at_min_severity_0():
+    snap = dict(SNAP, logs=spread_logs(3, severity=None))
+    assert json.loads(tools.call(snap, "search_logs", {"service": "payment"}))["total"] == 3
+    assert json.loads(tools.call(snap, "search_logs", {"service": "payment", "min_severity": 13}))["total"] == 0
+
+
+def test_search_traces_time_window():
+    assert out("search_traces", {"service": "payment", "since": 0})["spans_found"] == 1
+    r = out("search_traces", {"service": "payment", "until": -50})
+    assert r["spans_found"] == 1 and r["slowest"][0]["trace_id"] == "t2"
+    assert out("search_traces", {"service": "payment", "since": 6, "until": 6})["spans_found"] == 1  # inclusive
+    assert out("search_traces", {"service": "payment", "since": 7})["spans_found"] == 0
+
+
+def test_text_none_means_no_filter():
+    assert out("search_logs", {"service": "payment", "text": None})["total"] == 2
+
+
+def test_errors_only_string_is_coerced():
+    assert out("search_traces", {"service": "payment", "errors_only": "false"})["spans_found"] == 2
+    assert out("search_traces", {"service": "payment", "errors_only": "true"})["spans_found"] == 1
+    assert out("search_traces", {"service": "payment", "errors_only": "False"})["spans_found"] == 2
+
+
+@pytest.mark.parametrize("limit,expected", [(0, 1), (-5, 1), (1000, 200), (3, 3)])
+def test_limit_is_clamped_to_1_200(limit, expected):
+    snap = dict(SNAP, logs=spread_logs(300))
+    assert len(tools.search_logs(snap, "payment", limit=limit)["samples"]) == expected
+
+
+@pytest.mark.parametrize("limit", [0, -5])
+def test_search_traces_limit_below_one_still_returns_one_span(limit):
+    assert len(tools.search_traces(SNAP, "payment", limit=limit)["slowest"]) == 1
+
+
+def test_call_never_raises_for_odd_tool_names_or_unserialisable_output(monkeypatch):
+    for name in (None, ["x"], {"a": 1}, 7):
+        assert "error" in json.loads(tools.call(SNAP, name, {}))
+    monkeypatch.setitem(tools.TOOLS, "weird", lambda snap: {"x": object()})
+    assert "error" in json.loads(tools.call(SNAP, "weird", {}))
+
+
+def test_truncation_marker_says_how_to_narrow():
+    big = dict(SNAP, logs=[dict(SNAP["logs"][0], body="x" * 500) for _ in range(500)])
+    text = tools.call(big, "search_logs", {"service": "payment", "limit": 200})
+    assert text.endswith("[truncated: reduce limit or add a text/time filter]") and len(text) <= tools.MAX_TOOL_CHARS
+
+
+def test_schemas_describe_windows_and_severity_numbers():
+    by_name = {s["function"]["name"]: s["function"] for s in tools.SCHEMAS}
+    for name in ("search_logs", "search_traces"):
+        props = by_name[name]["parameters"]["properties"]
+        assert props["since"]["type"] == "number" and props["until"]["type"] == "number"
+    desc = by_name["search_logs"]["description"]
+    assert "17 = ERROR" in desc and "13 = WARN" in desc and "9 = INFO" in desc and "no severity" in desc
