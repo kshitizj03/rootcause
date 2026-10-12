@@ -36,11 +36,12 @@ def service_health(snap, service):
 def service_map(snap, limit=20):
     limit = max(1, min(60, int(20 if limit is None else limit)))
     t0 = snap["meta"]["fault_start"] * 1000
+    oldest = t0 - config.CAPTURE_LOOKBACK_S * 1000  # some snapshots hold stale spans from hours earlier; ignore them
     by_id = {s["span_id"]: s for s in snap["spans"]}
     edges = defaultdict(lambda: {"calls_before": 0, "calls_after": 0, "errors_before": 0, "errors_after": 0})
     for s in snap["spans"]:
         parent = by_id.get(s["parent_id"])
-        if not parent or parent["service"] == s["service"]:
+        if not parent or parent["service"] == s["service"] or s["start_ms"] < oldest:
             continue
         e = edges[(parent["service"], s["service"])]
         when = "after" if s["start_ms"] >= t0 else "before"
@@ -49,10 +50,10 @@ def service_map(snap, limit=20):
     for e in edges.values():
         if e["calls_before"] > 0 and e["calls_after"] == 0:
             e["stopped"] = True
-    ranked = sorted(edges.items(), key=lambda kv: (-(kv[1]["errors_after"] - kv[1]["errors_before"]),
-                                                   -(kv[1]["calls_before"] if kv[1]["calls_after"] == 0 else 0), -kv[1]["calls_after"], kv[0]))
+    ranked = sorted(edges.items(), key=lambda kv: (-max(0, kv[1]["errors_after"] - kv[1]["errors_before"]),
+                                                   -(kv[1]["calls_before"] if kv[1].get("stopped") else 0), -kv[1]["calls_after"], kv[0]))
     return {"edges": [{"caller": a, "callee": b, **v} for (a, b), v in ranked[:limit]],
-            "note": "edges from parent/child spans across services; before = t < 0, after = t >= 0; stopped = calls vanished after the alert"}
+            "note": f"edges from parent/child spans across services; before = the {config.CAPTURE_LOOKBACK_S // 60} min before the alert, after = t >= 0; stopped = calls vanished after the alert"}
 
 
 TOOLS = {**tools.TOOLS, "top_changes": top_changes, "service_health": service_health, "service_map": service_map}
@@ -61,7 +62,7 @@ SCHEMAS = tools.SCHEMAS + [
                                       "parameters": {"type": "object", "properties": {"n": {"type": "integer"}, "include_load": {"type": "boolean"}}}}},
     {"type": "function", "function": {"name": "service_health", "description": "All signals of one service, before vs after the alert, with the change.",
                                       "parameters": {"type": "object", "properties": {"service": {"type": "string"}}, "required": ["service"]}}},
-    {"type": "function", "function": {"name": "service_map", "description": "Which service calls which (from traces), with call and error counts before vs after the alert; edges whose errors rose come first.",
+    {"type": "function", "function": {"name": "service_map", "description": "Which service calls which (from traces), with call and error counts before vs after the alert; edges whose errors rose come first, then edges whose calls stopped after the alert (flagged \"stopped\").",
                                       "parameters": {"type": "object", "properties": {"limit": {"type": "integer"}}}}},
 ]
 

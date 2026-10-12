@@ -93,3 +93,17 @@ def test_n_and_limit_are_clamped_and_include_load_accepts_strings():
 def test_top_changes_note_uses_config_windows_and_warns_about_vanished_services():
     note = out("top_changes")["note"]
     assert "15 min before" in note and "60 s after" in note and "stopped reporting" in note
+
+
+def test_service_map_ignores_spans_older_than_the_capture_window():
+    old = [span("o1", "", "shipping", -9150, trace="t7"), span("o2", "o1", "quote", -9149, trace="t7")]
+    edges = json.loads(tools_v1.call(dict(SNAP, spans=SNAP["spans"] + old), "service_map", {}))["edges"]
+    assert [e["callee"] for e in edges] == ["payment"] and "5 min before" in out("service_map")["note"]
+
+
+def test_service_map_ranks_a_stopped_edge_that_had_errors_above_stable_edges():
+    spans = SNAP["spans"] + [span("f", "", "checkout", -30, trace="t3"), span("g", "f", "cart", -29, error=True, trace="t3"),
+                             span("h", "", "checkout", 20, trace="t4"), span("i", "h", "inventory", 21, trace="t4")]
+    edges = json.loads(tools_v1.call(dict(SNAP, spans=spans), "service_map", {}))["edges"]
+    assert [e["callee"] for e in edges] == ["payment", "cart", "inventory"] and edges[1]["stopped"] is True
+    assert "stopped" in next(s for s in tools_v1.SCHEMAS if s["function"]["name"] == "service_map")["function"]["description"]
