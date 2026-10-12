@@ -343,3 +343,11 @@ def test_v1_prompt_keeps_v0_priors_and_asks_for_structured_evidence():
         assert sentence in agent.SYSTEM and sentence in agent.SYSTEM_V1
     assert '"kind": "metric"' in agent.SYSTEM_V1 and "top_changes" in agent.SYSTEM_V1
     assert agent.NAME_V1 == "agent-v1"
+
+
+def test_v1_prompt_edits_fail_loudly_when_the_v0_text_drifts():
+    with pytest.raises(ValueError):
+        agent._replace_once("abc", "zzz", "y")
+    with pytest.raises(ValueError):
+        agent._replace_once("aa", "a", "b")  # must match exactly once
+    assert "//" not in agent.SYSTEM_V1.split('"evidence"')[1]  # no comments a model could copy into its JSON

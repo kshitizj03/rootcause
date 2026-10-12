@@ -32,16 +32,28 @@ SYSTEM = (
 )
 
 NAME_V1 = "agent-v1"
-SYSTEM_V1 = SYSTEM.replace(
+
+
+def _replace_once(text, old, new):
+    """Fail loudly at import if a prompt edit no longer matches (a silent no-op would change the experiment)."""
+    if text.count(old) != 1:
+        raise ValueError(f"prompt text to replace not found exactly once: {old[:40]!r}")
+    return text.replace(old, new)
+
+
+# v1 = v0's prompt with two edits (a tool hint and checkable evidence) plus one sentence on citing; the evidence
+# examples carry no // comments a model might copy into its JSON
+SYSTEM_V1 = _replace_once(_replace_once(
+    SYSTEM,
     ' "evidence": ["<short facts you observed>"],\n',
-    ' "evidence": [  // cite what you saw so it can be checked:\n'
+    ' "evidence": [\n'
     '   {"kind": "metric", "service": "<service>", "signal": "<signal>", "claim": "<before -> after>"},\n'
     '   {"kind": "trace", "trace_id": "<id>", "service": "<service>", "claim": "<what the trace shows>"},\n'
-    '   {"kind": "log", "service": "<service>", "quote": "<exact text copied from a log line>"}],\n'
-).replace("Use the tools to look at the telemetry, ",
-          "Use the tools to look at the telemetry (start with top_changes and service_map), ")
-if SYSTEM_V1 == SYSTEM:  # a silent no-op replacement must fail loudly (asserts are stripped under -O)
-    raise ValueError("SYSTEM_V1: evidence or telemetry text no longer matches SYSTEM")
+    '   {"kind": "log", "service": "<service>", "quote": "<exact text copied from a log line>"}],\n'),
+    "Use the tools to look at the telemetry, ",
+    "Use the tools to look at the telemetry (start with top_changes and service_map), ")
+SYSTEM_V1 += ("\nCite evidence as metric, trace or log items like those above; each one is checked against the "
+              "telemetry, so copy service names, trace ids and log text exactly.")
 
 
 class QuotaExhausted(RuntimeError):
