@@ -42,6 +42,9 @@ def rate_limit(text):
     return openai.RateLimitError(text, response=httpx.Response(429, request=httpx.Request("POST", "http://x")), body=None)
 
 
+EMPTY = object()  # script item: a response whose `choices` list is empty
+
+
 class FakeLLM:
     """Scripted responses; each item is a Msg (returned) or an Exception (raised). Records every request."""
 
@@ -54,6 +57,8 @@ class FakeLLM:
         item = self.script.pop(0)
         if isinstance(item, Exception):
             raise item
+        if item is EMPTY:
+            return SimpleNamespace(choices=[], usage=SimpleNamespace(prompt_tokens=999, completion_tokens=999))
         return resp(item)
 
 
@@ -140,3 +145,82 @@ def test_bad_tool_arguments_are_reported_to_the_model_not_raised():
     a, llm, _ = make([Msg(tool_calls=[bad]), Msg(content=FINAL)], min_interval=0)
     report, info = a.solve(SNAP)
     assert report.verdict == "incident" and "error" in info["transcript"][0]["output"]
+
+
+# --- cleanup ---
+
+def server_error():
+    return openai.InternalServerError("overloaded", response=httpx.Response(503, request=httpx.Request("POST", "http://x")), body=None)
+
+
+def test_no_sleep_after_the_last_failed_attempt_of_a_model():
+    a, _, clock = make([server_error()] * 6, min_interval=0)
+    with pytest.raises(openai.InternalServerError):
+        a.solve(SNAP)
+    assert clock.sleeps == [15, 30, 15, 30]  # backoff only between attempts on the same model
+
+
+def test_exhaustion_persists_across_solves_on_one_agent():
+    a, llm, _ = make([rate_limit("PerDay quota"), Msg(content=FINAL), Msg(content=FINAL)], min_interval=0)
+    a.solve(SNAP)
+    a.solve(SNAP)
+    assert [r["model"] for r in llm.requests] == [agent.MODELS[0], agent.MODELS[1], agent.MODELS[1]]
+
+
+def test_two_tool_calls_in_one_message_give_two_tool_messages_with_matching_ids():
+    two = Msg(tool_calls=[tool_call("list_services", {}, i="a"), tool_call("get_metric", {"service": "payment", "signal": "error_ratio"}, i="b")])
+    a, llm, _ = make([two, Msg(content=FINAL)], min_interval=0)
+    report, info = a.solve(SNAP)
+    tool_msgs = [m for m in llm.requests[1]["messages"] if m["role"] == "tool"]
+    assert [m["tool_call_id"] for m in tool_msgs] == ["a", "b"] and info["steps"] == 2 and info["turns"] == 2
+
+
+def test_max_steps_bounds_requests_even_with_parallel_tool_calls():
+    def two(i):
+        return Msg(tool_calls=[tool_call("list_services", {}, i=f"{i}a"), tool_call("list_services", {}, i=f"{i}b")])
+    a, llm, _ = make([two(0), two(1), Msg(content=FINAL)], min_interval=0, max_steps=2)
+    report, info = a.solve(SNAP)
+    assert len(llm.requests) == 3 and info["turns"] == 2 and info["steps"] == 4 and info["requests"] == 3
+    assert "tools" not in llm.requests[-1] and report.verdict == "incident"
+
+
+def test_turns_count_model_requests_in_the_tool_loop_not_repairs():
+    a, _, _ = make([Msg(tool_calls=[tool_call("list_services", {})]), Msg(content="prose"), Msg(content=FINAL)], min_interval=0)
+    _, info = a.solve(SNAP)
+    assert info["turns"] == 2 and info["steps"] == 1 and info["requests"] == 3
+
+
+def test_real_openai_message_with_tool_calls_round_trips_through_history():
+    from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageToolCall
+    from openai.types.chat.chat_completion_message_tool_call import Function
+    real = ChatCompletionMessage(role="assistant", content=None, tool_calls=[ChatCompletionMessageToolCall(
+        id="c1", type="function", function=Function(name="list_services", arguments="{}"))])
+    a, llm, _ = make([real, ChatCompletionMessage(role="assistant", content=FINAL)], min_interval=0)
+    report, _ = a.solve(SNAP)
+    assistant = llm.requests[1]["messages"][2]
+    assert assistant == {"role": "assistant", "tool_calls": [{"id": "c1", "type": "function",
+                                                              "function": {"name": "list_services", "arguments": "{}"}}]}
+    json.dumps(llm.requests[1]["messages"])  # the whole history stays JSON-serialisable for the endpoint
+    assert report.verdict == "incident"
+
+
+@pytest.mark.parametrize("content", [None, ""])
+def test_empty_reply_is_stored_with_empty_content(content):
+    a, llm, _ = make([Msg(content=content), Msg(content=FINAL)], min_interval=0)
+    report, _ = a.solve(SNAP)
+    assert llm.requests[1]["messages"][-2] == {"role": "assistant", "content": ""}
+    assert report.verdict == "incident"
+
+
+def test_empty_choices_is_retried_like_a_server_error_and_not_counted():
+    a, llm, clock = make([EMPTY, Msg(content=FINAL)], min_interval=0)
+    report, info = a.solve(SNAP)
+    assert report.verdict == "incident" and clock.sleeps == [15]
+    assert info["requests"] == 1 and info["prompt_tokens"] == 100 and info["completion_tokens"] == 10
+
+
+def test_persistent_empty_choices_falls_back_then_raises_an_api_error():
+    a, llm, _ = make([EMPTY] * 6, min_interval=0)
+    with pytest.raises(openai.OpenAIError):
+        a.solve(SNAP)
+    assert {r["model"] for r in llm.requests} == set(agent.MODELS)

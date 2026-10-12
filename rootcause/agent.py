@@ -6,6 +6,7 @@ can stop cleanly and resume later."""
 import os
 import time
 
+import openai
 from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
 
 from rootcause import config, tools
@@ -14,6 +15,7 @@ from rootcause.score import Report, parse_report
 NAME = "agent-v0"
 MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
 MAX_STEPS = 15
+ATTEMPTS = 3  # tries per model before falling back
 MIN_INTERVAL_S = 4.5  # stay under ~15 requests/minute on the free tier
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
@@ -32,6 +34,19 @@ SYSTEM = (
 
 class QuotaExhausted(RuntimeError):
     """Every model's daily free-tier quota is used up."""
+
+
+class EmptyResponse(openai.OpenAIError):
+    """The endpoint answered 200 but with no choices; handled like a server error."""
+
+
+def _dump(m):
+    """Message -> history dict. A reply with neither tool calls nor content must still carry content=""
+    (model_dump(exclude_none=True) would emit only the role, which the endpoint may reject)."""
+    d = m.model_dump(exclude_none=True)
+    if not m.tool_calls:
+        d["content"] = m.content or ""
+    return d
 
 
 def make_client():
@@ -59,6 +74,10 @@ class Agent:
                 self.sleep(wait)
         self._last = self.clock()
 
+    def _backoff(self, attempt):
+        if attempt < ATTEMPTS - 1:  # only sleep if another attempt on the same model follows
+            self.sleep(15 * 2 ** attempt)
+
     def _chat(self, info, **kw):
         if self.llm is None:
             self.llm = make_client()
@@ -66,7 +85,7 @@ class Agent:
         for model in self.models:
             if model in self.exhausted:
                 continue
-            for attempt in range(3):
+            for attempt in range(ATTEMPTS):
                 self._throttle()
                 try:
                     r = self.llm.chat.completions.create(model=model, **kw)
@@ -75,11 +94,15 @@ class Agent:
                     if _per_day(e):
                         self.exhausted.add(model)
                         break
-                    self.sleep(15 * 2 ** attempt)
+                    self._backoff(attempt)
                     continue
                 except (InternalServerError, APITimeoutError, APIConnectionError) as e:
                     last = e
-                    self.sleep(15 * 2 ** attempt)
+                    self._backoff(attempt)
+                    continue
+                if not r.choices:  # not a usable answer: no usage counted, retry like a server error
+                    last = EmptyResponse(f"{model} returned no choices")
+                    self._backoff(attempt)
                     continue
                 info["requests"] += 1
                 info["prompt_tokens"] += getattr(r.usage, "prompt_tokens", 0) or 0
@@ -98,7 +121,7 @@ class Agent:
         except ValueError as e:
             msgs.append({"role": "user", "content": f"That answer was not valid ({e}). Reply with ONLY the JSON object."})
             m = self._chat(info, messages=msgs, temperature=0)
-            msgs.append(m.model_dump(exclude_none=True))
+            msgs.append(_dump(m))
             try:
                 return parse_report(m.content or "")
             except ValueError as e2:
@@ -106,13 +129,16 @@ class Agent:
                 return Report("insufficient_evidence")
 
     def solve(self, snap):
-        info = {"solver": NAME, "models": [], "steps": 0, "requests": 0, "prompt_tokens": 0,
+        # steps = tool calls executed; turns = model requests inside the tool loop (a turn may hold several tool calls);
+        # requests = every successful model request, including the repair / step-limit final ones
+        info = {"solver": NAME, "models": [], "steps": 0, "turns": 0, "requests": 0, "prompt_tokens": 0,
                 "completion_tokens": 0, "parse_error": None, "transcript": []}
         msgs = [{"role": "system", "content": SYSTEM},
                 {"role": "user", "content": f"ALERT (fired at t=0): {snap['meta']['alert']}"}]
         for _ in range(self.max_steps):
             m = self._chat(info, messages=msgs, tools=tools.SCHEMAS, temperature=0)
-            msgs.append(m.model_dump(exclude_none=True))
+            info["turns"] += 1
+            msgs.append(_dump(m))
             if not m.tool_calls:
                 return self._final(msgs, info, m.content or ""), info
             for tc in m.tool_calls:
@@ -122,5 +148,5 @@ class Agent:
                 msgs.append({"role": "tool", "tool_call_id": tc.id, "content": out})
         msgs.append({"role": "user", "content": "Step limit reached. Give your final answer now as ONLY the JSON object."})
         m = self._chat(info, messages=msgs, temperature=0)
-        msgs.append(m.model_dump(exclude_none=True))
+        msgs.append(_dump(m))
         return self._final(msgs, info, m.content or ""), info
