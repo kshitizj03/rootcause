@@ -30,6 +30,7 @@ def lib(tmp_path, monkeypatch):
         {"scenario": "gone", "path": str(c), "valid": True},   # no longer in the library: ignored
     ]))
     monkeypatch.setattr(config, "SNAPSHOTS", snaps)
+    monkeypatch.setattr(evaluate, "code_version", lambda: "abc1234")
     monkeypatch.setattr(scenarios, "load_all", lambda: [
         scenarios.Scenario("pay", "easy", "a", {}, {}, []), scenarios.Scenario("ctl", "control", "a", {}, {}, [])])
     return tmp_path
@@ -136,3 +137,95 @@ def test_solver_info_cannot_overwrite_record_fields(lib):
     rec = json.loads((lib / "runs" / "evil" / "pay__0.json").read_text())
     assert (rec["scenario"], rec["category"], rec["run"]) == ("pay", "easy", 0)
     assert rec["seconds"] >= 0 and isinstance(rec["report"], dict) and isinstance(rec["score"], dict) and rec["extra"] == 1
+
+
+# --- final review: scenario-balanced table, run-major order, code version ---
+
+def write_scored(d, recs):
+    """recs: (scenario, category, run, correct). Other score fields follow from correct."""
+    d.mkdir(exist_ok=True)
+    for sid, cat, k, correct in recs:
+        score = {"correct": correct, "top3": correct == 1.0, "fault_type_ok": None if cat == "control" else correct == 1.0,
+                 "false_alarm": cat == "control" and correct == 0.0, "abstained": False}
+        (d / f"{sid}__{k}.json").write_text(json.dumps({"scenario": sid, "category": cat, "run": k, "score": score}))
+
+
+def test_uneven_records_give_scenario_balanced_rates_and_no_sd(tmp_path):
+    # p1 solved 5 times, p2 failed once: balanced accuracy is (1 + 0) / 2, not 5/6
+    write_scored(tmp_path / "x", [("p1", "easy", k, 1.0) for k in range(5)] + [("p2", "easy", 0, 0.0)])
+    row = evaluate.summarise("x", out_dir=tmp_path)[0]
+    assert row["accuracy_mean"] == 0.5 and row["top3"] == 0.5 and row["fault_type"] == 0.5
+    assert row["accuracy_std"] is None  # only run 0 covers both scenarios
+    assert "| 0.50 +/- - |" in evaluate.format_summary([row])
+
+
+def test_sd_uses_only_run_indices_covering_every_scenario(tmp_path):
+    write_scored(tmp_path / "x", [("p1", "easy", 0, 1.0), ("p2", "easy", 0, 1.0), ("p1", "easy", 1, 0.0),
+                                  ("p2", "easy", 1, 0.0), ("p1", "easy", 2, 1.0)])  # run 2 is incomplete
+    row = evaluate.summarise("x", out_dir=tmp_path)[0]
+    assert row["accuracy_std"] == 0.5
+
+
+def test_expected_scenarios_shown_when_they_differ(tmp_path):
+    write_scored(tmp_path / "x", [("p1", "easy", 0, 1.0), ("c1", "control", 0, 1.0)])
+    rows = evaluate.summarise("x", out_dir=tmp_path, expected={"easy": 2, "control": 1})
+    by = {r["category"]: r for r in rows}
+    assert by["easy"]["expected"] == 2 and by["control"]["expected"] == 1 and by["all incidents"]["expected"] == 2
+    table = evaluate.format_summary(rows)
+    assert "| easy | 1/2 |" in table and "| control | 1 |" in table and "| all incidents | 1/2 |" in table
+
+
+def test_format_dashes_for_meaningless_cells_and_footnotes_the_two_fault_metrics(tmp_path):
+    write_scored(tmp_path / "x", [("p1", "easy", 0, 1.0), ("c1", "control", 0, 0.0)])
+    lines = evaluate.format_summary(evaluate.summarise("x", out_dir=tmp_path)).splitlines()
+    cells = {l.split("|")[1].strip(): [c.strip() for c in l.split("|")[2:-1]] for l in lines if l.startswith("| ") and "category" not in l}
+    # columns: scenarios, runs, accuracy, top-3, fault type, false alarm, abstain
+    assert cells["easy"][4:6] == ["1.00", "-"] and cells["all incidents"][5] == "-"
+    assert cells["control"][3] == "-" and cells["control"][4] == "-" and cells["control"][5] == "1.00"
+    assert "fault type (cause+type)" in lines[0]
+    assert lines[-1] == "two-fault: accuracy = fraction of causes found; top-3 = both causes found"
+
+
+def test_run_is_run_major_so_a_quota_stop_leaves_scenarios_even(lib):
+    class Stop(Exception):
+        pass
+
+    calls = []
+
+    def solve(snap):
+        calls.append(1)
+        if len(calls) == 4:
+            raise Stop("quota")
+        return Report("no_incident"), {}
+
+    out = evaluate.run("s", solve, runs=3, out_dir=lib / "runs", stop_on=(Stop,))
+    assert out["completed"] == 3
+    assert sorted(p.name for p in (lib / "runs" / "s").glob("*.json")) == ["ctl__0.json", "ctl__1.json", "pay__0.json"]
+    rows = evaluate.summarise("s", out_dir=lib / "runs")
+    assert all(r["records_max"] - r["records_min"] <= 1 for r in rows)
+
+
+def test_records_carry_the_code_version(lib):
+    evaluate.run("v", lambda snap: (Report("no_incident"), {}), out_dir=lib / "runs")
+    assert json.loads((lib / "runs" / "v" / "pay__0.json").read_text())["code"] == "abc1234"
+
+
+def _fake_git(outputs):
+    def run(cmd, **kw):
+        out = outputs[cmd[1]]
+        if isinstance(out, Exception):
+            raise out
+        return type("R", (), {"stdout": out})()
+    return run
+
+
+def test_code_version_is_short_sha_with_dirty_marker(monkeypatch):
+    monkeypatch.setattr(evaluate.subprocess, "run", _fake_git({"rev-parse": "abc1234\n", "status": ""}))
+    assert evaluate.code_version() == "abc1234"
+    monkeypatch.setattr(evaluate.subprocess, "run", _fake_git({"rev-parse": "abc1234\n", "status": " M rootcause/agent.py\n"}))
+    assert evaluate.code_version() == "abc1234-dirty"
+
+
+def test_code_version_is_unknown_without_git(monkeypatch):
+    monkeypatch.setattr(evaluate.subprocess, "run", _fake_git({"rev-parse": FileNotFoundError("git"), "status": ""}))
+    assert evaluate.code_version() == "unknown"
