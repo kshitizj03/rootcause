@@ -35,7 +35,10 @@ def tool_call(name, args, i="c1"):
 
 
 def resp(msg, p=100, c=10):
-    return SimpleNamespace(choices=[SimpleNamespace(message=msg)], usage=SimpleNamespace(prompt_tokens=p, completion_tokens=c))
+    r = SimpleNamespace(choices=[SimpleNamespace(message=msg)], usage=SimpleNamespace(prompt_tokens=p, completion_tokens=c))
+    if getattr(msg, "served_by", None):  # real responses name the model that answered
+        r.model = msg.served_by
+    return r
 
 
 def rate_limit(text):
@@ -224,3 +227,85 @@ def test_persistent_empty_choices_falls_back_then_raises_an_api_error():
     with pytest.raises(openai.OpenAIError):
         a.solve(SNAP)
     assert {r["model"] for r in llm.requests} == set(agent.MODELS)
+
+
+# --- final review: served model, 4xx scored, reusable agent, replay data ---
+
+def status_error(cls, code, text="bad"):
+    return cls(text, response=httpx.Response(code, request=httpx.Request("POST", "http://x")), body=None)
+
+
+def test_models_records_the_model_that_served_the_response():
+    served = Msg(content=FINAL)
+    served.served_by = "gemini-served-version"
+    a, _, _ = make([served], min_interval=0)
+    _, info = a.solve(SNAP)
+    assert info["models"] == ["gemini-served-version"]
+
+
+@pytest.mark.parametrize("err", [status_error(openai.BadRequestError, 400, "invalid function_call turn"),
+                                 status_error(openai.UnprocessableEntityError, 422),
+                                 status_error(openai.APIStatusError, 413)])
+def test_client_errors_the_conversation_causes_are_scored_not_retried(err):
+    a, llm, clock = make([Msg(tool_calls=[tool_call("list_services", {})]), err], min_interval=0)
+    report, info = a.solve(SNAP)
+    assert report == Report("insufficient_evidence") and info["steps"] == 1
+    assert info["error"].startswith(type(err).__name__ + ": ")
+    assert len(llm.requests) == 2 and clock.sleeps == []  # no retry, no fallback model
+
+
+def test_client_error_in_the_repair_turn_is_scored_too():
+    a, _, _ = make([Msg(content="prose"), status_error(openai.BadRequestError, 400)], min_interval=0)
+    report, info = a.solve(SNAP)
+    assert report == Report("insufficient_evidence") and info["error"].startswith("BadRequestError")
+
+
+def test_successful_solve_has_no_error():
+    a, _, _ = make([Msg(content=FINAL)], min_interval=0)
+    assert a.solve(SNAP)[1]["error"] is None
+
+
+def test_server_and_rate_limit_errors_are_still_not_scored_away():
+    a, _, _ = make([server_error()] * 6, min_interval=0)
+    with pytest.raises(openai.InternalServerError):
+        a.solve(SNAP)
+    b, _, _ = make([rate_limit("PerDay quota")] * 2, min_interval=0)
+    with pytest.raises(agent.QuotaExhausted):
+        b.solve(SNAP)
+
+
+def test_agent_takes_its_toolset_system_prompt_and_name():
+    class Tools:
+        SCHEMAS = [{"type": "function", "function": {"name": "ping", "parameters": {"type": "object", "properties": {}}}}]
+        seen = []
+
+        @staticmethod
+        def call(snap, name, raw_args):
+            Tools.seen.append((name, raw_args))
+            return '{"pong": 1}'
+
+    a, llm, _ = make([Msg(tool_calls=[tool_call("ping", {})]), Msg(content=FINAL)], min_interval=0,
+                     toolset=Tools, system="SYS", name="agent-x")
+    _, info = a.solve(SNAP)
+    assert llm.requests[0]["tools"] is Tools.SCHEMAS and llm.requests[0]["messages"][0] == {"role": "system", "content": "SYS"}
+    assert Tools.seen == [("ping", "{}")] and info["solver"] == "agent-x"
+    assert info["transcript"][0]["output"] == '{"pong": 1}'
+    assert agent.Agent(llm=llm).name == agent.NAME  # the defaults stay v0
+
+
+def test_info_keeps_the_full_message_history_for_replay():
+    a, llm, _ = make([Msg(tool_calls=[tool_call("list_services", {})]), Msg(content="prose"), Msg(content=FINAL)],
+                     min_interval=0)
+    _, info = a.solve(SNAP)
+    roles = [m["role"] for m in info["messages"]]
+    assert roles == ["system", "user", "assistant", "tool", "assistant", "user", "assistant"]  # incl. the repair turn
+    assert info["messages"][2]["tool_calls"][0]["function"]["name"] == "list_services"
+    assert info["messages"][-1]["content"] == FINAL
+    json.dumps(info["messages"])
+
+
+def test_wait_s_totals_throttle_and_backoff_sleeps():
+    a, _, clock = make([rate_limit("Resource exhausted"), Msg(tool_calls=[tool_call("list_services", {})]), Msg(content=FINAL)],
+                       min_interval=4.5)
+    _, info = a.solve(SNAP)
+    assert info["wait_s"] == sum(clock.sleeps) and info["wait_s"] >= 15
