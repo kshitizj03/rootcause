@@ -44,7 +44,7 @@ def test_each_kind_is_checked_against_the_snapshot():
 
 
 def test_empty_evidence():
-    assert evidence.check(Report("no_incident"), SNAP) == {"items": [], "grounded": 0, "total": 0}
+    assert evidence.check(Report("no_incident"), SNAP) == {"items": [], "grounded": 0, "distinctive": 0, "total": 0}
 
 
 def mk(*items):
@@ -92,3 +92,44 @@ def test_heuristic_evidence_is_all_grounded():
     r = heuristic.diagnose(SNAP)
     c = evidence.check(r, SNAP)
     assert c["total"] >= 1 and c["grounded"] == c["total"]
+
+
+def _log(ts, body, service="payment"):
+    return {**SNAP["logs"][0], "service": service, "ts": ts, "body": body}
+
+
+def _span(trace_id, start_s, dur, error=False, service="payment"):
+    return {**SNAP["spans"][0], "trace_id": trace_id, "start_ms": start_s * 1000.0, "dur_ms": dur,
+            "error": error, "service": service}
+
+
+DSNAP = {**SNAP,
+         "logs": [_log("1970-01-01T00:05:00Z", "common word here"), _log("1970-01-01T00:15:20Z", "common word here"),
+                  _log("1970-01-01T00:15:30Z", "a brand new thing"), _log("garbage", "only in a bad line"),
+                  _log("1970-01-01T00:05:00Z", "hello from cart", "cart"),
+                  _log("1970-01-01T00:15:40Z", "hello from cart", "payment")],
+         "spans": [_span(f"base{i}", 100 + i, 10.0) for i in range(3)] +
+                  [_span("fast", 910, 15.0), _span("slow", 910, 50.0), _span("err", 910, 5.0, error=True),
+                   _span("cartonly", 910, 500.0, service="cart"), _span("pre", 100, 5.0, error=True)]}
+
+
+def flags(*items):
+    c = evidence.check(report(*items), DSNAP)
+    return [(i["grounded"], i["distinctive"]) for i in c["items"]], c
+
+
+def test_distinctive_separates_existing_from_anomalous():
+    log = lambda q: {"kind": "log", "service": "payment", "quote": q}
+    tr = lambda t, s="payment": {"kind": "trace", "trace_id": t, "service": s, "claim": "c"}
+    got, c = flags(log("common word here"), log("a brand new thing"), log("only in a bad line"),
+                   log("hello from cart"), tr("fast"), tr("slow"), tr("err"), tr("pre"), tr("cartonly", "cart"),
+                   {"kind": "metric", "service": "payment", "signal": "error_ratio", "claim": "c"}, "text")
+    assert got == [(True, False), (True, True), (False, False), (True, True), (True, False), (True, True),
+                   (True, True), (False, False), (True, False), (True, True), (False, False)]
+    assert c["distinctive"] == 5 and c["grounded"] == 8
+
+
+def test_slow_rule_only_applies_with_pre_alert_spans_of_that_service():
+    # cart has no pre-alert spans, so a slow cart span is grounded but only an error would make it distinctive
+    got, _ = flags({"kind": "trace", "trace_id": "cartonly", "service": "cart", "claim": "c"})
+    assert got == [(True, False)]

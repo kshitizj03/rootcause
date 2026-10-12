@@ -257,10 +257,11 @@ def test_records_store_the_evidence_check_and_summary_reports_grounded(lib):
 
     evaluate.run("g", solve, out_dir=lib / "runs")
     rec = json.loads((lib / "runs" / "g" / "pay__0.json").read_text())
-    assert rec["evidence_check"] == {"items": [{"kind": "text", "grounded": False, "reason": "free text is not checkable"}],
-                                     "grounded": 0, "total": 1}
+    assert rec["evidence_check"] == {"items": [{"kind": "text", "grounded": False, "distinctive": False,
+                                               "reason": "free text is not checkable"}],
+                                     "grounded": 0, "distinctive": 0, "total": 1}
     rows = {r["category"]: r for r in evaluate.summarise("g", lib / "runs")}
-    assert rows["easy"]["grounded"] == 0.0
+    assert rows["easy"]["grounded"] == 0.0 and rows["easy"]["distinctive"] == 0.0
 
 
 def test_metric_evidence_survives_the_record_json_round_trip(lib):
@@ -278,6 +279,6 @@ def test_metric_evidence_survives_the_record_json_round_trip(lib):
 def test_grounded_is_none_without_evidence_and_shown_in_the_table(lib):
     evaluate.run("n", lambda snap: (Report("no_incident"), {}), out_dir=lib / "runs")
     rows = evaluate.summarise("n", lib / "runs")
-    assert all(r["grounded"] is None for r in rows)
+    assert all(r["grounded"] is None and r["distinctive"] is None for r in rows)
     table = evaluate.format_summary(rows).splitlines()
-    assert "| grounded | errors |" in table[0] and table[2].endswith("| - | - |")
+    assert "| grounded | distinctive | errors |" in table[0] and table[2].endswith("| - | - | - |")
