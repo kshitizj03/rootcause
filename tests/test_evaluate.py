@@ -304,6 +304,21 @@ def test_coverage_curve_edge_cases():
     assert evaluate.coverage_curve([rec(0.95, 1.0), rec(0.95, 1.0)]) == [{"threshold": 0.95, "coverage": 1.0, "accuracy": 1.0}]
 
 
+def test_coverage_curve_counts_controls_and_is_selective_accuracy():
+    control = {**rec(0.8, 1.0), "category": "control", "report": {"verdict": "no_incident", "confidence": 0.8}}
+    assert evaluate.coverage_curve([control, rec(0.8, 0.0)]) == [{"threshold": 0.8, "coverage": 1.0, "accuracy": 0.5}]
+    # an abstention lowers the table's accuracy (counted wrong) but not the curve's lowest-threshold point
+    recs = [rec(0.9, 1.0), rec(0.2, 0.0, verdict="insufficient_evidence")]
+    assert evaluate.coverage_curve(recs) == [{"threshold": 0.9, "coverage": 0.5, "accuracy": 1.0}]
+    assert sum(r["score"]["correct"] for r in recs) / len(recs) == 0.5
+
+
+def test_usage_with_no_correct_run_and_with_mixed_records():
+    assert evaluate.usage([rec(0.9, 0.0), rec(0.9, 0.0)])["tokens_per_correct"] is None
+    u = evaluate.usage([rec(0.9, 1.0, p=1000, c=50, req=4), {"score": {"correct": 1.0}}])  # a record without usage is skipped
+    assert u["runs"] == 1 and u["tokens_per_correct"] == 1050.0
+
+
 def test_usage_and_tokens_per_correct():
     u = evaluate.usage([rec(0.9, 1.0, p=1000, c=50, req=4), rec(0.9, 0.0, p=3000, c=150, req=8)])
     assert u == {"runs": 2, "requests_mean": 6.0, "requests_max": 8, "prompt_tokens_mean": 2000.0,

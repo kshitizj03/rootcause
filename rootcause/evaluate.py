@@ -115,8 +115,10 @@ def load_records(solver_name, out_dir=RUNS_DIR, split=None):
 
 
 def coverage_curve(records):
-    """Accuracy when only answers at or above a confidence threshold count (record-level, not scenario-balanced).
-    Abstentions (insufficient_evidence) are never covered."""
+    """Selective accuracy: of the answered records at or above a confidence threshold, the fraction correct
+    (record-level, not scenario-balanced; controls count like any other record).
+    Abstentions (insufficient_evidence) are never covered and never in the denominator, so the lowest-threshold point
+    can exceed the summary tables' accuracy, which counts an abstention as wrong. coverage = covered / all records."""
     if not records:
         return []
     answered = [r for r in records if r["report"]["verdict"] != "insufficient_evidence"]
