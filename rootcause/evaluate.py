@@ -104,12 +104,43 @@ def in_split(scenario_id, split):
     raise ValueError(f"unknown split {split!r}")
 
 
+def load_records(solver_name, out_dir=RUNS_DIR, split=None):
+    recs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((Path(out_dir) / solver_name).glob("*.json"))]
+    return [r for r in recs if in_split(r["scenario"], split)]
+
+
+def coverage_curve(records):
+    """Accuracy when only answers at or above a confidence threshold count (record-level, not scenario-balanced).
+    Abstentions (insufficient_evidence) are never covered."""
+    if not records:
+        return []
+    answered = [r for r in records if r["report"]["verdict"] != "insufficient_evidence"]
+    points = []
+    for t in sorted({r["report"]["confidence"] for r in answered}, reverse=True):
+        covered = [r for r in answered if r["report"]["confidence"] >= t]
+        points.append({"threshold": t, "coverage": len(covered) / len(records),
+                       "accuracy": sum(r["score"]["correct"] for r in covered) / len(covered)})
+    return points
+
+
+def usage(records):
+    recs = [r for r in records if "prompt_tokens" in r]
+    if not recs:
+        return None
+    correct = sum(r["score"]["correct"] for r in recs)
+    tokens = sum(r["prompt_tokens"] + r["completion_tokens"] for r in recs)
+    return {"runs": len(recs), "requests_mean": _mean(r["requests"] for r in recs),
+            "requests_max": max(r["requests"] for r in recs),
+            "prompt_tokens_mean": _mean(r["prompt_tokens"] for r in recs),
+            "completion_tokens_mean": _mean(r["completion_tokens"] for r in recs),
+            "tokens_per_correct": tokens / correct if correct else None}
+
+
 def summarise(solver_name, out_dir=RUNS_DIR, expected=None, split=None):
     """expected: {category: number of scenarios in the library}, to show how complete each row is.
     split: None/"all", "tune" (not config.HELDOUT) or "heldout"."""
     expected = expected or {}
-    recs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((Path(out_dir) / solver_name).glob("*.json"))]
-    recs = [r for r in recs if in_split(r["scenario"], split)]
+    recs = load_records(solver_name, out_dir, split)
     by_cat = defaultdict(list)
     for r in recs:
         by_cat[r["category"]].append(r)
