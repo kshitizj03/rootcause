@@ -4,10 +4,10 @@ Two measures per cited item (neither proves the claim it is attached to):
 - grounded: the citation exists in the snapshot within the incident window (t >= fault_start).
 - distinctive (stricter): the citation also points at something anomalous. A metric must have changed (same as
   grounded); a log quote must appear in no pre-alert log of that service; a trace must contain an error span, or a
-  span (of the cited service, else any) lasting over 2x the median of that service's pre-alert spans. Free text is
-  neither."""
+  span (of the cited service, else any) lasting longer than that service's pre-alert p95 (an error span anywhere
+  in the trace counts: parents inherit their children's errors). Free text is neither."""
 import re
-import statistics
+import math
 
 from rootcause import summary
 from rootcause.tools import _epoch
@@ -22,6 +22,12 @@ def _t(ts):
         return _epoch(ts)
     except (ValueError, TypeError, AttributeError):
         return None  # a malformed timestamp: the line doesn't count
+
+
+def _p95(values):
+    """Nearest-rank 95th percentile: a healthy service's slowest ~5% of spans, so routine tail latency is not 'anomalous'."""
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, math.ceil(0.95 * len(ordered)) - 1)]
 
 
 def _check(item, snap, rows):
@@ -48,7 +54,7 @@ def _check(item, snap, rows):
 
         def slow(s):
             pre = [p["dur_ms"] for p in snap["spans"] if p["service"] == s["service"] and p["start_ms"] / 1000 < t0]
-            return bool(pre) and s["dur_ms"] > 2 * statistics.median(pre)
+            return bool(pre) and s["dur_ms"] > _p95(pre)
         distinct = any(s["error"] for s in spans) or any(
             slow(s) for s in spans if not item.get("service") or s["service"] == item["service"])
         return True, distinct, "trace found"

@@ -26,7 +26,7 @@ def build_server(snap, toolset=tools_v1):
         return types.CallToolResult(content=[types.TextContent(type="text", text=text)],
                                     isError=text.startswith('{"error"'))
 
-    instructions = (f"Incident alert: {snap['meta']['alert']}. Times are seconds relative to the alert (t=0). "
+    instructions = (f"Incident alert: {snap['meta']['alert'].rstrip('.')}. Times are seconds relative to the alert (t=0). "
                     "Start with top_changes and service_map.")
     return Server("rootcause", instructions=instructions, on_list_tools=on_list_tools, on_call_tool=on_call_tool)
 

@@ -108,7 +108,7 @@ DSNAP = {**SNAP,
                   _log("1970-01-01T00:15:30Z", "a brand new thing"), _log("garbage", "only in a bad line"),
                   _log("1970-01-01T00:05:00Z", "hello from cart", "cart"),
                   _log("1970-01-01T00:15:40Z", "hello from cart", "payment")],
-         "spans": [_span(f"base{i}", 100 + i, 10.0) for i in range(3)] +
+         "spans": [_span(f"base{i}", 100 + i, d) for i, d in enumerate((10.0, 12.0, 20.0))] +  # pre-alert p95 = 20
                   [_span("fast", 910, 15.0), _span("slow", 910, 50.0), _span("err", 910, 5.0, error=True),
                    _span("cartonly", 910, 500.0, service="cart"), _span("pre", 100, 5.0, error=True)]}
 
@@ -133,3 +133,16 @@ def test_slow_rule_only_applies_with_pre_alert_spans_of_that_service():
     # cart has no pre-alert spans, so a slow cart span is grounded but only an error would make it distinctive
     got, _ = flags({"kind": "trace", "trace_id": "cartonly", "service": "cart", "claim": "c"})
     assert got == [(True, False)]
+
+
+def test_p95_is_nearest_rank():
+    assert evidence._p95([5.0, 10.0, 12.0, 20.0]) == 20.0
+    assert evidence._p95(list(range(1, 101))) == 95
+    assert evidence._p95([7.0]) == 7.0
+
+
+def test_slow_means_above_the_pre_alert_p95():
+    # pre-alert payment spans: 10, 12, 20 (+ a 5 ms error span) -> p95 = 20; the old 2x-median rule needed > 22
+    snap = {**DSNAP, "spans": DSNAP["spans"] + [_span("p95", 910, 21.0)]}
+    c = evidence.check(report({"kind": "trace", "trace_id": "p95", "service": "payment", "claim": "c"}), snap)
+    assert c["items"][0]["grounded"] and c["items"][0]["distinctive"]

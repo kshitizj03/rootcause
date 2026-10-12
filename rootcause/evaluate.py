@@ -88,7 +88,7 @@ def _row(category, recs, expected=None):
             "grounded": rate(lambda r: None if not r.get("evidence_check", {}).get("total")
                              else r["evidence_check"]["grounded"] / r["evidence_check"]["total"]),
             "distinctive": rate(lambda r: None if not r.get("evidence_check", {}).get("total")
-                                else r["evidence_check"]["distinctive"] / r["evidence_check"]["total"]),
+                                else r["evidence_check"].get("distinctive", 0) / r["evidence_check"]["total"]),
             "errors": rate(lambda r: None if "error" not in r else r["error"] is not None)}  # None: solver never sets it
 
 
