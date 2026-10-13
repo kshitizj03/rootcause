@@ -60,16 +60,16 @@ def test_change_tools_on_sparse_snapshots():
     assert json.loads(tools_v1.call(empty, "service_map", {}))["edges"] == []
 
 
-def test_service_with_one_sided_metrics_is_surfaced_not_hidden():
+def test_services_without_complete_windows_get_no_special_surfacing():
+    # no "incomplete" list or note (it was shaped by viewing a held-out incident); such a service is simply absent from the summary
     late = {"error_ratio": {**SNAP["metrics"]["error_ratio"], "late": [[float(t), 0.2] for t in range(915, 1215, 15)]}}
     snap = dict(SNAP, metrics=late)
     r = json.loads(tools_v1.call(snap, "top_changes", {}))
-    assert r["incomplete"] == ["late"] and all(c["service"] != "late" for c in r["changes"])
-    assert out("top_changes")["incomplete"] == []
+    assert set(r) == {"changes", "note"} and "incomplete" not in r["note"] and all(c["service"] != "late" for c in r["changes"])
     h = json.loads(tools_v1.call(snap, "service_health", {"service": "late"}))
-    assert h["signals"] == [] and "no complete before/after" in h["note"] and "error" not in h
+    assert "late" in h["error"] and "late" in h["valid_services"] and "signals" not in h
     snap_spans = dict(SNAP, spans=SNAP["spans"] + [span("z", "", "ghost", 1)])  # known via spans only, no metrics
-    assert json.loads(tools_v1.call(snap_spans, "service_health", {"service": "ghost"}))["signals"] == []
+    assert "error" in json.loads(tools_v1.call(snap_spans, "service_health", {"service": "ghost"}))
 
 
 def test_service_map_ranks_vanished_edges_after_error_edges_before_stable_ones():

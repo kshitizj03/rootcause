@@ -15,19 +15,13 @@ def _fmt(row):
 def top_changes(snap, n=10, include_load=False):
     n = max(1, min(40, int(10 if n is None else n)))
     rows = [r for r in summary.changes(snap) if include_load is True or str(include_load).lower() == "true" or r["signal"] != "rps"]
-    seen = {r["service"] for r in summary.changes(snap)}
-    incomplete = sorted({s for series in snap["metrics"].values() for s in series} - seen)
-    return {"changes": [_fmt(r) for r in rows[:n]], "incomplete": incomplete,
+    return {"changes": [_fmt(r) for r in rows[:n]],
             "note": f"change = |after - before| / max(before, small floor); before = {config.BASELINE_S // 60} min before the alert, "
-                    f"after = from {config.RAMP_S} s after it; after = 0 can mean the service stopped reporting, not recovery. "
-                    "incomplete = services with metrics but no complete before/after windows"}
+                    f"after = from {config.RAMP_S} s after it; after = 0 can mean the service stopped reporting, not recovery."}
 
 
 def service_health(snap, service):
     rows = [r for r in summary.changes(snap) if r["service"] == service]
-    if not rows and service in tools._services(snap):
-        return {"service": service, "signals": [],
-                "note": "no complete before/after metric windows for this service (it may have started or stopped reporting around the alert)"}
     if not rows:
         return {"error": f"no metrics for {service!r}", "valid_services": tools._services(snap)}
     return {"service": service, "signals": [_fmt(r) for r in rows]}
