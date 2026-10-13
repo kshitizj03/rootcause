@@ -459,6 +459,15 @@ def test_eval_heuristic_runs_and_prints_summary(monkeypatch, capsys):
     assert "TABLE" in capsys.readouterr().out
 
 
+def test_eval_without_tracing_never_imports_the_opentelemetry_module(monkeypatch):
+    import sys
+    import rootcause
+    monkeypatch.setitem(sys.modules, "rootcause.tracing", None)  # any import of it now raises ImportError
+    monkeypatch.delattr(rootcause, "tracing", raising=False)
+    _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 0, "stopped": None})
+    assert cli.main(["eval", "heuristic"]) == 0
+
+
 # --- cleanup: eval exit codes and summary messages ---
 
 def _stub_eval(monkeypatch, run):

@@ -235,8 +235,10 @@ def _print_dry_run(i, counts):
 
 
 def _eval(args):
-    from rootcause import tracing  # lazy: only eval needs the OpenTelemetry SDK
-    provider = tracing.setup(args.trace)  # before the solver (and its agent) is built; None when off
+    provider = None
+    if args.trace != "off":  # the OpenTelemetry SDK is imported only when tracing is asked for
+        from rootcause import tracing
+        provider = tracing.setup(args.trace)  # before the solver (and its agent) is built
     try:
         return _eval_traced(args)
     finally:
