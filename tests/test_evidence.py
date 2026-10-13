@@ -39,8 +39,10 @@ def test_each_kind_is_checked_against_the_snapshot():
                {"kind": "log", "service": "payment", "quote": "failed"},
                "free text")
     c = evidence.check(r, SNAP)
-    assert [i["grounded"] for i in c["items"]] == [True, False, True, False, False, True, False, False]
-    assert c["grounded"] == 3 and c["total"] == 8
+    # a flat-but-existing series (cart) is grounded, just not distinctive
+    assert [i["grounded"] for i in c["items"]] == [True, True, True, False, False, True, False, False]
+    assert [i["distinctive"] for i in c["items"]][:2] == [True, False]
+    assert c["grounded"] == 4 and c["total"] == 8
 
 
 def test_empty_evidence():
@@ -87,6 +89,14 @@ def test_restarts_citation_is_grounded_by_an_uptime_drop():
     assert evidence.check(r, snap)["grounded"] == 1
 
 
+def test_metric_citation_is_normalised_and_uptime_s_means_restarts():
+    up = [[float(t), float(t)] for t in range(0, 1080, 15)] + [[1080.0, 5.0], [1095.0, 20.0]]
+    snap = {**SNAP, "metrics": {**SNAP["metrics"], "uptime_s": {"email": up}}}
+    cite = lambda sig, svc="email": {"kind": "metric", "service": svc, "signal": sig, "claim": "c"}
+    c = evidence.check(report(cite("uptime_s"), cite(" Restarts "), cite("ERROR_RATIO", "payment"), cite("cpu_cores")), snap)
+    assert [(i["grounded"], i["distinctive"]) for i in c["items"]] == [(True, True), (True, True), (True, True), (False, False)]
+
+
 def test_heuristic_evidence_is_all_grounded():
     from rootcause import heuristic
     r = heuristic.diagnose(SNAP)
@@ -108,7 +118,7 @@ DSNAP = {**SNAP,
                   _log("1970-01-01T00:15:30Z", "a brand new thing"), _log("garbage", "only in a bad line"),
                   _log("1970-01-01T00:05:00Z", "hello from cart", "cart"),
                   _log("1970-01-01T00:15:40Z", "hello from cart", "payment")],
-         "spans": [_span(f"base{i}", 100 + i, d) for i, d in enumerate((10.0, 12.0, 20.0))] +  # pre-alert p95 = 20
+         "spans": [_span(f"base{i}", 700 + i, d) for i, d in enumerate((10.0, 12.0, 20.0))] +  # pre-alert p95 = 20
                   [_span("fast", 910, 15.0), _span("slow", 910, 50.0), _span("err", 910, 5.0, error=True),
                    _span("cartonly", 910, 500.0, service="cart"), _span("pre", 100, 5.0, error=True)]}
 
@@ -146,3 +156,10 @@ def test_slow_means_above_the_pre_alert_p95():
     snap = {**DSNAP, "spans": DSNAP["spans"] + [_span("p95", 910, 21.0)]}
     c = evidence.check(report({"kind": "trace", "trace_id": "p95", "service": "payment", "claim": "c"}), snap)
     assert c["items"][0]["grounded"] and c["items"][0]["distinctive"]
+
+
+def test_slow_baseline_ignores_stale_spans_from_before_the_capture_lookback():
+    # T0 = 900, lookback 300 s: a 1000 ms span at t = 100 is stale and must not inflate the pre-alert p95 (20)
+    snap = {**DSNAP, "spans": DSNAP["spans"] + [_span("stale", 100, 1000.0), _span("p95", 910, 50.0)]}
+    c = evidence.check(report({"kind": "trace", "trace_id": "p95", "service": "payment", "claim": "c"}), snap)
+    assert c["items"][0]["distinctive"]

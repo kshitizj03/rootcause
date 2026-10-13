@@ -2,14 +2,14 @@
 
 Two measures per cited item (neither proves the claim it is attached to):
 - grounded: the citation exists in the snapshot within the incident window (t >= fault_start).
-- distinctive (stricter): the citation also points at something anomalous. A metric must have changed (same as
-  grounded); a log quote must appear in no pre-alert log of that service; a trace must contain an error span, or a
+- distinctive (stricter): the citation also points at something anomalous. A metric must have changed notably
+  (its change score >= 0.5; grounded only needs the series to exist); a log quote must appear in no pre-alert log of that service; a trace must contain an error span, or a
   span (of the cited service, else any) lasting longer than that service's pre-alert p95 (an error span anywhere
   in the trace counts: parents inherit their children's errors). Free text is neither."""
 import re
 import math
 
-from rootcause import summary
+from rootcause import config, summary
 from rootcause.tools import _epoch
 
 
@@ -37,11 +37,12 @@ def _check(item, snap, rows):
         return False, False, "free text is not checkable"
     kind = item["kind"]
     if kind == "metric":
-        row = rows.get((item["service"], item["signal"]))
+        signal = str(item["signal"]).strip().lower()
+        row = rows.get((item["service"], "restarts" if signal == "uptime_s" else signal))  # restarts are derived from uptime_s
         if row is None:
             return False, False, "no such series"
         ok = row["score"] >= 0.5
-        return ok, ok, "changed" if ok else "series did not change notably"
+        return True, ok, "changed" if ok else "series exists but did not change notably"
     if kind == "trace":
         spans = [s for s in snap["spans"] if s["trace_id"] == item["trace_id"]]
         if not spans:
@@ -53,7 +54,8 @@ def _check(item, snap, rows):
             return False, False, "trace has no span of that service in the incident window"
 
         def slow(s):
-            pre = [p["dur_ms"] for p in snap["spans"] if p["service"] == s["service"] and p["start_ms"] / 1000 < t0]
+            pre = [p["dur_ms"] for p in snap["spans"]  # same stale-span cutoff as service_map
+                   if p["service"] == s["service"] and t0 - config.CAPTURE_LOOKBACK_S <= p["start_ms"] / 1000 < t0]
             return bool(pre) and s["dur_ms"] > _p95(pre)
         distinct = any(s["error"] for s in spans) or any(
             slow(s) for s in spans if not item.get("service") or s["service"] == item["service"])
