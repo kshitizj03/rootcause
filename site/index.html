@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RootCause scoreboard</title>
+<meta name="description" content="An LLM agent and a one-line heuristic, scored against ground truth on 20 recorded microservice incidents. Every run is shown, failures included.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<script type="module" src="assets/app.js"></script>
+</head>
+<body data-page="index">
+<header class="masthead">
+  <p class="wordmark"><a href="./">RootCause</a></p>
+</header>
+
+<main>
+  <section class="intro" aria-labelledby="headline">
+    <h1 id="headline">Can an LLM agent find what broke,<br> better than a one-line rule?</h1>
+    <p class="lede">RootCause is an LLM agent that reads an incident’s metrics, traces and logs to name the service that broke; here it is scored against a simple heuristic on 20 recorded incidents, with every run shown, failures included.</p>
+  </section>
+
+  <section class="board" aria-labelledby="board-title">
+    <h2 id="board-title" class="visually-hidden">Scoreboard</h2>
+    <div id="scoreboard">
+      <p class="status">Loading results.</p>
+      <noscript><p class="status">This page needs JavaScript to load the results.</p></noscript>
+    </div>
+  </section>
+
+  <section class="figures" aria-labelledby="figures-title">
+    <h2 id="figures-title">The same results, charted</h2>
+    <div class="figure-row">
+      <figure class="fig-wide">
+        <img src="figures/accuracy_by_category.png" width="1153" height="723" loading="lazy"
+             alt="Grouped bar chart of accuracy by incident category for each solver: easy, cross-service, silent, noisy, two-fault, control, and all incidents. The numbers are the ones in the scoreboard's accuracy rows.">
+        <figcaption>Accuracy by incident category. Error bars show the spread across runs, when at least two complete runs exist; a solver with no runs in a category has no bar there.</figcaption>
+      </figure>
+      <figure class="fig-narrow">
+        <img src="figures/coverage.png" width="862" height="646" loading="lazy"
+             alt="Line chart of the agent's accuracy against coverage as its confidence threshold rises: answering fewer incidents, only the ones it is confident about, makes it more accurate.">
+        <figcaption>Accuracy against coverage. Raising the confidence threshold leaves fewer runs answered; accuracy here counts answered runs only.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="prose" aria-labelledby="how-title">
+    <h2 id="how-title">How it works</h2>
+    <ol class="steps">
+      <li>A fault is injected into the OpenTelemetry Demo, a shop made of 28 services, and its metrics, traces and logs are recorded as a snapshot. The ground truth is stored separately.</li>
+      <li>Every channel that could name the fault, such as feature-flag events, log wording or delay markers, is stripped, and an automated scan checks each snapshot for leaks.</li>
+      <li>Each solver gets the same alert and snapshot. The heuristic names the service whose fault signal rose most; the agent, a Gemini tool loop, investigates through queries for changes, health, the service map, traces and logs.</li>
+      <li>Answers are scored by rules fixed before the first run. The top-ranked cause must be in the accepted set, a control is only right with “no incident”, and abstaining counts as wrong.</li>
+      <li>The agent’s cited evidence is checked against the telemetry: does it exist (grounded), and does it point at something anomalous (distinctive)?</li>
+    </ol>
+  </section>
+
+  <section class="prose" aria-labelledby="limits-title">
+    <h2 id="limits-title">Honest limits</h2>
+    <ul class="limits">
+      <li><strong>Twenty incidents from one demo app on one laptop.</strong> This is a careful small benchmark, not a general claim.</li>
+      <li><strong>Both solvers get the exact fault onset</strong> (t=0 is the injection time), and several alerts hint at the culprit’s functional area. The planned vague-alert ablation measures how much that helps.</li>
+      <li><strong>Free-tier models only</strong> (Gemini Flash-Lite), at temperature 0. The 5-run spread measures API nondeterminism, not sampling.</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="colophon">
+  <p id="generated">Results are regenerated from the run records with <code>python -m rootcause site</code>.</p>
+</footer>
+</body>
+</html>

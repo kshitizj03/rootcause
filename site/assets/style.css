@@ -1,0 +1,230 @@
+/* RootCause replay site. Tokens first (the decided palette), then page furniture, then the scoreboard. */
+
+:root {
+  --paper: #EDF0F2;
+  --ink: #16263A;
+  --muted: #5B6B7D;
+  --cause: #2350C8;
+  --hit: #0B7A62;
+  --miss: #B0283F;
+  --trace: #C47A12;
+  --hairline: #C5CED7;   /* row separators: navy ink thinned against the paper */
+  --wash: #F7F9FA;       /* row hover: lighter than the paper, so muted text keeps AA contrast */
+
+  --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --glyph: "Archivo", "Segoe UI Symbol", "Apple Symbols", "DejaVu Sans", sans-serif;
+
+  --gutter: clamp(16px, 4vw, 48px);
+  --measure: 68ch;
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1.0625rem/1.55 var(--body);
+  overflow-wrap: break-word;
+}
+
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.9em; }
+
+h1, h2, h3 { font-family: var(--display); font-weight: 700; margin: 0; }
+
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------------------------------------------------------------- page furniture */
+
+.masthead, main, .colophon {
+  max-width: 76rem;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.masthead { padding-block: 1.25rem 0; }
+.wordmark { margin: 0; font: 800 1.125rem/1 var(--display); font-stretch: 75%; letter-spacing: 0.01em; }
+.wordmark a { text-decoration: none; }
+
+.intro { padding-block: clamp(2.5rem, 7vw, 5rem) clamp(1.25rem, 3vw, 2rem); }
+.intro h1 {
+  font-size: clamp(2.1rem, 1.2rem + 4vw, 3.2rem);
+  line-height: 1.04;
+  letter-spacing: -0.015em;
+  font-stretch: 92%;
+  max-width: 19em;
+  text-wrap: balance;
+}
+.lede { max-width: 62ch; margin: 1.25rem 0 0; font-size: 1.1875rem; line-height: 1.5; }
+
+main > section + section { margin-top: clamp(3.5rem, 8vw, 5.5rem); }
+main > .intro + .board { margin-top: 0.5rem; }
+main > section:not(.intro):not(.board) h2 {
+  border-top: 1px solid var(--ink);
+  padding-top: 0.75rem;
+  margin-bottom: 1.25rem;
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.prose { max-width: var(--measure); }
+.prose li + li { margin-top: 0.75rem; }
+.steps { padding-left: 1.75rem; }
+.steps li { padding-left: 0.25rem; }
+.steps li::marker { font: 700 1rem var(--display); }
+.limits { padding-left: 1.25rem; }
+.limits li::marker { color: var(--muted); }
+
+.figure-row {
+  display: grid;
+  /* column widths follow the two PNGs' aspect ratios, so the charts stand at the same height */
+  grid-template-columns: 1.6fr 1.33fr;
+  gap: 2rem;
+  align-items: start;
+}
+figure { margin: 0; }
+figure img { display: block; width: 100%; height: auto; border: 1px solid var(--hairline); }
+figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.9375rem; line-height: 1.45; max-width: 60ch; }
+
+.status { color: var(--ink); max-width: var(--measure); }
+
+.colophon {
+  margin-top: clamp(4rem, 9vw, 6rem);
+  padding-block: 1rem 2.5rem;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+.colophon p { margin: 0; border-top: 1px solid var(--ink); padding-top: 0.75rem; }
+
+/* ---------------------------------------------------------------- scoreboard (the one bold element) */
+
+.answer { max-width: var(--measure); margin: 0 0 1rem; font-size: 1.125rem; }
+
+.legend {
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem;
+  margin: 0 0 1.25rem; padding: 0; list-style: none;
+  color: var(--muted); font-size: 0.9375rem;
+}
+.legend li { display: inline-flex; align-items: center; gap: 0.4rem; }
+.legend .tile { width: 1.25rem; height: 1.25rem; font-size: 0.8125rem; }
+
+.table-scroll { overflow-x: auto; max-width: 100%; }
+
+.scoreboard {
+  width: 100%;
+  border-collapse: separate;   /* separate, so borders travel with the sticky first column */
+  border-spacing: 0;
+  border-top: 3px solid var(--ink);
+  font-family: var(--display);
+  font-stretch: 82%;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.scoreboard th, .scoreboard td { padding: 0.6rem 1rem 0.6rem 0; vertical-align: top; }
+.scoreboard th:first-child { padding-left: 0; }
+.scoreboard td:last-child, .scoreboard th:last-child { padding-right: 0; }
+
+.scoreboard thead th {
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--ink);
+  font-weight: 700; font-size: 1rem; vertical-align: bottom;
+}
+.scoreboard .sub {
+  display: block;
+  font-family: var(--body); font-stretch: normal; font-weight: 400;
+  font-size: 0.8125rem; color: var(--muted); line-height: 1.3;
+}
+
+/* the first column stays put while the runs scroll sideways */
+.scoreboard th.incident {
+  position: sticky; left: 0; z-index: 1;
+  background: var(--paper);
+  min-width: 15rem; width: 45%;
+}
+/* solver columns hug their run strips, so each accuracy figure sits under its own strip */
+.scoreboard th.solver, .scoreboard td.runs, .scoreboard td.num { width: 1%; min-width: 7.5rem; }
+.scoreboard th.solver { font-size: 1.1875rem; font-weight: 750; font-stretch: 90%; }
+
+.group th {
+  padding-top: 2rem; padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--ink);
+  font-size: 1.1875rem; font-weight: 750; font-stretch: 100%;
+}
+.group-label { position: sticky; left: 0; display: inline-block; }
+.group .sub { display: inline; margin-left: 0.6rem; }
+tbody:first-of-type .group th { padding-top: 1rem; }
+
+.incident-row th, .incident-row td { border-bottom: 1px solid var(--hairline); }
+.incident-row:hover th, .incident-row:hover td { background: var(--wash); }
+.incident-row th.incident { font-weight: 600; font-size: 1.0625rem; }
+.incident-row th a { text-decoration-color: var(--hairline); }
+.incident-row th a:hover { text-decoration-color: currentColor; }
+.heldout {
+  margin-left: 0.5rem;
+  font-family: var(--body); font-stretch: normal; font-weight: 400; font-style: italic;
+  font-size: 0.875rem; color: var(--muted); white-space: nowrap;
+}
+.alert {
+  display: block; max-width: 40ch; margin-top: 0.15rem;
+  font-family: var(--body); font-stretch: normal; font-weight: 400;
+  font-size: 0.875rem; line-height: 1.4; color: var(--muted);
+}
+
+.truth { min-width: 9rem; font-size: 0.9375rem; }
+.cause { display: block; }
+.svc { color: var(--cause); font-weight: 650; }
+.ftype, .none { color: var(--muted); }
+
+.runs { white-space: nowrap; }
+.strip { display: inline-flex; gap: 3px; }
+.tile {
+  display: inline-grid; place-items: center;
+  width: 1.75rem; height: 1.75rem;
+  font: 700 1.0625rem/1 var(--glyph);
+  color: #fff;
+}
+.tile.hit { background: var(--hit); }
+.tile.miss { background: var(--miss); }
+.tile.part { background: linear-gradient(135deg, var(--hit) 50%, var(--miss) 50%); }
+.tile.empty { border: 1px dashed var(--muted); }
+
+.num { text-align: right; }
+.acc-row th, .acc-row td { padding-top: 0.7rem; padding-bottom: 0.9rem; vertical-align: baseline; }
+.acc-row th.incident { font-weight: 600; font-size: 0.9375rem; color: var(--muted); }
+.acc { display: block; font-size: 1.375rem; font-weight: 750; font-stretch: 90%; line-height: 1.1; }
+.acc-detail, .acc-none {
+  display: block; white-space: nowrap;
+  font-family: var(--body); font-stretch: normal; font-size: 0.8125rem; color: var(--muted);
+}
+
+tfoot .total th, tfoot .total td { border-top: 3px solid var(--ink); padding-top: 0.9rem; }
+tfoot .total th.incident { color: var(--ink); font-size: 1.0625rem; }
+tfoot .total .acc { font-size: 1.75rem; }
+
+/* ---------------------------------------------------------------- narrow screens */
+
+@media (max-width: 800px) {
+  .figure-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .intro h1 br { display: none; }   /* the comma break only pays at desktop width */
+  .lede { font-size: 1.0625rem; }
+  .scoreboard th, .scoreboard td { padding-right: 0.75rem; }
+  .scoreboard th.incident { min-width: 0; width: 9.5rem; max-width: 9.5rem; padding-right: 0.6rem; border-right: 1px solid var(--hairline); }
+  .incident-row th.incident { font-size: 0.9375rem; }
+  .alert { display: none; }           /* the alert is on the incident page; here the column must stay narrow */
+  .heldout { display: block; margin: 0.1rem 0 0; }
+  .group .sub { display: block; margin: 0.15rem 0 0; white-space: normal; max-width: calc(100vw - 2 * var(--gutter)); }
+}
