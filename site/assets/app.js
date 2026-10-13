@@ -29,18 +29,19 @@ export function h(tag, attrs = {}, ...kids) {
   for (const [k, v] of Object.entries(attrs)) {
     if (v !== null && v !== undefined && v !== false) node.setAttribute(k, v === true ? "" : v);
   }
-  node.append(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
+  node.append(...kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false));
   return node;
 }
 
-/** Fetch JSON relative to the page; null when it is missing or unreadable. */
+/** Fetch JSON relative to the page; null when it is missing. Malformed JSON throws, so the page says to rebuild it. */
 export async function loadJSON(path) {
+  let res;
   try {
-    const res = await fetch(path);
-    return res.ok ? await res.json() : null;
+    res = await fetch(path);
   } catch {
     return null;
   }
+  return res.ok ? res.json() : null;
 }
 
 /** A run's score as a mark: 1 is correct, 0 wrong, anything between partly correct (two-fault, one cause of two). */
@@ -210,22 +211,29 @@ const errorCell = (isError) => (isError ? h("span", { class: "bad" }, "✗ error
 const note = (text) => (text ? h("p", { class: "note" }, text) : null);
 
 function changesTable(rows, label, text) {
+  if (!rows.length) return [h("p", { class: "out-line" }, "No changes."), note(text)];
   return [dataTable(label, [["Service"], ["Signal"], ["Before", 1], ["After", 1], ["Change", 1]],
     rows.map((r) => [r.service, r.signal, num(r.before), num(r.after), r.change])), note(text)];
 }
 
 /** get_metric as a sparkline: the alert (t=0) is a vertical rule and everything after it is tinted. */
-function sparkline(o) {
+const WINDOW_END_S = 300;  // every snapshot ends 5 minutes after the alert (config.SETTLE_S)
+
+function sparkline(o, args = {}) {
   const pts = (o.points || []).filter((p) => Number.isFinite(p?.[0]) && Number.isFinite(p?.[1]));
   if (pts.length < 2) return rawOutput({ output: o, truncated: false });
   const W = 300, H = 48, PAD = 4;
   const ts = pts.map((p) => p[0]), vs = pts.map((p) => p[1]);
-  const t0 = Math.min(...ts), t1 = Math.max(...ts), lo = Math.min(...vs), hi = Math.max(...vs);
+  const last = Math.max(...ts), lo = Math.min(...vs), hi = Math.max(...vs);
+  // the axis runs to the end of what was asked for, so a series that stops early (a paused service) visibly stops
+  const asked = Number.isFinite(args.until) ? Math.min(args.until, WINDOW_END_S) : WINDOW_END_S;
+  const t0 = Math.min(...ts), t1 = Math.max(last, asked);
+  const stopped = t1 - last >= 120 ? `No points after ${minutes(last)}.` : null;
   const x = (t) => ((t - t0) / (t1 - t0 || 1)) * W;
   const y = (v) => (hi === lo ? H / 2 : PAD + (1 - (v - lo) / (hi - lo)) * (H - 2 * PAD));
   const at = Math.min(W, Math.max(0, x(0)));
   const label = `${o.signal} for ${o.service}, one point per minute from ${minutes(t0)} to ${minutes(t1)} around the alert; ` +
-    `lowest ${num(lo)}, highest ${num(hi)}`;
+    `lowest ${num(lo)}, highest ${num(hi)}${stopped ? `. ${stopped}` : ""}`;
   const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", class: "spark", role: "img", "aria-label": label },
     t1 >= 0 ? svgEl("rect", { x: at, y: 0, width: W - at, height: H, class: "spark-after" }) : null,
     t0 <= 0 && t1 >= 0 ? svgEl("line", { x1: at, x2: at, y1: 0, y2: H, class: "spark-alert", "vector-effect": "non-scaling-stroke" }) : null,
@@ -237,7 +245,8 @@ function sparkline(o) {
     h("figcaption", { class: "spark-axis" },
       h("span", {}, minutes(t0)),
       t0 <= 0 && t1 >= 0 ? h("span", { class: "spark-zero", style: `left: ${((at / W) * 100).toFixed(1)}%` }, "alert") : null,
-      h("span", {}, minutes(t1))));
+      h("span", {}, minutes(t1))),
+    stopped ? note(stopped) : null);
 }
 
 /** One renderer per tool, written against the shapes in rootcause/tools.py and tools_v1.py. */
@@ -263,7 +272,7 @@ const RENDER = {
       o.samples.map((l) => `t=${l.t}  ${l.severity ?? "no severity"}  ${l.body}`).join("\n")) : null],
   top_changes: (o) => changesTable(o.changes, "Largest changes", o.note),
   service_health: (o) => changesTable(o.signals, `Health of ${o.service}`),
-  service_map: (o) => [dataTable("Service map",
+  service_map: (o) => [!o.edges.length ? h("p", { class: "out-line" }, "No calls between services.") : dataTable("Service map",
     [["Caller"], ["Callee"], ["Calls before", 1], ["Calls after", 1], ["Errors before", 1], ["Errors after", 1]],
     o.edges.map((e) => [e.caller, e.stopped ? [e.callee, " ", h("span", { class: "bad stopped" }, "✗ stopped")] : e.callee,
       num(e.calls_before), num(e.calls_after), num(e.errors_before), num(e.errors_after)])), note(o.note)],
@@ -280,9 +289,12 @@ function rawOutput(step) {
 
 function renderOutput(step) {
   const o = step.output;
-  if (step.truncated || !isObj(o) || "error" in o || !RENDER[step.tool]) return rawOutput(step);
+  if (!isObj(o) || "error" in o || !RENDER[step.tool]) return rawOutput(step);
+  const cut = Object.entries(o._trimmed || {}).map(([k, n]) => `${o[k]?.length ?? 0} of ${n} ${k}`).join(", ");
   try {
-    return RENDER[step.tool](o);
+    return [RENDER[step.tool](o, isObj(step.args) ? step.args : {}),
+      o._cut_by_tool ? note("The tool cut this output for the agent too, so the agent saw only part of it.") : null,
+      cut ? note(`Shortened for the site: the first ${cut} are shown${o._cut_by_tool ? "" : "; the agent saw them all"}.`) : null];
   } catch {
     return rawOutput(step);   // a shape the renderer does not expect is still shown, as text
   }
@@ -331,6 +343,7 @@ function evidenceText(item) {
   if (item.kind === "metric") return `${who}: ${item.claim ?? ""}`;
   if (item.kind === "trace") return `Trace ${item.trace_id ?? ""}${who ? ` (${who})` : ""}: ${item.claim ?? ""}`;
   if (item.kind === "log") return `${who} log: “${item.quote ?? ""}”`;
+  if (item.kind === "text") return String(item.text ?? "");
   return JSON.stringify(item);
 }
 
@@ -456,7 +469,7 @@ async function renderIncident() {
   function draw() {
     stop();
     status.textContent = "";
-    const list = runs[state.solver] || [];
+    const list = Object.hasOwn(runs, state.solver) ? runs[state.solver] : [];
     const run = list.find((r) => r.run + 1 === state.run) || list[0];
     runPick.replaceChildren(...(list.length
       ? list.map((r) => h("option", { value: r.run + 1, selected: r === run }, `Run ${r.run + 1}`))
@@ -472,18 +485,21 @@ async function renderIncident() {
     body.replaceChildren(verdictPanel(data, state.solver, run), investigation(state.solver, run));
   }
 
+  const syncURL = () => history.replaceState(null, "", `?${new URLSearchParams({ id: data.id, solver: state.solver, run: state.run })}`);
   const pick = () => {
     state.solver = solverPick.value;
     state.run = Number(runPick.value) || 1;
     draw();
-    const params = new URLSearchParams({ id: data.id, solver: state.solver, run: state.run });
-    history.replaceState(null, "", `?${params}`);
+    syncURL();
   };
   solverPick.addEventListener("change", pick);
   runPick.addEventListener("change", pick);
   replayButton.addEventListener("click", replay);
   showButton.addEventListener("click", () => showAll());
+  const asked = state.run;
   draw();
+  if (Object.hasOwn(runs, state.solver) && runs[state.solver].length) syncURL();
+  if (query.has("run") && asked !== state.run) status.textContent = `Run ${query.get("run")} was not recorded, so run ${state.run} is shown.`;
 }
 
 // ---------------------------------------------------------------- dispatch

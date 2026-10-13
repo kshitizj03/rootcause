@@ -1,13 +1,14 @@
 """Build the JSON behind the static replay site (site/data/) from recorded run records.
 
 Post-hoc only: it shows ground truth, so nothing else in rootcause/ may import it. Run records are copied through an
-allow-list of fields (never `messages`, `code` or paths), and tool outputs are cut to MAX_OUTPUT characters."""
+allow-list of fields (never `messages`, `code` or paths), and tool outputs are cut to MAX_OUTPUT characters (by
+halving their longest lists while that is enough, so they still parse; as plain text otherwise)."""
 import json
 import shutil
 from datetime import date
 from pathlib import Path
 
-from rootcause import config, evaluate, report, scenarios, snapshot
+from rootcause import config, evaluate, report, scenarios, snapshot, tools
 
 MAX_OUTPUT = 3000
 
@@ -24,12 +25,43 @@ def _parse(text):
         return text
 
 
+def _shrink(obj):
+    """Halve the longest list in a JSON object until it fits MAX_OUTPUT, so the page can still render it as a table;
+    `_trimmed` records each cut list's original length. None when cutting lists cannot make it fit."""
+    if not isinstance(obj, dict):
+        return None
+    obj, trimmed = dict(obj), {}
+    while len(json.dumps(obj)) > MAX_OUTPUT:
+        lists = [k for k, v in obj.items() if isinstance(v, list) and len(v) > 1]
+        if not lists:
+            return None
+        k = max(lists, key=lambda k: len(json.dumps(obj[k])))
+        trimmed.setdefault(k, len(obj[k]))
+        obj[k] = obj[k][:len(obj[k]) // 2]
+        obj["_trimmed"] = trimmed
+    return obj
+
+
+def _repair(text):
+    """An output the tool itself cut for the agent (tools.TRUNCATED) is JSON cut mid-list: close it after the last
+    whole item. None when that does not give an object."""
+    if not text.endswith(tools.TRUNCATED):
+        return None
+    head = text[:-len(tools.TRUNCATED)]
+    end = head.rfind("}, {")
+    fixed = _parse(head[:end + 1] + "]}") if end > 0 else None
+    return {**fixed, "_cut_by_tool": True} if isinstance(fixed, dict) else None
+
+
 def _step(t):
     out = t.get("output", "")
     out = out if isinstance(out, str) else json.dumps(out)
-    cut = len(out) > MAX_OUTPUT  # a cut JSON text no longer parses, so it is shown as text
-    return {"tool": t["tool"], "args": _parse(t.get("args")), "output": out[:MAX_OUTPUT] if cut else _parse(out),
-            "truncated": cut}
+    if len(out) <= MAX_OUTPUT:
+        return {"tool": t["tool"], "args": _parse(t.get("args")), "output": _parse(out), "truncated": False}
+    parsed = _parse(out)
+    shrunk = _shrink(_repair(out) if isinstance(parsed, str) else parsed)  # a cut JSON text no longer parses, so cut lists first and the text only as a fallback
+    return {"tool": t["tool"], "args": _parse(t.get("args")), "output": shrunk if shrunk is not None else out[:MAX_OUTPUT],
+            "truncated": True}
 
 
 def _run(r):

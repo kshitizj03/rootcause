@@ -123,3 +123,28 @@ def test_build_refuses_to_delete_run_data(tmp_path):
     for bad in (config.ROOT, config.DATA):
         with pytest.raises(ValueError):
             site.build(out_dir=bad, runs_dir=tmp_path)
+
+
+def test_long_json_outputs_are_shortened_by_cutting_lists_so_they_still_parse():
+    spans = [{"service": "cart", "name": "op", "t": i, "dur_ms": 1.5, "error": False, "message": "m" * 40} for i in range(200)]
+    step = site._step({"tool": "get_trace", "args": "{}", "output": json.dumps({"trace_id": "abc", "spans": spans})})
+    out = step["output"]
+    assert step["truncated"] is True and isinstance(out, dict)  # still structured, so the page renders a table
+    assert out["trace_id"] == "abc" and out["spans"] == spans[:len(out["spans"])] and 0 < len(out["spans"]) < 200
+    assert out["_trimmed"] == {"spans": 200} and len(json.dumps(out)) <= site.MAX_OUTPUT
+    # one list item that alone is too long cannot be cut further: plain-text truncation, as before
+    big = site._step({"tool": "search_logs", "args": "{}", "output": json.dumps({"samples": ["x" * 5000]})})
+    assert big["truncated"] is True and isinstance(big["output"], str) and len(big["output"]) == site.MAX_OUTPUT
+
+
+def test_outputs_the_tool_cut_for_the_agent_are_repaired_at_the_last_whole_item():
+    from rootcause import tools
+    text = json.dumps({"trace_id": "abc", "spans": [{"t": i, "name": "op" * 30} for i in range(100)]})[:5000] + tools.TRUNCATED
+    step = site._step({"tool": "get_trace", "args": "{}", "output": text})
+    out = step["output"]
+    assert step["truncated"] is True and isinstance(out, dict) and out["_cut_by_tool"] is True
+    assert out["trace_id"] == "abc" and [s["t"] for s in out["spans"]] == list(range(len(out["spans"])))
+    assert len(json.dumps(out)) <= site.MAX_OUTPUT
+    # garbage that only looks cut stays text
+    junk = site._step({"tool": "get_trace", "args": "{}", "output": "{x" * 3000 + tools.TRUNCATED})
+    assert isinstance(junk["output"], str)

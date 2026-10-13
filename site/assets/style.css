@@ -267,7 +267,7 @@ tfoot .total .acc { font-size: 1.75rem; }
 .replay-buttons button.primary { background: var(--ink); color: var(--paper); }
 .replay-buttons button:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 .replay-status { margin: 0; min-height: 1.5em; color: var(--muted); font-size: 0.9375rem; font-variant-numeric: tabular-nums; flex-basis: 100%; }
-.replay-status:empty { display: none; }
+.replay-status:empty { min-height: 0; }  /* stays rendered: a live region added on first use is often not announced */
 
 .replay-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2.5rem; padding-top: 2rem; }
 
@@ -328,6 +328,7 @@ tfoot .total .acc { font-size: 1.75rem; }
   font-size: 0.8125rem; color: var(--muted); font-variant-numeric: tabular-nums;
 }
 .spark-zero { position: absolute; top: 0; transform: translateX(-100%); padding-right: 0.3rem; color: var(--ink); }  /* ends at the rule, clear of the end label */
+.spark-fig > .note { grid-column: 1 / -1; margin: 0.25rem 0 0; }  /* "No points after ..." spans the figure, under the axis */
 
 /* verdict */
 .verdict { min-width: 0; }
