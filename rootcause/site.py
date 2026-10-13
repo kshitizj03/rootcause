@@ -11,6 +11,7 @@ from pathlib import Path
 from rootcause import config, evaluate, report, scenarios, snapshot, tools
 
 MAX_OUTPUT = 3000
+TAIL_LISTS = {"samples"}  # search_logs returns the *last* N lines, so cutting keeps the newest
 
 
 def _dump(path, obj):
@@ -37,7 +38,8 @@ def _shrink(obj):
             return None
         k = max(lists, key=lambda k: len(json.dumps(obj[k])))
         trimmed.setdefault(k, len(obj[k]))
-        obj[k] = obj[k][:len(obj[k]) // 2]
+        half = len(obj[k]) // 2
+        obj[k] = obj[k][-half:] if k in TAIL_LISTS else obj[k][:half]
         obj["_trimmed"] = trimmed
     return obj
 
@@ -87,7 +89,10 @@ def _truth(s, rows):
 def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=report.SOLVER_ORDER):
     """Write out_dir/data/index.json, out_dir/data/incidents/<id>.json and out_dir/figures/*.png; return out_dir."""
     out_dir = Path(out_dir)
-    if out_dir.resolve() in (config.ROOT.resolve(), config.DATA.resolve()) or out_dir.resolve() in config.ROOT.resolve().parents:
+    target, root = out_dir.resolve(), config.ROOT.resolve()
+    protected = (config.DATA.resolve(), (root / "docs" / "results" / "figures").resolve())  # run records, source figures
+    # a build deletes target/data and target/figures: never at or above the repo root, nor at, in or above a protected dir
+    if root.is_relative_to(target) or any(target.is_relative_to(p) or p.is_relative_to(target) for p in protected):
         raise ValueError(f"refusing to build the site into {out_dir}: it would delete run data")  # data/ holds days of runs
     for generated in ("data", "figures"):  # drop outputs of scenarios/figures that no longer exist
         shutil.rmtree(out_dir / generated, ignore_errors=True)

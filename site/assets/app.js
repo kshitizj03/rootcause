@@ -84,10 +84,11 @@ function accuracyCell(row) {
   if (!row) return h("td", { class: "num" }, h("span", { class: "acc-none" }, "not run"));
   const lo = row.records_min, hi = row.records_max;
   const runs = lo === hi ? plural(lo, "run") : `${lo}–${hi} runs`;
-  const spread = row.accuracy_std === null ? null : `± ${Math.round(row.accuracy_std * 100)}, `;
+  const spread = row.accuracy_std === null ? null : `± ${Math.round(row.accuracy_std * 100)} pts, `;
+  const missing = row.expected && row.scenarios < row.expected ? `${row.scenarios} of ${row.expected} incidents, ` : null;
   return h("td", { class: "num" },
     h("span", { class: "acc" }, pct(row.accuracy_mean)),
-    h("span", { class: "acc-detail" }, spread, `${runs} each`));
+    h("span", { class: "acc-detail" }, missing, spread, `${runs} each`));
 }
 
 function legend() {
@@ -97,16 +98,19 @@ function legend() {
     item("part", "½", "partly correct (one of two causes)"), item("empty", "", "not run yet"));
 }
 
-/** "Right on the 16 fault incidents: heuristic 59% and agent v0 41%." plus a note for each partial batch. */
+/** "Accuracy on the 16 fault incidents: heuristic 59% and agent v0 41%." plus a note for each partial batch. */
 function answer(data, overall) {
   const shown = data.solvers.filter((s) => overall[s]);
   if (!shown.length) return null;
   const n = overall[shown[0]].expected ?? overall[shown[0]].scenarios;
   const parts = shown.map((s) => `${solverName(s).toLowerCase()} ${pct(overall[s].accuracy_mean)}`);
   const list = new Intl.ListFormat("en", { type: "conjunction" }).format(parts);
-  const partial = shown.filter((s) => overall[s].records_min !== overall[s].records_max)
-    .map((s) => `${solverName(s)} is a partial batch so far (${overall[s].records_min}–${overall[s].records_max} runs per incident).`);
-  return h("p", { class: "answer" }, `Right on the ${n} fault incidents: ${list}. `, partial.join(" "));
+  const partial = shown.filter((s) => overall[s].records_min !== overall[s].records_max || overall[s].scenarios < n)
+    .map((s) => { const o = overall[s];
+      const reach = o.scenarios < n ? `${o.scenarios} of ${n} incidents, ` : "";
+      const runs = o.records_min === o.records_max ? plural(o.records_min, "run") : `${o.records_min}–${o.records_max} runs`;
+      return `${solverName(s)} is a partial batch so far (${reach}${runs} per incident).`; });
+  return h("p", { class: "answer" }, `Accuracy on the ${n} fault incidents: ${list}. `, partial.join(" "));
 }
 
 async function renderIndex() {
@@ -266,8 +270,9 @@ const RENDER = {
     o.spans.map((s) => [num(s.t), s.service, [s.name, s.message ? h("span", { class: "msg" }, s.message) : null],
       num(s.dur_ms), errorCell(s.error)])),
   search_logs: (o) => [
-    h("p", { class: "out-line" }, `${plural(o.total, "line")} matched` +
-      (o.samples.length < o.total ? `; the last ${o.samples.length} are shown.` : ".")),
+    h("p", { class: "out-line" }, `${plural(o.total, "line")} matched` + (o._cut_by_tool
+      ? `; the agent saw the oldest ${o._trimmed?.samples ?? o.samples.length} of the lines returned before the tool cut its output.`
+      : (o._trimmed?.samples ?? o.samples.length) < o.total ? `; the tool returned the last ${o._trimmed?.samples ?? o.samples.length}.` : ".")),
     o.samples.length ? h("pre", { class: "out-pre", tabindex: "0" },
       o.samples.map((l) => `t=${l.t}  ${l.severity ?? "no severity"}  ${l.body}`).join("\n")) : null],
   top_changes: (o) => changesTable(o.changes, "Largest changes", o.note),
@@ -290,11 +295,12 @@ function rawOutput(step) {
 function renderOutput(step) {
   const o = step.output;
   if (!isObj(o) || "error" in o || !RENDER[step.tool]) return rawOutput(step);
-  const cut = Object.entries(o._trimmed || {}).map(([k, n]) => `${o[k]?.length ?? 0} of ${n} ${k}`).join(", ");
+  const cut = Object.entries(o._trimmed || {})   // log samples keep their newest lines (site._shrink), other lists their first
+    .map(([k, n]) => `the ${k === "samples" ? "last" : "first"} ${o[k]?.length ?? 0} of ${n} ${k}`).join(", ");
   try {
     return [RENDER[step.tool](o, isObj(step.args) ? step.args : {}),
       o._cut_by_tool ? note("The tool cut this output for the agent too, so the agent saw only part of it.") : null,
-      cut ? note(`Shortened for the site: the first ${cut} are shown${o._cut_by_tool ? "" : "; the agent saw them all"}.`) : null];
+      cut ? note(`Shortened for the site: ${cut} are shown${o._cut_by_tool ? "" : "; the agent saw them all"}.`) : null];
   } catch {
     return rawOutput(step);   // a shape the renderer does not expect is still shown, as text
   }

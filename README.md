@@ -70,6 +70,7 @@ The site is plain HTML, CSS and JS with no build step, and every URL is relative
 
 ```bash
 git worktree add --orphan -b gh-pages ../rootcause-pages     # first time only (git 2.42+)
+git -C ../rootcause-pages rm -rq --ignore-unmatch .            # drop files from the last publish
 cp -r site/. ../rootcause-pages/ && touch ../rootcause-pages/.nojekyll
 git -C ../rootcause-pages add -A && git -C ../rootcause-pages commit -m "Publish replay site" && git -C ../rootcause-pages push origin gh-pages
 ```

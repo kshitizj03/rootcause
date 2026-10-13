@@ -120,7 +120,7 @@ def test_cli_site_prints_output_path(monkeypatch, capsys):
 def test_build_refuses_to_delete_run_data(tmp_path):
     import pytest
     from rootcause import config, site
-    for bad in (config.ROOT, config.DATA):
+    for bad in (config.ROOT, config.DATA, config.ROOT.parent, config.ROOT / "docs" / "results", config.DATA / "runs"):
         with pytest.raises(ValueError):
             site.build(out_dir=bad, runs_dir=tmp_path)
 
@@ -135,6 +135,10 @@ def test_long_json_outputs_are_shortened_by_cutting_lists_so_they_still_parse():
     # one list item that alone is too long cannot be cut further: plain-text truncation, as before
     big = site._step({"tool": "search_logs", "args": "{}", "output": json.dumps({"samples": ["x" * 5000]})})
     assert big["truncated"] is True and isinstance(big["output"], str) and len(big["output"]) == site.MAX_OUTPUT
+    # log samples are the last N lines, so the newest ones are kept
+    logs = [{"t": i, "severity": "INFO", "body": "b" * 300} for i in range(20)]
+    cut = site._step({"tool": "search_logs", "args": "{}", "output": json.dumps({"service": "a", "total": 99, "samples": logs})})["output"]
+    assert cut["_trimmed"] == {"samples": 20} and cut["samples"] == logs[-len(cut["samples"]):]
 
 
 def test_outputs_the_tool_cut_for_the_agent_are_repaired_at_the_last_whole_item():
