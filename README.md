@@ -4,7 +4,7 @@ An LLM agent that investigates microservice incidents. Given a symptom ("custome
 
 RootCause is mainly a **benchmark**: is an LLM agent actually better than a simple rule, and where? Every answer is scored against ground truth on 20 recorded incidents. The scoring rules were fixed before the first run, there are no-fault controls, the agent gets 5 runs per incident, and a held-out split is never used for tuning.
 
-> Status: weeks 1–4 of 5 are built; week 5 (replay site) in progress. Results are in [`docs/results/`](docs/results/); they report failures as plainly as wins.
+> Status: all five weeks are built. The agent batches are still running on the free tier's daily quota (about 40 runs a day), so agent results are partial until they finish. Results are in [`docs/results/`](docs/results/); they report failures as plainly as wins.
 
 ## How it works
 
@@ -49,6 +49,33 @@ The reports show accuracy, top-3, fault type, false alarms and abstentions per c
 - **grounded:** the cited metric, trace or log line exists in the incident window;
 - **distinctive:** it also points at something anomalous.
 
+## Replay site
+
+A static site replays every recorded run, failures included:
+- **The scoreboard** shows one mark per run, for every incident and solver.
+- **Each incident page** steps through the agent's investigation: every tool call and what it returned, drawn as tables and sparklines. Next to it is the verdict against the true cause, the simple rule's answer for the same incident, and the cited evidence marked grounded or not.
+
+![Scoreboard: one mark per run for each incident and solver](docs/images/scoreboard.png)
+
+![Replay of a held-out incident the agent got wrong: it named the symptom service first](docs/images/replay.png)
+
+*(Screenshots from the partial agent v0 batch.)*
+
+```bash
+python -m rootcause report && python -m rootcause site   # regenerate figures and site/data from data/runs
+python -m http.server 8000 -d site                       # then open http://localhost:8000
+```
+
+The site is plain HTML, CSS and JS with no build step, and every URL is relative, so it can be served from any sub-path. To publish it on GitHub Pages, copy the built `site/` (including the generated, git-ignored `site/data/` and `site/figures/`) into a `gh-pages` branch:
+
+```bash
+git worktree add --orphan -b gh-pages ../rootcause-pages     # first time only (git 2.42+)
+cp -r site/. ../rootcause-pages/ && touch ../rootcause-pages/.nojekyll
+git -C ../rootcause-pages add -A && git -C ../rootcause-pages commit -m "Publish replay site" && git -C ../rootcause-pages push origin gh-pages
+```
+
+The site shows ground truth, so it is built after scoring and is never given to the agent or the MCP server.
+
 ## Quick start
 
 Requirements: Windows, macOS or Linux, Python 3.11, Docker (about 4 GB RAM for the demo), and a free [Gemini API key](https://aistudio.google.com/) (agent runs only).
@@ -92,6 +119,8 @@ In a client config, use absolute paths, with the venv's python as `command` and 
 | `rootcause/summary.py`, `heuristic.py` | baseline-vs-fault change table and the heuristic |
 | `rootcause/tools.py`, `tools_v1.py`, `agent.py` | agent tools (v0, v1) and the Gemini tool loop |
 | `rootcause/evidence.py`, `mcp_server.py` | evidence checker and MCP server |
+| `rootcause/report.py`, `tracing.py` | results report and figures; optional OpenTelemetry GenAI spans of agent runs |
+| `rootcause/site.py`, `site/` | data builder and static front end of the replay site |
 | `docs/superpowers/specs/`, `plans/` | design spec and the week-by-week implementation plans |
 
 ## Honest limits
