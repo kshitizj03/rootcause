@@ -92,6 +92,7 @@ def build_parser():
     sm.add_argument("solver", choices=list(SOLVERS))
     sm.add_argument("--split", choices=["all", "tune", "heldout"], default="all")
     sub.add_parser("report", help="write docs/results/report.md and figures from all recorded runs")
+    sub.add_parser("site", help="write site/data (index + per-incident JSON) for the replay site from all recorded runs")
     mc = sub.add_parser("mcp", help="serve the v1 tools for one snapshot over MCP (stdio)")
     mc.add_argument("path")
     return p
@@ -305,6 +306,9 @@ def _dispatch(args):
     elif args.cmd == "report":
         from rootcause import report
         print(report.build())
+    elif args.cmd == "site":
+        from rootcause import site
+        print(site.build())
     elif args.cmd == "mcp":
         from rootcause import mcp_server
         return mcp_server.main([args.path])
