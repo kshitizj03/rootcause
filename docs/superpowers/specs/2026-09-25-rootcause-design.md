@@ -108,7 +108,7 @@ The **free-tier limits hit** are documented. Also reported:
 ### 11. Replay website (the hero, since there's no live demo)
 For each incident: the symptom, then each tool call and its output, then the evidence, the verdict,
 and the **correct answer**. It shows the heuristic's answer alongside and **includes failures**. It
-is static (GitHub Pages) and designed with care, plus a short demo video.
+is static (GitHub Pages) and designed with care, plus a short demo video (deferred 2026-10-13: recorded once the agent-v1 batch is complete, so it shows final results; the site's Replay button covers the walkthrough until then).
 
 ### 12. Agent self-tracing (last, quick)
 OTel GenAI spans for the agent's LLM and tool calls, sent to the same Jaeger.
