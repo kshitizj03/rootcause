@@ -63,7 +63,7 @@ def test_report_content_cells_partial_batches_and_small_n(tmp_path, monkeypatch)
     # partial-batch note under the all and tune tables, not for the complete heuristic batch or the held-out split
     assert "agent-v1: partial batch (1-2 runs per scenario, 5/6 runs)" in md
     assert "agent-v1: partial batch (1-2 runs per scenario, 3/4 runs)" in md
-    assert md.count("agent-v1: partial batch") == 2  # under the all and tune tables only
+    assert md.count("agent-v1: partial batch") == 3  # under the all and tune tables, and the paired comparisons
     assert "heuristic: partial" not in md
     # per-scenario cells show mean (n runs)
     assert "| a | easy | 1.00 (1 run) | 0.50 (2 runs) | not run |" in md
@@ -104,14 +104,17 @@ def test_evidence_provenance_and_wording(tmp_path, monkeypatch):
 
 
 def test_paired_counts_wins_ties_losses_and_bootstraps_a_ci_over_incidents():
-    a = {"x": 1.0, "y": 1.0, "z": 0.5, "w": 0.0, "only_a": 1.0}
-    b = {"x": 0.0, "y": 1.0, "z": 0.0, "w": 0.0, "only_b": 0.0}
+    a = {"x": 1.0, "y": 1.0, "z": 0.5, "w": 0.0, "v": 1.0, "only_a": 1.0}
+    b = {"x": 0.0, "y": 1.0, "z": 0.0, "w": 0.0, "v": 1.0, "only_b": 0.0}
     p = report.paired(a, b)
-    assert (p["n"], p["wins"], p["ties"], p["losses"]) == (4, 2, 2, 0)  # only incidents both solvers ran are paired
-    assert p["mean_diff"] == 0.375 and 0 <= p["ci"][0] <= 0.375 <= p["ci"][1] <= 1.0
+    assert (p["n"], p["wins"], p["ties"], p["losses"]) == (5, 2, 3, 0)  # only incidents both solvers ran are paired
+    assert p["mean_diff"] == 0.3 and p["ci"] == (0.0, 0.7)  # pinned: 2.5% / 97.5% of 10,000 resampled means
     assert report.paired(a, b) == p  # fixed seed: the report is reproducible
-    same = report.paired({"x": 1.0, "y": 0.0}, {"x": 1.0, "y": 0.0})
-    assert same["mean_diff"] == 0 and same["ci"] == (0.0, 0.0)
+    q = report.paired(b, a)
+    assert (q["wins"], q["losses"], q["mean_diff"], q["ci"]) == (0, 2, -0.3, (-0.7, 0.0))
+    # too few incidents, or no spread: no interval rather than a falsely certain one
+    assert report.paired({"x": 1.0}, {"x": 0.0})["ci"] is None
+    assert report.paired(dict.fromkeys("vwxyz", 1.0), dict.fromkeys("vwxyz", 0.0))["ci"] is None
     assert report.paired({}, {"x": 1.0}) is None
 
 
@@ -125,5 +128,5 @@ def test_report_has_a_paired_section_for_solver_pairs_with_records(tmp_path, mon
         write(runs, "agent-v1", sid, cat, 0, v)
     md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["heuristic", "agent-v0", "agent-v1"]).read_text(encoding="utf-8")
     sec = md.split("## Paired comparisons")[1].split("\n## ")[0]
-    assert "| agent-v1 vs heuristic | 2 | 1 / 1 / 0 | +0.50 |" in sec  # controls are left out: fault incidents only
+    assert "| agent-v1 vs heuristic | 2/2 | 1 / 1 / 0 | +0.50 | n/a (too few incidents or no spread) |" in sec  # no controls
     assert "agent-v0" not in sec  # no records, no row

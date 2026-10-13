@@ -90,6 +90,18 @@ def make_client():
     return OpenAI(base_url=BASE_URL, api_key=os.getenv("GEMINI_API_KEY"), timeout=90)
 
 
+# A second model family for the model comparison: NVIDIA's free trial endpoint (OpenAI-compatible, rate-limited per
+# minute rather than per day, so a 429 there is retried, never a quota stop).
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
+NEMOTRON = "nvidia/nemotron-3-super-120b-a12b"
+
+
+def make_nvidia_client():
+    from dotenv import load_dotenv
+    load_dotenv(config.ROOT / ".env")
+    return OpenAI(base_url=NVIDIA_BASE_URL, api_key=os.getenv("NVIDIA_API_KEY"), timeout=120)
+
+
 def _per_day(err):
     text = str(err).lower()
     return "perday" in text or "per day" in text

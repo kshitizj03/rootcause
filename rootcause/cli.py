@@ -25,9 +25,10 @@ def _agent_solver():
     return agent.NAME, agent.Agent(models=agent.MODELS[:1], attempts=5).solve, (agent.QuotaExhausted,)
 
 
-def _v1_agent(system, name):
+def _v1_agent(system, name, **model):
     from rootcause import agent, tools_v1
-    return agent.Agent(models=agent.MODELS[:1], attempts=5, toolset=tools_v1, system=system, name=name)
+    model = model or {"models": agent.MODELS[:1]}
+    return agent.Agent(**model, attempts=5, toolset=tools_v1, system=system, name=name)
 
 
 def _agent_v1_solver():
@@ -47,9 +48,15 @@ def _agent_v1_vague_solver():
     return "agent-v1-vague", solve, (agent.QuotaExhausted,)
 
 
+def _agent_v1_nemotron_solver():
+    from rootcause import agent  # agent-v1 exactly, on another model family (NVIDIA_API_KEY in .env)
+    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron", llm=agent.make_nvidia_client(), models=[agent.NEMOTRON])
+    return "agent-v1-nemotron", a.solve, (agent.QuotaExhausted,)
+
+
 SOLVERS = {"heuristic": _heuristic_solver, "agent": _agent_solver,
            "agent-v1": _agent_v1_solver, "agent-v1-nopriors": _agent_v1_nopriors_solver,
-           "agent-v1-vague": _agent_v1_vague_solver}  # CLI name -> factory of (record name, solve, stop_on)
+           "agent-v1-vague": _agent_v1_vague_solver, "agent-v1-nemotron": _agent_v1_nemotron_solver}  # CLI name -> factory of (record name, solve, stop_on)
 
 
 class _Subparser(argparse.ArgumentParser):

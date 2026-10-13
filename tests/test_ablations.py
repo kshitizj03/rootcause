@@ -40,3 +40,19 @@ def test_ablation_solvers_change_one_thing(monkeypatch):
     assert kw_np["toolset"] is tools_v1 and kw_v["toolset"] is tools_v1
     assert kw_np["models"] == kw_v["models"] == agent.MODELS[:1]
     assert snap["meta"]["alert"] == "Orders fail at checkout."  # the loaded snapshot is never mutated
+
+
+def test_nemotron_solver_is_agent_v1_with_only_the_model_swapped(monkeypatch):
+    monkeypatch.setattr(agent, "Agent", FakeAgent)
+    monkeypatch.setattr(agent, "make_nvidia_client", lambda: "nvidia-client")
+    FakeAgent.seen.clear()
+    snap = {"meta": {"alert": "Orders fail at checkout."}, "metrics": {}, "spans": [], "logs": []}
+    for name in ("agent-v1", "agent-v1-nemotron"):
+        record_name, solve, stop_on = cli.SOLVERS[name]()
+        assert record_name == name and stop_on == (agent.QuotaExhausted,)
+        solve(snap)
+    (kw_v1, _), (kw_n, alert_n) = FakeAgent.seen
+    same = lambda kw: {k: v for k, v in kw.items() if k not in ("llm", "models", "name")}
+    assert same(kw_n) == same(kw_v1) and kw_n["system"] == agent.SYSTEM_V1 and kw_n["toolset"] is tools_v1
+    assert kw_n["llm"] == "nvidia-client" and kw_n["models"] == [agent.NEMOTRON] and kw_n["name"] == "agent-v1-nemotron"
+    assert alert_n == "Orders fail at checkout."

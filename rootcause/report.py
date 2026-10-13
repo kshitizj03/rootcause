@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from rootcause import config, evaluate, scenarios  # noqa: E402
 
-SOLVER_ORDER = ["heuristic", "agent-v0", "agent-v1", "agent-v1-nopriors", "agent-v1-vague"]
+SOLVER_ORDER = ["heuristic", "agent-v0", "agent-v1", "agent-v1-nopriors", "agent-v1-vague", "agent-v1-nemotron"]
 # dataviz categorical slots 1-5 (light surface, validated); one fixed colour per solver in both charts
-COLOURS = dict(zip(SOLVER_ORDER, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]))
+COLOURS = dict(zip(SOLVER_ORDER, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#7d5ccf"]))
 SPLITS = ("all", "tune", "heldout")
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
 NOT_RUN = "not run"
@@ -20,10 +20,13 @@ DISCLOSURE = ("During week-3 development a reviewer viewed v1 tool output on one
               "changes from that commit (stopped service-map edges, the 'after = 0 can mean the service stopped "
               "reporting' caveat) are each exercised by the tuning snapshot payment-unreachable.")
 # (a, b): is a better than b? Each is shown only when both have records.
+MIN_PAIRED = 5  # fewer shared incidents than this: no interval
 PAIRS = [("agent-v0", "heuristic"), ("agent-v1", "heuristic"), ("agent-v1", "agent-v0"),
-         ("agent-v1-nopriors", "agent-v1"), ("agent-v1-vague", "agent-v1")]
+         ("agent-v1-nopriors", "agent-v1"), ("agent-v1-vague", "agent-v1"), ("agent-v1-nemotron", "agent-v1")]
 FLASH_NOTE = ("A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run "
-              "takes about 10, so the agent runs on `gemini-3.5-flash-lite` only.")
+              "takes about 10, so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparison is instead "
+              "agent-v1-nemotron: agent v1 unchanged (prompt, tools, step limit) on `nvidia/nemotron-3-super-120b-a12b` "
+              "through NVIDIA's free trial endpoint.")
 
 
 def _f(x):
@@ -114,34 +117,43 @@ def _means(records):
 
 def paired(a, b, draws=10000, seed=0):
     """Compare two solvers' per-incident mean scores ({scenario: mean}) on the incidents both ran: wins/ties/losses of
-    a over b, the mean difference, and a 95% percentile bootstrap CI that resamples incidents. None if none are shared."""
+    a over b, the mean difference, and a 95% percentile bootstrap CI that resamples incidents (None below MIN_PAIRED
+    incidents or when every difference is the same). None if no incident is shared."""
     shared = sorted(set(a) & set(b))
     if not shared:
         return None
     d = [a[s] - b[s] for s in shared]
     rng, n = random.Random(seed), len(d)
-    boot = sorted(sum(rng.choices(d, k=n)) / n for _ in range(draws))
+    ci = None  # too few incidents, or all differences equal: resampling would print a falsely certain interval
+    if n >= MIN_PAIRED and len(set(d)) > 1:
+        boot = sorted(sum(rng.choices(d, k=n)) / n for _ in range(draws))
+        ci = (boot[int(0.025 * draws)], boot[int(0.975 * draws) - 1])
     return {"n": n, "wins": sum(x > 0 for x in d), "ties": sum(x == 0 for x in d), "losses": sum(x < 0 for x in d),
-            "mean_diff": sum(d) / n, "ci": (boot[int(0.025 * draws)], boot[int(0.975 * draws) - 1])}
+            "mean_diff": sum(d) / n, "ci": ci}
 
 
 def _paired_section(data, solvers):
     faults = {s.id for s in scenarios.load_all() if s.category != "control"}
-    rows = []
+    rows, partial = [], {}
     for a, b in PAIRS:
         if a in solvers and b in solvers and data["records"][a] and data["records"][b]:
             ma, mb = ({sid: m for sid, (m, _) in _means(data["records"][s]).items() if sid in faults} for s in (a, b))
             p = paired(ma, mb)
             if p:
-                rows.append([f"{a} vs {b}", str(p["n"]), f"{p['wins']} / {p['ties']} / {p['losses']}", f"{p['mean_diff']:+.2f}",
-                             f"{p['ci'][0]:+.2f} to {p['ci'][1]:+.2f}"])
+                ci = f"{p['ci'][0]:+.2f} to {p['ci'][1]:+.2f}" if p["ci"] else "n/a (too few incidents or no spread)"
+                rows.append([f"{a} vs {b}", f"{p['n']}/{len(faults)}", f"{p['wins']} / {p['ties']} / {p['losses']}",
+                             f"{p['mean_diff']:+.2f}", ci])
+                partial.update({s: note for s in (a, b) if (note := _partial(data, s, "all"))})
     return ["## Paired comparisons (all split, fault incidents)",
             "Each solver's mean score per incident, compared on the incidents both have run. Wins / ties / losses count "
-            "incidents where the first solver scored higher / the same / lower. The 95% interval is a bootstrap over incidents "
-            "(10,000 resamples, fixed seed). With 16 incidents an interval that includes 0 means this benchmark cannot tell "
-            "the two apart.",
+            "incidents where the first solver scored higher / the same / lower, by any margin. A per-incident mean of 0.5 "
+            "can mean one of two causes found or half of the runs right. The 95% interval is a percentile bootstrap over "
+            "incidents (10,000 resamples, fixed seed); at this few incidents it is approximate and somewhat too narrow, and "
+            f"it is not given below {MIN_PAIRED} shared incidents. An interval that includes 0 means this benchmark cannot "
+            "tell the two apart.",
             _table(["comparison", "incidents", "wins / ties / losses", "mean difference", "95% interval"], rows)
-            if rows else "No pair of solvers with records yet."]
+            if rows else "No pair of solvers has run a shared fault incident yet.",
+            *(f"{s}: partial batch ({note})" for s, note in partial.items())]
 
 
 def _per_scenario(data, solvers):

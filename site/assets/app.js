@@ -16,6 +16,7 @@ export const SOLVERS = {
   "agent-v1": ["Agent v1", "change-aware tools"],
   "agent-v1-nopriors": ["V1 without priors", "ablation of agent v1"],
   "agent-v1-vague": ["V1 with vague alerts", "ablation of agent v1"],
+  "agent-v1-nemotron": ["V1 on Nemotron", "agent v1, another model"],
 };
 
 export const solverName = (s) => (SOLVERS[s] || [s])[0];
