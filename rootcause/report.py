@@ -14,6 +14,8 @@ COLOURS = dict(zip(SOLVER_ORDER, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#
 SPLITS = ("all", "tune", "heldout")
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
 NOT_RUN = "not run"
+DISCLOSURE = ("During week-3 development a reviewer viewed v1 tool output on one held-out incident (valkey-cart-paused); "
+              "the only feature that could have been influenced by it was removed before any v1 run.")
 FLASH_NOTE = ("A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run "
               "takes about 10, so the agent runs on `gemini-3.5-flash-lite` only.")
 
@@ -110,7 +112,7 @@ def _per_scenario(data, solvers):
 
 
 def _coverage_section(data, solvers):
-    out = ["## Accuracy vs coverage", "![accuracy vs coverage](figures/coverage.png)",
+    out = ["## Accuracy vs coverage (all split, record-level)", "![accuracy vs coverage](figures/coverage.png)",
            "Coverage is the fraction of all runs whose answer is at or above the confidence threshold (abstentions never count). "
            "Accuracy here is over answered runs only, so the lowest-threshold point can exceed the tables' accuracy, which counts abstentions as wrong."]
     for s in solvers:
@@ -125,6 +127,23 @@ def _coverage_section(data, solvers):
                    f"(the curve point nearest 50%, confidence >= {_f(p['threshold'])})."
                    + (f" Partial batch ({note}): treat with caution." if (note := _partial(data, s, "all")) else ""))
     return out
+
+
+def _evidence_skip(data):
+    """Replacement cell for a solver whose evidence cannot be summarised as grounded/distinctive rates, else None."""
+    def skip(s):
+        checked = [r["evidence_check"] for r in data["records"][s] if "evidence_check" in r]
+        if not checked:
+            return "n/a (predates evidence checks)"
+        kinds = [i.get("kind") for c in checked for i in c.get("items") or []]
+        return "n/a (free-text evidence)" if kinds and all(k == "text" for k in kinds) else None
+    return skip
+
+
+def _provenance(data, solvers):
+    lines = [f"{s}: " + (", ".join(sorted({r.get("code") or "unknown" for r in data["records"][s]})) if data["records"][s] else NOT_RUN)
+             for s in solvers]
+    return ["## Provenance", "Code versions (git short sha) of the records behind each solver:", "\n".join(f"- {l}" for l in lines), DISCLOSURE]
 
 
 def _not_run(data, solvers):
@@ -215,10 +234,11 @@ def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, 
                               "False alarm = claiming an incident on a control; abstain = insufficient evidence on an incident.",
                               [("control false-alarm rate", "control", "false_alarm"), ("incident abstain rate", "all incidents", "abstain")]),
                 _rate_section(data, solvers, "## Evidence (all split, incidents)",
-                              "Grounded = cited evidence exists in the snapshot; distinctive = it also separates this incident from the baseline.",
+                              "Grounded = cited evidence exists in the snapshot; distinctive = it also looks anomalous against the baseline "
+                              "(neither proves that the incident caused it).",
                               [("grounded", "all incidents", "grounded"), ("distinctive", "all incidents", "distinctive")],
-                              skip=lambda s: None if any("evidence_check" in r for r in data["records"][s]) else "n/a (predates evidence checks)"),
-                _cost(data, solvers), _per_scenario(data, solvers), _coverage_section(data, solvers), _not_run(data, solvers)]
+                              skip=_evidence_skip(data)),
+                _cost(data, solvers), _per_scenario(data, solvers), _coverage_section(data, solvers), _provenance(data, solvers), _not_run(data, solvers)]
     path = out_dir / "report.md"
     path.write_text("\n\n".join("\n\n".join(s) for s in sections) + "\n", encoding="utf-8")
     return path

@@ -77,3 +77,27 @@ def test_report_content_cells_partial_batches_and_small_n(tmp_path, monkeypatch)
     # coverage: nearest curve point to 50% (threshold 0.9 -> 20% coverage), with the partial-batch caveat
     line = next(l for l in md.splitlines() if l.startswith("agent-v1: accuracy"))
     assert "accuracy 1.00 at 20% coverage" in line and "partial batch (1-2 runs per scenario, 5/6 runs)" in line.lower()
+
+
+def test_evidence_provenance_and_wording(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "HELDOUT", ())
+    monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario("a", "easy", "x", {}, {}, [])])
+    runs = tmp_path / "runs"
+    write(runs, "heuristic", "a", "easy", 0, 1.0, tokens=False, evidence=False)
+    for solver, codes, kinds in (("agent-v1", ("abc", "def-dirty"), ["metric", "text"]), ("agent-v1-vague", ("abc",), ["text", "text"])):
+        for k, code in enumerate(codes):
+            write(runs, solver, "a", "easy", k, 1.0)
+            f = runs / solver / f"a__{k}.json"
+            r = json.loads(f.read_text())
+            r["code"] = code
+            r["evidence_check"] = {"grounded": 0, "distinctive": 0, "total": 2, "items": [{"kind": x} for x in kinds]}
+            f.write_text(json.dumps(r))
+    md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["heuristic", "agent-v1", "agent-v1-vague"]).read_text(encoding="utf-8")
+    assert "| agent-v1-vague | n/a (free-text evidence) | n/a (free-text evidence) |" in md  # all checked items are text
+    assert "| agent-v1 | 0.00 | 0.00 |" in md  # one non-text item per record: real numbers
+    assert "| heuristic | n/a (predates evidence checks) |" in md
+    assert "neither proves that the incident caused it" in md and "## Accuracy vs coverage (all split, record-level)" in md
+    prov = md.split("## Provenance")[1]
+    assert "agent-v1: abc, def-dirty" in prov and "agent-v1-vague: abc" in prov and "heuristic: unknown" in prov
+    assert ("During week-3 development a reviewer viewed v1 tool output on one held-out incident (valkey-cart-paused); "
+            "the only feature that could have been influenced by it was removed before any v1 run.") in prov
