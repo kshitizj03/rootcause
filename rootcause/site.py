@@ -55,6 +55,8 @@ def _truth(s, rows):
 def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=report.SOLVER_ORDER):
     """Write out_dir/data/index.json, out_dir/data/incidents/<id>.json and out_dir/figures/*.png; return out_dir."""
     out_dir = Path(out_dir)
+    for generated in ("data", "figures"):  # drop outputs of scenarios/figures that no longer exist
+        shutil.rmtree(out_dir / generated, ignore_errors=True)
     lib = scenarios.load_all()
     rows = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl", [s.id for s in lib])
     records = {n: evaluate.load_records(n, runs_dir) for n in solvers}

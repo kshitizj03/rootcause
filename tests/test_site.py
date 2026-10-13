@@ -86,6 +86,19 @@ def test_build(tmp_path, monkeypatch):
         assert not {"messages", "path", "code"} & set(_walk(json.loads(f.read_text(encoding="utf-8")))), f
 
 
+def test_build_removes_stale_outputs_but_keeps_other_files(tmp_path, monkeypatch):
+    runs = _setup(tmp_path, monkeypatch)
+    out = tmp_path / "out"
+    for stale in ("data/incidents/gone.json", "figures/gone.png"):
+        (out / stale).parent.mkdir(parents=True, exist_ok=True)
+        (out / stale).write_bytes(b"old")
+    (out / "index.html").write_text("page", encoding="utf-8")
+    site.build(out, runs)
+    assert not (out / "data" / "incidents" / "gone.json").exists() and not (out / "figures" / "gone.png").exists()
+    assert (out / "data" / "incidents" / "a.json").exists() and (out / "figures" / "f.png").exists()
+    assert (out / "index.html").read_text(encoding="utf-8") == "page"  # only data/ and figures/ are generated
+
+
 def test_build_is_deterministic(tmp_path, monkeypatch):
     runs = _setup(tmp_path, monkeypatch)
     one, two = site.build(tmp_path / "one", runs), site.build(tmp_path / "two", runs)
