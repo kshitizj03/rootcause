@@ -15,7 +15,9 @@ SPLITS = ("all", "tune", "heldout")
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
 NOT_RUN = "not run"
 DISCLOSURE = ("During week-3 development a reviewer viewed v1 tool output on one held-out incident (valkey-cart-paused); "
-              "the only feature that could have been influenced by it was removed before any v1 run.")
+              "the incomplete-services list, which no tuning snapshot exercised, was removed before any v1 run; the other "
+              "changes from that commit (stopped service-map edges, the 'after = 0 can mean the service stopped "
+              "reporting' caveat) are each exercised by the tuning snapshot payment-unreachable.")
 FLASH_NOTE = ("A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run "
               "takes about 10, so the agent runs on `gemini-3.5-flash-lite` only.")
 

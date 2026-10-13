@@ -99,5 +99,5 @@ def test_evidence_provenance_and_wording(tmp_path, monkeypatch):
     assert "neither proves that the incident caused it" in md and "## Accuracy vs coverage (all split, record-level)" in md
     prov = md.split("## Provenance")[1]
     assert "agent-v1: abc, def-dirty" in prov and "agent-v1-vague: abc" in prov and "heuristic: unknown" in prov
-    assert ("During week-3 development a reviewer viewed v1 tool output on one held-out incident (valkey-cart-paused); "
-            "the only feature that could have been influenced by it was removed before any v1 run.") in prov
+    assert "reviewer viewed v1 tool output on one held-out incident (valkey-cart-paused)" in prov
+    assert "incomplete-services list, which no tuning snapshot exercised, was removed before any v1 run" in prov

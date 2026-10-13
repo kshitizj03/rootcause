@@ -5,7 +5,9 @@ Two measures per cited item (neither proves the claim it is attached to):
 - distinctive (stricter): the citation also points at something anomalous. A metric must have changed notably
   (its change score >= 0.5; grounded only needs the series to exist); a log quote must appear in no pre-alert log of that service; a trace must contain an error span, or a
   span (of the cited service, else any) lasting longer than that service's pre-alert p95 (an error span anywhere
-  in the trace counts: parents inherit their children's errors). Free text is neither."""
+  in the trace counts: parents inherit their children's errors). Free text is neither.
+A metric whose service lacks a complete before or after window reports "no such series" (ungrounded), matching what
+the v1 tools show for it."""
 import re
 import math
 

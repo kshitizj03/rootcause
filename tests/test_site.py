@@ -115,3 +115,11 @@ def test_cli_site_prints_output_path(monkeypatch, capsys):
     monkeypatch.setattr(site, "build", lambda: "OUT/site")
     assert cli.main(["site"]) == 0
     assert capsys.readouterr().out.strip() == "OUT/site"
+
+
+def test_build_refuses_to_delete_run_data(tmp_path):
+    import pytest
+    from rootcause import config, site
+    for bad in (config.ROOT, config.DATA):
+        with pytest.raises(ValueError):
+            site.build(out_dir=bad, runs_dir=tmp_path)

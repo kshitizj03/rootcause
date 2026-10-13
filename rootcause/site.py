@@ -55,6 +55,8 @@ def _truth(s, rows):
 def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=report.SOLVER_ORDER):
     """Write out_dir/data/index.json, out_dir/data/incidents/<id>.json and out_dir/figures/*.png; return out_dir."""
     out_dir = Path(out_dir)
+    if out_dir.resolve() in (config.ROOT.resolve(), config.DATA.resolve()) or out_dir.resolve() in config.ROOT.resolve().parents:
+        raise ValueError(f"refusing to build the site into {out_dir}: it would delete run data")  # data/ holds days of runs
     for generated in ("data", "figures"):  # drop outputs of scenarios/figures that no longer exist
         shutil.rmtree(out_dir / generated, ignore_errors=True)
     lib = scenarios.load_all()
