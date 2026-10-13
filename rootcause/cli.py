@@ -7,12 +7,69 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from rootcause import config, env, harness, inject, sanitize, scenarios, snapshot
+try:
+    from openai import OpenAIError  # the Gemini client's base error; the CLI still works without openai installed
+except ImportError:
+    OpenAIError = ()  # `except ()` catches nothing
+
+from rootcause import config, env, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot
+
+
+def _heuristic_solver():
+    return "heuristic", heuristic.solve, ()
+
+
+def _agent_solver():
+    from rootcause import agent  # imported lazily: only the agent needs the Gemini client
+    # one model per batch (and patient retries, since 503 overloads are common): a per-day quota stops the run (resume tomorrow) instead of silently mixing models in the table
+    return agent.NAME, agent.Agent(models=agent.MODELS[:1], attempts=5).solve, (agent.QuotaExhausted,)
+
+
+def _v1_agent(system, name):
+    from rootcause import agent, tools_v1
+    return agent.Agent(models=agent.MODELS[:1], attempts=5, toolset=tools_v1, system=system, name=name)
+
+
+def _agent_v1_solver():
+    from rootcause import agent
+    return agent.NAME_V1, _v1_agent(agent.SYSTEM_V1, agent.NAME_V1).solve, (agent.QuotaExhausted,)
+
+
+def _agent_v1_nopriors_solver():
+    from rootcause import agent
+    return "agent-v1-nopriors", _v1_agent(agent.SYSTEM_V1_NOPRIORS, "agent-v1-nopriors").solve, (agent.QuotaExhausted,)
+
+
+def _agent_v1_vague_solver():
+    from rootcause import agent
+    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-vague")
+    solve = lambda snap: a.solve({**snap, "meta": {**snap["meta"], "alert": agent.VAGUE_ALERT}})
+    return "agent-v1-vague", solve, (agent.QuotaExhausted,)
+
+
+SOLVERS = {"heuristic": _heuristic_solver, "agent": _agent_solver,
+           "agent-v1": _agent_v1_solver, "agent-v1-nopriors": _agent_v1_nopriors_solver,
+           "agent-v1-vague": _agent_v1_vague_solver}  # CLI name -> factory of (record name, solve, stop_on)
+
+
+class _Subparser(argparse.ArgumentParser):
+    """Python 3.11's argparse gives a trailing `nargs="*"` positional [] when an option comes between it and the
+    previous positional (`eval agent --runs 5 some-id`); intermixed parsing lets options and positionals interleave."""
+    _intermixed = False
+
+    def parse_known_args(self, args=None, namespace=None):
+        if self._intermixed:  # parse_known_intermixed_args calls back into parse_known_args
+            return super().parse_known_args(args, namespace)
+        self._intermixed = True
+        try:
+            return self.parse_known_intermixed_args(args, namespace)
+        finally:
+            self._intermixed = False
 
 
 def build_parser():
     p = argparse.ArgumentParser(prog="rootcause")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd", required=True, parser_class=_Subparser)
     for name in ("up", "down", "status", "list", "reset-flags"):
         sub.add_parser(name)
     rec = sub.add_parser("record", help="inject scenarios and capture snapshots")
@@ -25,6 +82,19 @@ def build_parser():
     resan = sub.add_parser("resanitize", help="re-apply the current sanitisers to recorded snapshots, then revalidate")
     resan.add_argument("ids", nargs="*")
     resan.add_argument("--dry-run", action="store_true", help="report what would be dropped; write nothing")
+    ev = sub.add_parser("eval", help="run a solver over the recorded snapshots and score it")
+    ev.add_argument("solver", choices=list(SOLVERS))
+    ev.add_argument("--runs", type=int, default=1)
+    ev.add_argument("--trace", choices=["off", "otlp", "file"], default="off",
+                    help="self-trace the agent with OpenTelemetry GenAI spans (otlp: localhost:4318, file: data/agent_traces.jsonl)")
+    ev.add_argument("ids", nargs="*")
+    sm = sub.add_parser("summary", help="print the per-category score table for a solver's recorded runs")
+    sm.add_argument("solver", choices=list(SOLVERS))
+    sm.add_argument("--split", choices=["all", "tune", "heldout"], default="all")
+    sub.add_parser("report", help="write docs/results/report.md and figures from all recorded runs")
+    sub.add_parser("site", help="write site/data (index + per-incident JSON) for the replay site from all recorded runs")
+    mc = sub.add_parser("mcp", help="serve the v1 tools for one snapshot over MCP (stdio)")
+    mc.add_argument("path")
     return p
 
 
@@ -164,10 +234,41 @@ def _print_dry_run(i, counts):
                 print(f"    {n}x {text}")
 
 
+def _eval(args):
+    provider = None
+    if args.trace != "off":  # the OpenTelemetry SDK is imported only when tracing is asked for
+        from rootcause import tracing
+        provider = tracing.setup(args.trace)  # before the solver (and its agent) is built
+    try:
+        return _eval_traced(args)
+    finally:
+        if provider is not None:
+            provider.shutdown()
+
+
+def _eval_traced(args):
+    name, solve, stop_on = SOLVERS[args.solver]()
+    out = evaluate.run(name, solve, runs=args.runs, ids=args.ids or None, stop_on=stop_on)
+    print(f"{out['completed']} new runs" + (f"; stopped: {out['stopped']}" if out["stopped"] else ""))
+    _print_summary(name, args.solver)
+    if out["stopped"]:
+        print("re-run the same command after the quota resets to resume")
+        return 4
+    return 0
+
+
+def _print_summary(name, solver, split="all"):
+    rows = evaluate.summarise(name, expected=evaluate.expected_counts(split), split=split)
+    print(evaluate.format_summary(rows) if rows else f"no runs recorded for {solver} ({split})")
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
     try:
         return _dispatch(args)
+    except OpenAIError as e:  # API failure after retries/fallback; the stack is fine, so no reset hint
+        print(f"Gemini API error: {e} -- completed runs are kept; re-run the same command to resume", file=sys.stderr)
+        return 5
     except RuntimeError as e:  # includes harness.DirtyStateError / RestoreError
         print(f"error: {e} -- run `python -m rootcause reset-flags` to reset the stack", file=sys.stderr)
         return 3
@@ -200,4 +301,17 @@ def _dispatch(args):
         return _revalidate(args)
     elif args.cmd == "resanitize":
         return _revalidate(args, resanitize=True)
+    elif args.cmd == "eval":
+        return _eval(args)
+    elif args.cmd == "summary":
+        _print_summary(SOLVERS[args.solver]()[0], args.solver, args.split)
+    elif args.cmd == "report":
+        from rootcause import report
+        print(report.build())
+    elif args.cmd == "site":
+        from rootcause import site
+        print(site.build())
+    elif args.cmd == "mcp":
+        from rootcause import mcp_server
+        return mcp_server.main([args.path])
     return 0

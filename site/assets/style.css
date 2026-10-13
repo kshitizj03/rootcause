@@ -1,0 +1,388 @@
+/* RootCause replay site. Tokens first (the decided palette), then page furniture, then the scoreboard. */
+
+:root {
+  --paper: #EDF0F2;
+  --ink: #16263A;
+  --muted: #5B6B7D;
+  --cause: #2350C8;
+  --hit: #0B7A62;
+  --miss: #B0283F;
+  --trace: #C47A12;
+  --hairline: #C5CED7;   /* row separators: navy ink thinned against the paper */
+  --wash: #F7F9FA;       /* row hover: lighter than the paper, so muted text keeps AA contrast */
+
+  --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --glyph: "Archivo", "Segoe UI Symbol", "Apple Symbols", "DejaVu Sans", sans-serif;
+
+  --gutter: clamp(16px, 4vw, 48px);
+  --measure: 68ch;
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1.0625rem/1.55 var(--body);
+  overflow-wrap: break-word;
+}
+
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.9em; }
+
+h1, h2, h3 { font-family: var(--display); font-weight: 700; margin: 0; }
+
+.visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------------------------------------------------------------- page furniture */
+
+.masthead, main, .colophon {
+  max-width: 76rem;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.masthead { padding-block: 1.25rem 0; }
+.wordmark { margin: 0; font: 800 1.125rem/1 var(--display); font-stretch: 75%; letter-spacing: 0.01em; }
+.wordmark a { text-decoration: none; }
+
+.intro { padding-block: clamp(2.5rem, 7vw, 5rem) clamp(1.25rem, 3vw, 2rem); }
+.intro h1 {
+  font-size: clamp(2.1rem, 1.2rem + 4vw, 3.2rem);
+  line-height: 1.04;
+  letter-spacing: -0.015em;
+  font-stretch: 92%;
+  max-width: 19em;
+  text-wrap: balance;
+}
+.lede { max-width: 62ch; margin: 1.25rem 0 0; font-size: 1.1875rem; line-height: 1.5; }
+
+main > section + section { margin-top: clamp(3.5rem, 8vw, 5.5rem); }
+main > .intro + .board { margin-top: 0.5rem; }
+main > section:not(.intro):not(.board) h2 {
+  border-top: 1px solid var(--ink);
+  padding-top: 0.75rem;
+  margin-bottom: 1.25rem;
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.prose { max-width: var(--measure); }
+.prose li + li { margin-top: 0.75rem; }
+.steps { padding-left: 1.75rem; }
+.steps li { padding-left: 0.25rem; }
+.steps li::marker { font: 700 1rem var(--display); }
+.limits { padding-left: 1.25rem; }
+.limits li::marker { color: var(--muted); }
+
+.figure-row {
+  display: grid;
+  /* column widths follow the two PNGs' aspect ratios, so the charts stand at the same height */
+  grid-template-columns: 1.6fr 1.33fr;
+  gap: 2rem;
+  align-items: start;
+}
+figure { margin: 0; }
+figure img { display: block; width: 100%; height: auto; border: 1px solid var(--hairline); }
+figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.9375rem; line-height: 1.45; max-width: 60ch; }
+
+.status { color: var(--ink); max-width: var(--measure); }
+
+.colophon {
+  margin-top: clamp(4rem, 9vw, 6rem);
+  padding-block: 1rem 2.5rem;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+.colophon p { margin: 0; border-top: 1px solid var(--ink); padding-top: 0.75rem; }
+
+/* ---------------------------------------------------------------- scoreboard (the one bold element) */
+
+.answer { max-width: var(--measure); margin: 0 0 1rem; font-size: 1.125rem; }
+
+.legend {
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem;
+  margin: 0 0 1.25rem; padding: 0; list-style: none;
+  color: var(--muted); font-size: 0.9375rem;
+}
+.legend li { display: inline-flex; align-items: center; gap: 0.4rem; }
+.legend .tile { width: 1.25rem; height: 1.25rem; font-size: 0.8125rem; }
+
+.table-scroll { overflow-x: auto; max-width: 100%; }
+
+.scoreboard {
+  width: 100%;
+  border-collapse: separate;   /* separate, so borders travel with the sticky first column */
+  border-spacing: 0;
+  border-top: 3px solid var(--ink);
+  font-family: var(--display);
+  font-stretch: 82%;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.scoreboard th, .scoreboard td { padding: 0.6rem 1rem 0.6rem 0; vertical-align: top; }
+.scoreboard th:first-child { padding-left: 4px; }
+.scoreboard td:last-child, .scoreboard th:last-child { padding-right: 0; }
+
+.scoreboard thead th {
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--ink);
+  font-weight: 700; font-size: 1rem; vertical-align: bottom;
+}
+.scoreboard .sub {
+  display: block;
+  font-family: var(--body); font-stretch: normal; font-weight: 400;
+  font-size: 0.8125rem; color: var(--muted); line-height: 1.3;
+}
+
+/* the first column stays put while the runs scroll sideways */
+.scoreboard th.incident {
+  position: sticky; left: 0; z-index: 1;
+  background: var(--paper);
+  min-width: 15rem; width: 45%;
+}
+/* solver columns hug their run strips, so each accuracy figure sits under its own strip */
+.scoreboard th.solver, .scoreboard td.runs, .scoreboard td.num { width: 1%; min-width: 7.5rem; }
+.scoreboard th.solver { font-size: 1.1875rem; font-weight: 750; font-stretch: 90%; }
+
+.group th {
+  padding-top: 2rem; padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--ink);
+  font-size: 1.1875rem; font-weight: 750; font-stretch: 100%;
+}
+.group-label { position: sticky; left: 0; display: inline-block; }
+.group .sub { display: inline; margin-left: 0.6rem; }
+tbody:first-of-type .group th { padding-top: 1rem; }
+
+.incident-row th, .incident-row td { border-bottom: 1px solid var(--hairline); }
+.incident-row:hover th, .incident-row:hover td { background: var(--wash); }
+.incident-row th.incident { font-weight: 600; font-size: 1.0625rem; }
+.incident-row th a { text-decoration-color: var(--hairline); }
+.incident-row th a:hover { text-decoration-color: currentColor; }
+.heldout {
+  margin-left: 0.5rem;
+  font-family: var(--body); font-stretch: normal; font-weight: 400; font-style: italic;
+  font-size: 0.875rem; color: var(--muted); white-space: nowrap;
+}
+.alert {
+  display: block; max-width: 40ch; margin-top: 0.15rem;
+  font-family: var(--body); font-stretch: normal; font-weight: 400;
+  font-size: 0.875rem; line-height: 1.4; color: var(--muted);
+}
+
+.truth { min-width: 9rem; font-size: 0.9375rem; }
+.cause { display: block; }
+.svc { color: var(--cause); font-weight: 650; }
+.ftype, .none { color: var(--muted); }
+
+.runs { white-space: nowrap; }
+.strip { display: inline-flex; gap: 3px; }
+.tile {
+  display: inline-grid; place-items: center;
+  width: 1.75rem; height: 1.75rem;
+  font: 700 1.0625rem/1 var(--glyph);
+  color: #fff;
+}
+.tile.hit { background: var(--hit); }
+.tile.miss { background: var(--miss); }
+.tile.part { background: linear-gradient(135deg, var(--hit) 50%, var(--miss) 50%); }
+.tile.empty { border: 1px dashed var(--muted); }
+
+.num { text-align: right; }
+.acc-row th, .acc-row td { padding-top: 0.7rem; padding-bottom: 0.9rem; vertical-align: baseline; }
+.acc-row th.incident { font-weight: 600; font-size: 0.9375rem; color: var(--muted); }
+.acc { display: block; font-size: 1.375rem; font-weight: 750; font-stretch: 90%; line-height: 1.1; }
+.acc-detail, .acc-none {
+  display: block; white-space: nowrap;
+  font-family: var(--body); font-stretch: normal; font-size: 0.8125rem; color: var(--muted);
+}
+
+tfoot .total th, tfoot .total td { border-top: 3px solid var(--ink); padding-top: 0.9rem; }
+tfoot .total th.incident { color: var(--ink); font-size: 1.0625rem; }
+tfoot .total .acc { font-size: 1.75rem; }
+
+/* ---------------------------------------------------------------- narrow screens */
+
+@media (max-width: 800px) {
+  .figure-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .intro h1 br { display: none; }   /* the comma break only pays at desktop width */
+  .lede { font-size: 1.0625rem; }
+  .scoreboard th, .scoreboard td { padding-right: 0.75rem; }
+  .scoreboard th.incident { min-width: 0; width: 9.5rem; max-width: 9.5rem; padding-right: 0.6rem; border-right: 1px solid var(--hairline); }
+  .incident-row th.incident { font-size: 0.9375rem; }
+  .alert { display: none; }           /* the alert is on the incident page; here the column must stay narrow */
+  .heldout { display: block; margin: 0.1rem 0 0; }
+  .group .sub { display: block; margin: 0.15rem 0 0; white-space: normal; max-width: calc(100vw - 2 * var(--gutter)); }
+}
+
+/* ---------------------------------------------------------------- incident replay */
+
+.incident-head { padding-block: clamp(2rem, 5vw, 3.5rem) 1.5rem; max-width: var(--measure); }
+.incident-head h1 {
+  font-size: clamp(1.75rem, 1.1rem + 2.6vw, 2.6rem);
+  line-height: 1.08; letter-spacing: -0.01em; font-stretch: 88%;
+}
+.incident-meta { margin: 0.5rem 0 0; color: var(--muted); }
+.incident-meta .heldout { display: block; margin: 0.15rem 0 0; font-size: 1rem; white-space: normal; }
+
+.alert-quote { margin: 1.75rem 0 0; }
+.alert-quote blockquote { margin: 0; padding-left: 1.25rem; border-left: 3px solid var(--ink); }
+.alert-quote blockquote p {
+  margin: 0; font: 600 clamp(1.3rem, 1rem + 1.2vw, 1.75rem)/1.3 var(--display); font-stretch: 95%;
+  text-wrap: balance;
+}
+.alert-quote figcaption { margin: 0.5rem 0 0 1.25rem; color: var(--muted); font-size: 0.9375rem; }
+
+/* pickers and the replay control: the only rounded things on the site */
+.controls {
+  display: flex; flex-wrap: wrap; align-items: end; gap: 0.75rem 1.25rem;
+  padding-block: 1rem; border-block: 1px solid var(--ink);
+}
+.pick { display: grid; gap: 0.2rem; }
+.pick label { font-size: 0.875rem; color: var(--muted); }
+.pick select {
+  font: 600 1rem/1.2 var(--body); color: var(--ink);
+  background: var(--wash); border: 1px solid var(--ink); border-radius: 6px;
+  padding: 0.45rem 0.6rem; min-width: 9rem;
+}
+.replay-buttons { display: flex; gap: 0.5rem; }
+.replay-buttons button {
+  font: 700 1rem/1.2 var(--display); font-stretch: 90%;
+  padding: 0.5rem 1rem; border: 1px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer;
+}
+.replay-buttons button.primary { background: var(--ink); color: var(--paper); }
+.replay-buttons button:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.replay-status { margin: 0; min-height: 1.5em; color: var(--muted); font-size: 0.9375rem; font-variant-numeric: tabular-nums; flex-basis: 100%; }
+.replay-status:empty { min-height: 0; }  /* stays rendered: a live region added on first use is often not announced */
+
+.replay-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2.5rem; padding-top: 2rem; }
+
+.investigation h2, .verdict h2 { font-size: 1.5rem; line-height: 1.2; }
+.note { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.875rem; line-height: 1.45; }
+
+.timeline { margin: 1.25rem 0 0; padding-left: 2.25rem; }
+.step { padding: 0.9rem 0 1.1rem 0.25rem; border-top: 1px solid var(--hairline); }
+.step::marker { font: 700 1rem var(--display); font-variant-numeric: tabular-nums; }
+.call { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.75rem; }
+.call .tool { font: 700 1.0625rem/1.3 var(--display); font-stretch: 90%; }
+.call .args { color: var(--muted); font-size: 0.8125rem; overflow-wrap: anywhere; }
+.output { margin-top: 0.6rem; min-width: 0; }
+.out-line { margin: 0; font-size: 0.9375rem; }
+
+.out-pre {
+  margin: 0.4rem 0 0; padding: 0.6rem 0.75rem; max-height: 18rem; overflow: auto;
+  background: var(--wash); border-left: 2px solid var(--hairline);
+  font: 0.8125rem/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+.out {
+  border-collapse: collapse; margin-top: 0.4rem; min-width: 100%;
+  font-family: var(--display); font-stretch: 82%; font-variant-numeric: tabular-nums;
+  font-size: 0.9375rem; text-align: left;
+}
+.out th, .out td { padding: 0.3rem 0.9rem 0.3rem 0; vertical-align: top; }
+.out th:last-child, .out td:last-child { padding-right: 0; }
+.out th { font-weight: 700; border-bottom: 1px solid var(--ink); white-space: nowrap; }
+.out td { border-bottom: 1px solid var(--hairline); }
+.out .num { text-align: right; white-space: nowrap; }
+.out .msg { display: block; color: var(--muted); font-family: var(--body); font-stretch: normal; font-size: 0.8125rem; }
+.out code { font-size: 0.8125rem; color: var(--muted); }
+
+.facts { margin: 0; display: grid; gap: 0.2rem; font-size: 0.9375rem; }
+.facts div { display: grid; grid-template-columns: 8.5rem 1fr; gap: 0.75rem; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+
+.good { color: var(--hit); }
+.bad { color: var(--miss); }
+
+/* sparkline: the line in ink, the after-the-alert region tinted amber */
+.spark-fig {
+  margin: 0.4rem 0 0; display: grid; grid-template-columns: minmax(0, 1fr) 6rem; column-gap: 0.6rem;
+}
+.spark { display: block; width: 100%; height: 48px; border-bottom: 1px solid var(--hairline); }
+.spark-after { fill: var(--trace); opacity: 0.16; }
+.spark-alert { stroke: var(--trace); stroke-width: 1.5; }
+.spark-line { fill: none; stroke: var(--ink); stroke-width: 1.75; stroke-linejoin: round; }
+.spark-range {
+  display: flex; flex-direction: column; justify-content: space-between;
+  font: 0.8125rem/1 var(--display); font-stretch: 82%; font-variant-numeric: tabular-nums; color: var(--muted);
+}
+.spark-axis {
+  position: relative; display: flex; justify-content: space-between; margin-top: 0.25rem; max-width: none;
+  font-size: 0.8125rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.spark-zero { position: absolute; top: 0; transform: translateX(-100%); padding-right: 0.3rem; color: var(--ink); }  /* ends at the rule, clear of the end label */
+.spark-fig > .note { grid-column: 1 / -1; margin: 0.25rem 0 0; }  /* "No points after ..." spans the figure, under the axis */
+
+/* verdict */
+.verdict { min-width: 0; }
+.result { margin: 0.5rem 0 0; font: 750 1.25rem/1.2 var(--display); font-stretch: 90%; }
+.result.big { font-size: 2.25rem; letter-spacing: -0.01em; }
+.result.hit { color: var(--hit); }
+.result.miss { color: var(--miss); }
+.result.part { color: var(--ink); }
+.problem { margin: 0.75rem 0 0; padding-left: 0.75rem; border-left: 3px solid var(--miss); }
+
+.verdict-facts { margin: 1rem 0 0; }
+.verdict-facts > div { padding-block: 0.6rem; border-top: 1px solid var(--hairline); }
+.verdict-facts dt { color: var(--muted); font-size: 0.875rem; }
+.verdict-facts dd { margin: 0.15rem 0 0; }
+.said { margin: 0; }
+.ranked, .truth-list { margin: 0; padding-left: 1.4rem; }
+.truth-list { list-style: none; padding-left: 0; }
+.ranked li::marker { font-family: var(--display); color: var(--muted); }
+.svc-other { font-weight: 650; }
+.verdict .good { font-weight: 700; }
+
+.rule, .evidence { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid var(--ink); }
+.rule h3, .evidence h3 { font-size: 1.0625rem; line-height: 1.3; }
+.rule .result { margin-top: 0.35rem; }
+.rule .ranked { margin-top: 0.35rem; }
+
+.evidence-list { margin: 0.5rem 0 0; padding: 0; list-style: none; }
+.evidence-list li { padding-block: 0.5rem; border-bottom: 1px solid var(--hairline); font-size: 0.9375rem; line-height: 1.45; }
+.evidence-list .claim { display: block; overflow-wrap: anywhere; }
+.badges { display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; margin-top: 0.2rem; }
+.badge { font: 650 0.8125rem/1.3 var(--display); font-stretch: 85%; }
+.badge.unchecked { color: var(--muted); font-weight: 500; }
+
+/* the one motion moment: replay */
+.pending { visibility: hidden; }
+.revealed { animation: reveal 280ms ease-out; }
+@keyframes reveal { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) {
+  .revealed { animation: none; }
+}
+
+@media (min-width: 900px) {
+  .replay-body { grid-template-columns: minmax(0, 72ch) minmax(17rem, 1fr); column-gap: clamp(2rem, 4vw, 4rem); align-items: start; }
+  .investigation { grid-column: 1; grid-row: 1; }
+  .verdict {
+    grid-column: 2; grid-row: 1;
+    position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; scrollbar-width: thin;
+  }
+}
+
+@media (max-width: 600px) {
+  .timeline { padding-left: 1.75rem; }
+  .facts div { grid-template-columns: 6.5rem 1fr; gap: 0.5rem; }
+  .result.big { font-size: 1.875rem; }
+  .pick { flex: 1 1 8rem; }
+  .pick select { width: 100%; min-width: 0; }
+}

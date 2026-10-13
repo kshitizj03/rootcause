@@ -436,3 +436,138 @@ def test_resanitize_bad_snapshot_is_reported_skipped_and_exit_nonzero(resan, sna
     assert lines[0].startswith("s1: error: ") and lines[1] == "s2: spans 2->1, logs 4->2, metrics 0->0, valid=True"
     assert (resan / "spans.jsonl.gz").read_bytes() == spans_before
     assert [r["scenario"] for r in _rows(snaps)[2:]] == ["s2"]  # no row for the failed id
+
+
+def test_eval_and_summary_commands_parse():
+    p = cli.build_parser()
+    a = p.parse_args(["eval", "heuristic"])
+    assert (a.cmd, a.solver, a.runs, a.ids) == ("eval", "heuristic", 1, [])
+    a = p.parse_args(["eval", "agent", "--runs", "5", "payment-failure-50"])
+    assert (a.solver, a.runs, a.ids) == ("agent", 5, ["payment-failure-50"])
+    assert p.parse_args(["summary", "heuristic"]).solver == "heuristic"
+
+
+def test_eval_heuristic_runs_and_prints_summary(monkeypatch, capsys):
+    from rootcause import evaluate
+    calls = {}
+    monkeypatch.setattr(evaluate, "run", lambda name, solve, runs, ids, stop_on=(): calls.update(name=name, runs=runs, ids=ids) or {"completed": 3, "stopped": None})
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: [{"category": "easy"}])
+    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
+    monkeypatch.setattr(evaluate, "format_summary", lambda rows: "TABLE")
+    assert cli.main(["eval", "heuristic"]) == 0
+    assert calls == {"name": "heuristic", "runs": 1, "ids": None}
+    assert "TABLE" in capsys.readouterr().out
+
+
+def test_eval_without_tracing_never_imports_the_opentelemetry_module(monkeypatch):
+    import sys
+    import rootcause
+    monkeypatch.setitem(sys.modules, "rootcause.tracing", None)  # any import of it now raises ImportError
+    monkeypatch.delattr(rootcause, "tracing", raising=False)
+    _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 0, "stopped": None})
+    assert cli.main(["eval", "heuristic"]) == 0
+
+
+# --- cleanup: eval exit codes and summary messages ---
+
+def _stub_eval(monkeypatch, run):
+    from rootcause import evaluate
+    monkeypatch.setattr(evaluate, "run", run)
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: [{"category": "easy"}])
+    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
+    monkeypatch.setattr(evaluate, "format_summary", lambda rows: "TABLE")
+
+
+def test_eval_quota_stop_exits_4_and_says_how_to_resume(monkeypatch, capsys):
+    _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 2, "stopped": "QuotaExhausted: daily"})
+    assert cli.main(["eval", "agent"]) == 4
+    out = capsys.readouterr().out
+    assert "stopped: QuotaExhausted: daily" in out and "re-run the same command after the quota resets to resume" in out
+
+
+def test_eval_gemini_api_error_exits_5_without_the_reset_hint(monkeypatch, capsys):
+    import openai
+
+    def boom(*a, **k):
+        raise openai.OpenAIError("no choices")
+    _stub_eval(monkeypatch, boom)
+    assert cli.main(["eval", "agent"]) == 5
+    err = capsys.readouterr().err
+    assert "Gemini API error: no choices" in err and "reset-flags" not in err
+
+
+def test_stack_runtime_errors_still_exit_3_with_the_hint(monkeypatch, capsys):
+    from rootcause import evaluate
+
+    def boom(*a, **k):
+        raise RuntimeError("stack broke")
+    monkeypatch.setattr(evaluate, "run", boom)
+    assert cli.main(["eval", "heuristic"]) == 3
+    assert "reset-flags" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("solver", ["heuristic", "agent"])
+def test_summary_with_no_records_says_so(monkeypatch, capsys, solver):
+    from rootcause import evaluate
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: [])
+    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
+    assert cli.main(["summary", solver]) == 0
+    assert f"no runs recorded for {solver}" in capsys.readouterr().out
+
+
+# --- final review: one model per eval batch, one SOLVERS table, expected scenario counts ---
+
+def test_eval_agent_pins_the_batch_to_one_model(monkeypatch):
+    from rootcause import agent
+    built = {}
+
+    class FakeAgent:
+        def __init__(self, **kw):
+            built.update(kw)
+
+        def solve(self, snap):
+            raise AssertionError("not called")
+
+    _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 0, "stopped": None})
+    monkeypatch.setattr(agent, "Agent", FakeAgent)
+    assert cli.main(["eval", "agent"]) == 0
+    assert built == {"models": agent.MODELS[:1], "attempts": 5}  # a per-day quota must stop the batch, not switch models mid-table
+
+
+def test_eval_and_summary_resolve_solvers_through_the_solvers_table(monkeypatch, capsys):
+    from rootcause import evaluate
+    seen = {}
+    solve = lambda snap: None
+    monkeypatch.setattr(cli, "SOLVERS", {"heuristic": lambda: ("renamed", solve, ("stop",))})
+    monkeypatch.setattr(evaluate, "run", lambda name, s, runs, ids, stop_on=(): seen.update(run=(name, s, stop_on)) or {"completed": 0, "stopped": None})
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: seen.setdefault("summ", []).append(name) or [])
+    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
+    assert cli.main(["eval", "heuristic"]) == 0 and cli.main(["summary", "heuristic"]) == 0
+    assert seen["run"] == ("renamed", solve, ("stop",)) and seen["summ"] == ["renamed", "renamed"]
+
+
+def test_summary_passes_the_library_scenario_counts_per_category(monkeypatch):
+    from rootcause import evaluate
+    got = {}
+    from types import SimpleNamespace as S
+    monkeypatch.setattr(cli.scenarios, "load_all", lambda: [S(id="a", category="easy"), S(id="b", category="easy"), S(id="c", category="control")])
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: got.update(expected=expected) or [])
+    assert cli.main(["summary", "heuristic"]) == 0
+    assert got["expected"] == {"easy": 2, "control": 1}
+
+
+def test_agent_v1_solver_uses_v1_tools_and_prompt(monkeypatch):
+    from rootcause import agent, tools_v1
+    built = {}
+
+    class Fake:
+        def __init__(self, **kw):
+            built.update(kw)
+
+        def solve(self, snap):
+            raise AssertionError("not called")
+
+    monkeypatch.setattr(agent, "Agent", Fake)
+    name, _, stop_on = cli.SOLVERS["agent-v1"]()
+    assert name == "agent-v1" and stop_on == (agent.QuotaExhausted,)
+    assert built["toolset"] is tools_v1 and built["system"] == agent.SYSTEM_V1 and built["models"] == agent.MODELS[:1]

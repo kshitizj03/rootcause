@@ -5,7 +5,7 @@ import os
 import time
 from pathlib import Path
 
-from rootcause import backends, config, sanitize, signals
+from rootcause import backends, config, sanitize, signals, summary
 
 
 def _write_jsonl_gz(path, rows):
@@ -126,8 +126,7 @@ def validate_snapshot(path, scenario, names):
     path = Path(path)
     meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
     metrics = json.loads((path / "metrics.json").read_text(encoding="utf-8"))
-    results = signals.evaluate(scenario.checks, metrics, (meta["baseline_start"], meta["fault_start"]),
-                               (meta["fault_start"] + config.RAMP_S, meta["end"]))
+    results = signals.evaluate(scenario.checks, metrics, *summary.windows(meta))
     leaks = sanitize.scan_snapshot(path, names)
     out = {"valid": all(r["passed"] for r in results) and not leaks, "results": results, "leaks": leaks}
     (path / "validation.json").write_text(json.dumps(out, indent=1), encoding="utf-8")

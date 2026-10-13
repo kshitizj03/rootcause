@@ -37,3 +37,8 @@ STEP_S = 15                 # metric resolution in snapshots
 CAPTURE_LOOKBACK_S = 300    # spans/logs captured from 5 minutes before injection
 TRACES_PER_SERVICE = 50
 LOGS_PER_SERVICE = 200
+
+# Frozen 2026-10-13, before any agent-v1 tuning: the alphabetically last scenario of each category. Never used to
+# tune prompts or tools; reported separately from the rest (the tuning set).
+HELDOUT = ("product-catalog-failure", "valkey-cart-paused", "recommendation-cache-leak",
+           "payment-failure-with-flood", "payment-failure-and-recommendation-leak", "control-4")
