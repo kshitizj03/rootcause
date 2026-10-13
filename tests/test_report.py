@@ -101,3 +101,29 @@ def test_evidence_provenance_and_wording(tmp_path, monkeypatch):
     assert "agent-v1: abc, def-dirty" in prov and "agent-v1-vague: abc" in prov and "heuristic: unknown" in prov
     assert "reviewer viewed v1 tool output on one held-out incident (valkey-cart-paused)" in prov
     assert "incomplete-services list, which no tuning snapshot exercised, was removed before any v1 run" in prov
+
+
+def test_paired_counts_wins_ties_losses_and_bootstraps_a_ci_over_incidents():
+    a = {"x": 1.0, "y": 1.0, "z": 0.5, "w": 0.0, "only_a": 1.0}
+    b = {"x": 0.0, "y": 1.0, "z": 0.0, "w": 0.0, "only_b": 0.0}
+    p = report.paired(a, b)
+    assert (p["n"], p["wins"], p["ties"], p["losses"]) == (4, 2, 2, 0)  # only incidents both solvers ran are paired
+    assert p["mean_diff"] == 0.375 and 0 <= p["ci"][0] <= 0.375 <= p["ci"][1] <= 1.0
+    assert report.paired(a, b) == p  # fixed seed: the report is reproducible
+    same = report.paired({"x": 1.0, "y": 0.0}, {"x": 1.0, "y": 0.0})
+    assert same["mean_diff"] == 0 and same["ci"] == (0.0, 0.0)
+    assert report.paired({}, {"x": 1.0}) is None
+
+
+def test_report_has_a_paired_section_for_solver_pairs_with_records(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "HELDOUT", ())
+    monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario(s, "easy", "x", {}, {}, []) for s in "ab"]
+                        + [scenarios.Scenario("c", "control", "x", {}, {}, [])])
+    runs = tmp_path / "runs"
+    for sid, cat, h, v in (("a", "easy", 0.0, 1.0), ("b", "easy", 1.0, 1.0), ("c", "control", 1.0, 0.0)):
+        write(runs, "heuristic", sid, cat, 0, h, tokens=False)
+        write(runs, "agent-v1", sid, cat, 0, v)
+    md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["heuristic", "agent-v0", "agent-v1"]).read_text(encoding="utf-8")
+    sec = md.split("## Paired comparisons")[1].split("\n## ")[0]
+    assert "| agent-v1 vs heuristic | 2 | 1 / 1 / 0 | +0.50 |" in sec  # controls are left out: fault incidents only
+    assert "agent-v0" not in sec  # no records, no row

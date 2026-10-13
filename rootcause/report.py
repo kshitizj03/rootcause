@@ -1,4 +1,5 @@
 """Turn every stored run record into docs/results/report.md plus two figures. A solver with no records shows "not run"."""
+import random
 from pathlib import Path
 
 import matplotlib
@@ -18,6 +19,9 @@ DISCLOSURE = ("During week-3 development a reviewer viewed v1 tool output on one
               "the incomplete-services list, which no tuning snapshot exercised, was removed before any v1 run; the other "
               "changes from that commit (stopped service-map edges, the 'after = 0 can mean the service stopped "
               "reporting' caveat) are each exercised by the tuning snapshot payment-unreachable.")
+# (a, b): is a better than b? Each is shown only when both have records.
+PAIRS = [("agent-v0", "heuristic"), ("agent-v1", "heuristic"), ("agent-v1", "agent-v0"),
+         ("agent-v1-nopriors", "agent-v1"), ("agent-v1-vague", "agent-v1")]
 FLASH_NOTE = ("A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run "
               "takes about 10, so the agent runs on `gemini-3.5-flash-lite` only.")
 
@@ -100,13 +104,48 @@ def _cost(data, solvers):
     return ["## Cost", "The heuristic makes no model calls, so it has no token usage.", _table(heads, body)]
 
 
+def _means(records):
+    """{scenario: (mean score over its runs, number of runs)}."""
+    by = {}
+    for r in records:
+        by.setdefault(r["scenario"], []).append(r["score"]["correct"])
+    return {sid: (sum(v) / len(v), len(v)) for sid, v in by.items()}
+
+
+def paired(a, b, draws=10000, seed=0):
+    """Compare two solvers' per-incident mean scores ({scenario: mean}) on the incidents both ran: wins/ties/losses of
+    a over b, the mean difference, and a 95% percentile bootstrap CI that resamples incidents. None if none are shared."""
+    shared = sorted(set(a) & set(b))
+    if not shared:
+        return None
+    d = [a[s] - b[s] for s in shared]
+    rng, n = random.Random(seed), len(d)
+    boot = sorted(sum(rng.choices(d, k=n)) / n for _ in range(draws))
+    return {"n": n, "wins": sum(x > 0 for x in d), "ties": sum(x == 0 for x in d), "losses": sum(x < 0 for x in d),
+            "mean_diff": sum(d) / n, "ci": (boot[int(0.025 * draws)], boot[int(0.975 * draws) - 1])}
+
+
+def _paired_section(data, solvers):
+    faults = {s.id for s in scenarios.load_all() if s.category != "control"}
+    rows = []
+    for a, b in PAIRS:
+        if a in solvers and b in solvers and data["records"][a] and data["records"][b]:
+            ma, mb = ({sid: m for sid, (m, _) in _means(data["records"][s]).items() if sid in faults} for s in (a, b))
+            p = paired(ma, mb)
+            if p:
+                rows.append([f"{a} vs {b}", str(p["n"]), f"{p['wins']} / {p['ties']} / {p['losses']}", f"{p['mean_diff']:+.2f}",
+                             f"{p['ci'][0]:+.2f} to {p['ci'][1]:+.2f}"])
+    return ["## Paired comparisons (all split, fault incidents)",
+            "Each solver's mean score per incident, compared on the incidents both have run. Wins / ties / losses count "
+            "incidents where the first solver scored higher / the same / lower. The 95% interval is a bootstrap over incidents "
+            "(10,000 resamples, fixed seed). With 16 incidents an interval that includes 0 means this benchmark cannot tell "
+            "the two apart.",
+            _table(["comparison", "incidents", "wins / ties / losses", "mean difference", "95% interval"], rows)
+            if rows else "No pair of solvers with records yet."]
+
+
 def _per_scenario(data, solvers):
-    means = {}
-    for s in solvers:
-        by = {}
-        for r in data["records"][s]:
-            by.setdefault(r["scenario"], []).append(r["score"]["correct"])
-        means[s] = {sid: (sum(v) / len(v), len(v)) for sid, v in by.items()}
+    means = {s: _means(data["records"][s]) for s in solvers}
     one = lambda s, sid: f"{_f(means[s][sid][0])} ({means[s][sid][1]} run{'' if means[s][sid][1] == 1 else 's'})" if sid in means[s] else "-"
     cell = lambda s, sid: NOT_RUN if not data["records"][s] else one(s, sid)
     body = [[x.id + ("*" if x.id in config.HELDOUT else ""), x.category] + [cell(s, x.id) for s in solvers] for x in scenarios.load_all()]
@@ -240,7 +279,7 @@ def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, 
                               "(neither proves that the incident caused it).",
                               [("grounded", "all incidents", "grounded"), ("distinctive", "all incidents", "distinctive")],
                               skip=_evidence_skip(data)),
-                _cost(data, solvers), _per_scenario(data, solvers), _coverage_section(data, solvers), _provenance(data, solvers), _not_run(data, solvers)]
+                _paired_section(data, solvers), _cost(data, solvers), _per_scenario(data, solvers), _coverage_section(data, solvers), _provenance(data, solvers), _not_run(data, solvers)]
     path = out_dir / "report.md"
     path.write_text("\n\n".join("\n\n".join(s) for s in sections) + "\n", encoding="utf-8")
     return path

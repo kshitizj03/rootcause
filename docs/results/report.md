@@ -76,6 +76,14 @@ Grounded = cited evidence exists in the snapshot; distinctive = it also looks an
 | agent-v1-nopriors | not run | not run |
 | agent-v1-vague | not run | not run |
 
+## Paired comparisons (all split, fault incidents)
+
+Each solver's mean score per incident, compared on the incidents both have run. Wins / ties / losses count incidents where the first solver scored higher / the same / lower. The 95% interval is a bootstrap over incidents (10,000 resamples, fixed seed). With 16 incidents an interval that includes 0 means this benchmark cannot tell the two apart.
+
+| comparison | incidents | wins / ties / losses | mean difference | 95% interval |
+|---|---|---|---|---|
+| agent-v0 vs heuristic | 16 | 3 / 6 / 7 | -0.19 | -0.50 to +0.12 |
+
 ## Cost
 
 The heuristic makes no model calls, so it has no token usage.
