@@ -4,7 +4,7 @@ Records go to data/runs/<variant>/ through evaluate.run, so the scoring rules, t
 same as every other solver's. A report ranks services by Laya's probability (top 3); `no_incident` wins only if it
 is the single most likely option. Laya cites no evidence, so its reports carry none.
 
-    .venv/Scripts/python.exe experiments/laya/score.py
+    .venv/Scripts/python.exe -m experiments.laya.score
 """
 import json
 
