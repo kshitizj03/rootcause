@@ -58,7 +58,7 @@ SYSTEM_V1 = _replace_once(_replace_once(
 SYSTEM_V1 += ("\nCite evidence as metric, trace or log items like those above; each one is checked against the "
               "telemetry, so copy service names, trace ids and log text exactly.")
 
-# Ablations of v1 (each changes exactly one thing)
+# Ablations of v1 (each changes one component: the prompt's priors, or the alert). nopriors removes both prior sentences.
 SYSTEM_V1_NOPRIORS = _replace_once(_replace_once(
     SYSTEM_V1,
     "The alert describes a user-visible symptom; the service it mentions is often NOT the cause, so follow errors "
