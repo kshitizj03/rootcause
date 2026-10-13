@@ -4,7 +4,7 @@ An LLM agent that investigates microservice incidents. Given a symptom ("custome
 
 RootCause is mainly a **benchmark**: is an LLM agent actually better than a simple rule, and where? Every answer is scored against ground truth on 20 recorded incidents. The scoring rules were fixed before the first run, there are no-fault controls, the agent gets 5 runs per incident, and a held-out split is never used for tuning.
 
-> Status: weeks 1–3 of 5 are built (incident capture, scoring, heuristic, agent v0/v1, MCP server, evidence checker). Results are in [`docs/results/`](docs/results/); they report failures as plainly as wins.
+> Status: weeks 1–4 of 5 are built; week 5 (replay site) in progress. Results are in [`docs/results/`](docs/results/); they report failures as plainly as wins.
 
 ## How it works
 
