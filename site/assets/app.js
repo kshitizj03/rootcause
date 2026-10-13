@@ -11,7 +11,7 @@ export const CATEGORIES = {
 };
 
 export const SOLVERS = {
-  heuristic: ["Heuristic", "the one-line rule"],
+  heuristic: ["Heuristic", "the simple rule"],
   "agent-v0": ["Agent v0", "naive tools"],
   "agent-v1": ["Agent v1", "change-aware tools"],
   "agent-v1-nopriors": ["V1 without priors", "ablation of agent v1"],
@@ -186,4 +186,9 @@ function guardFigures() {
 const pages = {
   index: () => { guardFigures(); return renderIndex(); },
 };
-pages[document.body.dataset.page]?.();
+Promise.resolve(pages[document.body.dataset.page]?.()).catch((err) => {  // malformed data must not leave "Loading" up
+  console.error(err);
+  const root = document.querySelector("[data-root]") ?? document.querySelector("main");
+  root.replaceChildren(h("p", { class: "status" }, "These results could not be read. Rebuild them with ",
+    command("python -m rootcause site"), "."));
+});

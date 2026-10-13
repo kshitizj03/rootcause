@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RootCause scoreboard</title>
-<meta name="description" content="An LLM agent and a one-line heuristic, scored against ground truth on 20 recorded microservice incidents. Every run is shown, failures included.">
+<meta name="description" content="An LLM agent and a simple heuristic, scored against ground truth on 20 recorded microservice incidents. Every run is shown, failures included.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
@@ -18,13 +18,13 @@
 
 <main>
   <section class="intro" aria-labelledby="headline">
-    <h1 id="headline">Can an LLM agent find what broke,<br> better than a one-line rule?</h1>
-    <p class="lede">RootCause is an LLM agent that reads an incident’s metrics, traces and logs to name the service that broke; here it is scored against a simple heuristic on 20 recorded incidents, with every run shown, failures included.</p>
+    <h1 id="headline">Can an LLM agent find what broke,<br> better than a simple rule?</h1>
+    <p class="lede">RootCause is an LLM agent that reads an incident’s metrics, traces and logs to name the service that broke. Here it is scored against a simple heuristic on 20 recorded incidents, with every run shown, failures included.</p>
   </section>
 
   <section class="board" aria-labelledby="board-title">
     <h2 id="board-title" class="visually-hidden">Scoreboard</h2>
-    <div id="scoreboard">
+    <div id="scoreboard" data-root>
       <p class="status">Loading results.</p>
       <noscript><p class="status">This page needs JavaScript to load the results.</p></noscript>
     </div>
