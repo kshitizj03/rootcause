@@ -22,7 +22,8 @@ DISCLOSURE = ("During week-3 development a reviewer viewed v1 tool output on one
 # (a, b): is a better than b? Each is shown only when both have records.
 MIN_PAIRED = 5  # fewer shared incidents than this: no interval
 PAIRS = [("agent-v0", "heuristic"), ("agent-v1", "heuristic"), ("agent-v1", "agent-v0"),
-         ("agent-v1-nopriors", "agent-v1"), ("agent-v1-vague", "agent-v1"), ("agent-v1-nemotron", "agent-v1")]
+         ("agent-v1-nopriors", "agent-v1"), ("agent-v1-vague", "agent-v1"), ("agent-v1-nemotron", "heuristic"),
+         ("agent-v1-nemotron", "agent-v1")]
 FLASH_NOTE = ("A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run "
               "takes about 10, so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparison is instead "
               "agent-v1-nemotron: agent v1 unchanged (prompt, tools, step limit) on `nvidia/nemotron-3-super-120b-a12b` "
