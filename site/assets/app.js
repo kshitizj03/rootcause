@@ -181,10 +181,316 @@ function guardFigures() {
   }
 }
 
+// ---------------------------------------------------------------- incident page
+
+/** svgEl("line", {x1, ...}): h() for SVG, which needs createElementNS. Only attributes and child nodes, never markup. */
+function svgEl(tag, attrs = {}, ...kids) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) if (v !== null && v !== undefined) node.setAttribute(k, v);
+  node.append(...kids.filter(Boolean));
+  return node;
+}
+
+const isObj = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
+const num = (x) => (x === null || x === undefined ? "" : String(x));   // tool values already carry 4 significant digits
+const minutes = (t) => (t === 0 ? "0" : `${t < 0 ? "−" : "+"}${Math.round(Math.abs(t) / 6) / 10} min`);
+const fact = (term, ...detail) => h("div", {}, h("dt", {}, term), h("dd", {}, ...detail));
+const counted = (obj) => Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ×${n}`).join(", ");
+const isTrueCause = (service, truth) => truth.some((c) => c.accept.includes(service));
+
+/** A table inside its own sideways-scrolling region, so a wide tool output never widens the page. */
+function dataTable(label, cols, rows) {
+  return h("div", { class: "table-scroll", tabindex: "0", role: "region", "aria-label": label },
+    h("table", { class: "out" },
+      h("thead", {}, h("tr", {}, cols.map(([c, isNum]) => h("th", { scope: "col", class: isNum ? "num" : null }, c)))),
+      h("tbody", {}, rows.map((r) => h("tr", {}, r.map((v, i) => h("td", { class: cols[i][1] ? "num" : null }, v)))))));
+}
+
+const errorCell = (isError) => (isError ? h("span", { class: "bad" }, "✗ error") : "");
+const note = (text) => (text ? h("p", { class: "note" }, text) : null);
+
+function changesTable(rows, label, text) {
+  return [dataTable(label, [["Service"], ["Signal"], ["Before", 1], ["After", 1], ["Change", 1]],
+    rows.map((r) => [r.service, r.signal, num(r.before), num(r.after), r.change])), note(text)];
+}
+
+/** get_metric as a sparkline: the alert (t=0) is a vertical rule and everything after it is tinted. */
+function sparkline(o) {
+  const pts = (o.points || []).filter((p) => Number.isFinite(p?.[0]) && Number.isFinite(p?.[1]));
+  if (pts.length < 2) return rawOutput({ output: o, truncated: false });
+  const W = 300, H = 48, PAD = 4;
+  const ts = pts.map((p) => p[0]), vs = pts.map((p) => p[1]);
+  const t0 = Math.min(...ts), t1 = Math.max(...ts), lo = Math.min(...vs), hi = Math.max(...vs);
+  const x = (t) => ((t - t0) / (t1 - t0 || 1)) * W;
+  const y = (v) => (hi === lo ? H / 2 : PAD + (1 - (v - lo) / (hi - lo)) * (H - 2 * PAD));
+  const at = Math.min(W, Math.max(0, x(0)));
+  const label = `${o.signal} for ${o.service}, one point per minute from ${minutes(t0)} to ${minutes(t1)} around the alert; ` +
+    `lowest ${num(lo)}, highest ${num(hi)}`;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", class: "spark", role: "img", "aria-label": label },
+    t1 >= 0 ? svgEl("rect", { x: at, y: 0, width: W - at, height: H, class: "spark-after" }) : null,
+    t0 <= 0 && t1 >= 0 ? svgEl("line", { x1: at, x2: at, y1: 0, y2: H, class: "spark-alert", "vector-effect": "non-scaling-stroke" }) : null,
+    svgEl("polyline", { points: pts.map(([t, v]) => `${x(t).toFixed(1)},${y(v).toFixed(1)}`).join(" "),
+      class: "spark-line", "vector-effect": "non-scaling-stroke" }));
+  return h("figure", { class: "spark-fig" },
+    svg,
+    h("div", { class: "spark-range", "aria-hidden": "true" }, h("span", {}, `max ${num(hi)}`), h("span", {}, `min ${num(lo)}`)),
+    h("figcaption", { class: "spark-axis" },
+      h("span", {}, minutes(t0)),
+      t0 <= 0 && t1 >= 0 ? h("span", { class: "spark-zero", style: `left: ${((at / W) * 100).toFixed(1)}%` }, "alert") : null,
+      h("span", {}, minutes(t1))));
+}
+
+/** One renderer per tool, written against the shapes in rootcause/tools.py and tools_v1.py. */
+const RENDER = {
+  list_services: (o) => h("p", { class: "out-line" }, `${plural(o.services.length, "service")}: ${o.services.join(", ")}.`),
+  get_metric: sparkline,
+  search_traces: (o) => [
+    h("dl", { class: "facts" },
+      fact("Spans found", num(o.spans_found)), fact("Errors", num(o.errors)),
+      Object.keys(o.operations || {}).length ? fact("Operations", counted(o.operations)) : null,
+      Object.keys(o.error_messages || {}).length ? fact("Error messages", counted(o.error_messages)) : null),
+    o.slowest?.length ? dataTable(`Slowest ${o.service} spans`,
+      [["t (s)", 1], ["Duration (ms)", 1], ["Operation"], ["Error"], ["Trace"]],
+      o.slowest.map((s) => [num(s.t), num(s.dur_ms), s.name, errorCell(s.error), h("code", {}, String(s.trace_id).slice(0, 8))])) : null],
+  get_trace: (o) => dataTable(`Spans of trace ${String(o.trace_id).slice(0, 8)}`,
+    [["t (s)", 1], ["Service"], ["Operation"], ["Duration (ms)", 1], ["Error"]],
+    o.spans.map((s) => [num(s.t), s.service, [s.name, s.message ? h("span", { class: "msg" }, s.message) : null],
+      num(s.dur_ms), errorCell(s.error)])),
+  search_logs: (o) => [
+    h("p", { class: "out-line" }, `${plural(o.total, "line")} matched` +
+      (o.samples.length < o.total ? `; the last ${o.samples.length} are shown.` : ".")),
+    o.samples.length ? h("pre", { class: "out-pre", tabindex: "0" },
+      o.samples.map((l) => `t=${l.t}  ${l.severity ?? "no severity"}  ${l.body}`).join("\n")) : null],
+  top_changes: (o) => changesTable(o.changes, "Largest changes", o.note),
+  service_health: (o) => changesTable(o.signals, `Health of ${o.service}`),
+  service_map: (o) => [dataTable("Service map",
+    [["Caller"], ["Callee"], ["Calls before", 1], ["Calls after", 1], ["Errors before", 1], ["Errors after", 1]],
+    o.edges.map((e) => [e.caller, e.stopped ? [e.callee, " ", h("span", { class: "bad stopped" }, "✗ stopped")] : e.callee,
+      num(e.calls_before), num(e.calls_after), num(e.errors_before), num(e.errors_after)])), note(o.note)],
+};
+
+/** Errors, truncated text, unknown tools and unexpected shapes: the output as text, never parsed as markup. */
+function rawOutput(step) {
+  const o = step.output;
+  return [
+    isObj(o) && "error" in o ? h("p", { class: "out-line bad" }, "✗ The tool returned an error.") : null,
+    h("pre", { class: "out-pre", tabindex: "0" }, typeof o === "string" ? o : JSON.stringify(o)),
+    step.truncated ? note("Truncated: the site keeps the first 3,000 characters of each tool output.") : null];
+}
+
+function renderOutput(step) {
+  const o = step.output;
+  if (step.truncated || !isObj(o) || "error" in o || !RENDER[step.tool]) return rawOutput(step);
+  try {
+    return RENDER[step.tool](o);
+  } catch {
+    return rawOutput(step);   // a shape the renderer does not expect is still shown, as text
+  }
+}
+
+function argText(args) {
+  if (!isObj(args)) return String(args ?? "");
+  return Object.entries(args).map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`).join("  ");
+}
+
+function stepItem(step) {
+  const args = argText(step.args);
+  return h("li", { class: "step" },
+    h("p", { class: "call" }, h("span", { class: "tool" }, step.tool), args ? h("code", { class: "args" }, args) : null),
+    h("div", { class: "output" }, renderOutput(step)));
+}
+
+function causeLine(c, truth) {
+  const ok = isTrueCause(c.service, truth);
+  return [h("span", { class: ok ? "svc" : "svc-other" }, c.service), " ", h("span", { class: "ftype" }, c.fault_type),
+    ok ? h("span", { class: "good" }, " ✓ true cause") : null];
+}
+
+function answerOf(run, truth) {
+  if (run.verdict === "no_incident") return h("p", { class: "said" }, "No incident");
+  if (run.verdict !== "incident") return h("p", { class: "said" }, "Not enough evidence (no answer, which counts as wrong)");
+  return h("ol", { class: "ranked" }, run.causes.map((c) => h("li", {}, causeLine(c, truth))));
+}
+
+function truthOf(truth) {
+  if (!truth.length) return h("p", { class: "said" }, "Nothing is broken; the right answer is “no incident”.");
+  return h("ul", { class: "truth-list" }, truth.map((c) =>
+    h("li", {}, h("span", { class: "svc" }, c.accept.join(" or ")), " ", h("span", { class: "ftype" }, c.fault_type))));
+}
+
+function resultLine(run, size = "") {
+  const m = mark(run.score?.correct ?? 0);
+  return h("p", { class: `result ${m.cls} ${size}` }, h("span", { "aria-hidden": "true" }, `${m.glyph} `),
+    m.word[0].toUpperCase() + m.word.slice(1));
+}
+
+function evidenceText(item) {
+  if (typeof item === "string") return item;
+  if (!isObj(item)) return JSON.stringify(item);
+  const who = [item.service, item.signal].filter(Boolean).join(" ");
+  if (item.kind === "metric") return `${who}: ${item.claim ?? ""}`;
+  if (item.kind === "trace") return `Trace ${item.trace_id ?? ""}${who ? ` (${who})` : ""}: ${item.claim ?? ""}`;
+  if (item.kind === "log") return `${who} log: “${item.quote ?? ""}”`;
+  return JSON.stringify(item);
+}
+
+function badges(e) {
+  if (e.grounded === null && e.distinctive === null) return h("span", { class: "badge unchecked" }, "not checked");
+  const one = (value, word) => (value === null ? h("span", { class: "badge unchecked" }, `${word} not checked`)
+    : value ? h("span", { class: "badge good" }, `✓ ${word}`) : h("span", { class: "badge bad" }, `✗ not ${word}`));
+  return [one(e.grounded, "grounded"), one(e.distinctive, "distinctive")];
+}
+
+function verdictPanel(data, solver, run) {
+  const rule = solver === "heuristic" ? null : data.runs.heuristic?.[0];
+  // focusable because on desktop it is a sticky panel that scrolls on its own when the evidence is long
+  return h("aside", { class: "verdict", "aria-labelledby": "verdict-title", tabindex: "0" },
+    h("h2", { id: "verdict-title" }, "Verdict"),
+    resultLine(run, "big"),
+    run.error ? h("p", { class: "problem" }, "This run failed: ", run.error) : null,
+    run.parse_error ? h("p", { class: "problem" }, "The final answer could not be read, so it counts as no answer: ", run.parse_error) : null,
+    h("dl", { class: "verdict-facts" },
+      fact(`${solverName(solver)} answered`, answerOf(run, data.truth)),
+      fact(data.truth.length > 1 ? "True causes" : "True cause", truthOf(data.truth)),
+      fact("Confidence", run.confidence === null || run.confidence === undefined ? "not given" : pct(run.confidence))),
+    solver === "heuristic" ? null : h("section", { class: "rule", "aria-labelledby": "rule-title" },
+      h("h3", { id: "rule-title" }, "The simple rule, same incident"),
+      rule ? [resultLine(rule), answerOf(rule, data.truth)] : h("p", {}, "The simple rule has no run for this incident.")),
+    h("section", { class: "evidence", "aria-labelledby": "evidence-title" },
+      h("h3", { id: "evidence-title" }, "Cited evidence"),
+      run.evidence.length
+        ? h("ul", { class: "evidence-list" }, run.evidence.map((e) =>
+          h("li", {}, h("span", { class: "claim" }, evidenceText(e.item)), h("span", { class: "badges" }, badges(e)))))
+        : h("p", {}, "No evidence was cited.")));
+}
+
+function investigation(solver, run) {
+  const usage = run.requests === null || run.requests === undefined ? null
+    : `${plural(run.requests, "model request")}, ${(run.prompt_tokens ?? 0).toLocaleString("en")} prompt tokens and ` +
+      `${(run.completion_tokens ?? 0).toLocaleString("en")} completion tokens.`;
+  return h("section", { class: "investigation", "aria-labelledby": "steps-title" },
+    h("h2", { id: "steps-title" }, "Investigation"),
+    run.steps.length
+      ? [h("p", { class: "note" }, `${plural(run.steps.length, "tool call")}. `, usage),
+        h("ol", { class: "timeline" }, run.steps.map(stepItem))]
+      : h("p", {}, solver === "heuristic"
+        ? "The simple rule does not investigate: it ranks every service by how much its fault signals rose, so there are no steps to replay."
+        : "This run made no tool calls. ", solver === "heuristic" ? null : usage));
+}
+
+async function renderIncident() {
+  const root = document.getElementById("incident");
+  const query = new URLSearchParams(location.search);
+  const id = query.get("id") || "";
+  const data = /^[a-z0-9][a-z0-9-]*$/i.test(id) ? await loadJSON(`data/incidents/${id}.json`) : null;
+  if (!data) {
+    root.replaceChildren(h("p", { class: "status" }, id ? `No incident called ${id}. ` : "No incident was named. ",
+      h("a", { href: "./" }, "Back to the scoreboard"), "."));
+    return;
+  }
+  document.title = `${data.id}: RootCause replay`;
+
+  const runs = data.runs || {};
+  const known = Object.keys(SOLVERS);
+  const rank = (s) => (known.includes(s) ? known.indexOf(s) : known.length);
+  const have = Object.keys(runs).filter((s) => runs[s]?.length).sort((a, b) => rank(a) - rank(b));
+  const state = { solver: query.get("solver") || have.find((s) => s.startsWith("agent")) || have[0] || "",
+    run: Number.parseInt(query.get("run"), 10) || 1 };
+  const choices = have.includes(state.solver) || !state.solver ? have : [...have, state.solver];
+
+  const solverPick = h("select", { id: "pick-solver" },
+    choices.map((s) => h("option", { value: s, selected: s === state.solver }, solverName(s))));
+  const runPick = h("select", { id: "pick-run" });
+  const replayButton = h("button", { type: "button", class: "primary" }, "Replay");
+  const showButton = h("button", { type: "button" }, "Show all");
+  const status = h("p", { class: "replay-status", role: "status" });
+  const body = h("div", { class: "replay-body" });
+  const category = CATEGORIES[data.category];
+
+  root.replaceChildren(
+    h("header", { class: "incident-head" },
+      h("h1", {}, data.id),
+      h("p", { class: "incident-meta" },
+        category ? `${category[0]}: ${category[1]}.` : `${categoryName(data.category)}.`,
+        data.heldout ? h("span", { class: "heldout" }, "Held out: never used to tune the agent’s prompts or tools.") : null),
+      h("figure", { class: "alert-quote" },
+        h("blockquote", {}, h("p", {}, data.alert)),
+        h("figcaption", {}, "The alert every solver was given."))),
+    h("div", { class: "controls" },
+      h("div", { class: "pick" }, h("label", { for: "pick-solver" }, "Solver"), solverPick),
+      h("div", { class: "pick" }, h("label", { for: "pick-run" }, "Run"), runPick),
+      h("div", { class: "replay-buttons" }, replayButton, showButton),
+      status),
+    body);
+
+  let timer = null;
+  const stop = () => { clearTimeout(timer); timer = null; };
+  const showAll = (message = "") => {
+    stop();
+    body.querySelectorAll(".pending").forEach((el) => el.classList.remove("pending"));
+    status.textContent = message;
+  };
+
+  function replay() {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      showAll("Reduced motion is on, so every step is shown at once.");
+      return;
+    }
+    stop();
+    const items = [...body.querySelectorAll(".step"), body.querySelector(".verdict")];
+    items.forEach((el) => el.classList.remove("revealed"));
+    items.forEach((el) => el.classList.add("pending"));
+    let i = 0;
+    const next = () => {
+      const el = items[i++];
+      el.classList.remove("pending");
+      el.classList.add("revealed");
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const done = i === items.length;
+      status.textContent = done ? "Replay finished. The verdict is shown." : `Step ${i} of ${items.length - 1}`;
+      if (!done) timer = setTimeout(next, 600);
+    };
+    timer = setTimeout(next, 300);
+  }
+
+  function draw() {
+    stop();
+    status.textContent = "";
+    const list = runs[state.solver] || [];
+    const run = list.find((r) => r.run + 1 === state.run) || list[0];
+    runPick.replaceChildren(...(list.length
+      ? list.map((r) => h("option", { value: r.run + 1, selected: r === run }, `Run ${r.run + 1}`))
+      : [h("option", { value: "" }, "none")]));
+    runPick.disabled = !list.length;
+    if (!run) {
+      replayButton.hidden = showButton.hidden = true;
+      body.replaceChildren(h("p", { class: "status" }, "This solver has no recorded runs for this incident yet."));
+      return;
+    }
+    state.run = run.run + 1;
+    replayButton.hidden = showButton.hidden = !run.steps.length;
+    body.replaceChildren(verdictPanel(data, state.solver, run), investigation(state.solver, run));
+  }
+
+  const pick = () => {
+    state.solver = solverPick.value;
+    state.run = Number(runPick.value) || 1;
+    draw();
+    const params = new URLSearchParams({ id: data.id, solver: state.solver, run: state.run });
+    history.replaceState(null, "", `?${params}`);
+  };
+  solverPick.addEventListener("change", pick);
+  runPick.addEventListener("change", pick);
+  replayButton.addEventListener("click", replay);
+  showButton.addEventListener("click", () => showAll());
+  draw();
+}
+
 // ---------------------------------------------------------------- dispatch
 
 const pages = {
   index: () => { guardFigures(); return renderIndex(); },
+  incident: renderIncident,
 };
 Promise.resolve(pages[document.body.dataset.page]?.()).catch((err) => {  // malformed data must not leave "Loading" up
   console.error(err);
