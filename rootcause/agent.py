@@ -84,10 +84,12 @@ def _dump(m):
     return d
 
 
+# max_retries=0 on both clients: Agent._chat retries timeouts and 429s itself (attempts, backoff); the SDK's own hidden
+# retries would also count against the free-tier daily quota.
 def make_client():
     from dotenv import load_dotenv
     load_dotenv(config.ROOT / ".env")
-    return OpenAI(base_url=BASE_URL, api_key=os.getenv("GEMINI_API_KEY"), timeout=90)
+    return OpenAI(base_url=BASE_URL, api_key=os.getenv("GEMINI_API_KEY"), timeout=90, max_retries=0)
 
 
 # A second model family for the model comparison: NVIDIA's free trial endpoint (OpenAI-compatible, rate-limited per
@@ -99,7 +101,7 @@ NEMOTRON = "nvidia/nemotron-3-super-120b-a12b"
 def make_nvidia_client():
     from dotenv import load_dotenv
     load_dotenv(config.ROOT / ".env")
-    return OpenAI(base_url=NVIDIA_BASE_URL, api_key=os.getenv("NVIDIA_API_KEY"), timeout=120)
+    return OpenAI(base_url=NVIDIA_BASE_URL, api_key=os.getenv("NVIDIA_API_KEY"), timeout=120, max_retries=0)
 
 
 def _per_day(err):

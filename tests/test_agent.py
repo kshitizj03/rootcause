@@ -303,3 +303,9 @@ def test_v1_prompt_edits_fail_loudly_when_the_v0_text_drifts():
     with pytest.raises(ValueError):
         agent._replace_once("aa", "a", "b")  # must match exactly once
     assert "//" not in agent.SYSTEM_V1.split('"evidence"')[1]  # no comments a model could copy into its JSON
+
+
+def test_clients_leave_retries_to_the_agent_so_hidden_sdk_retries_do_not_spend_quota(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "x")
+    monkeypatch.setenv("NVIDIA_API_KEY", "x")
+    assert agent.make_client().max_retries == 0 and agent.make_nvidia_client().max_retries == 0
