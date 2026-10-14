@@ -104,3 +104,8 @@ def test_service_map_ranks_a_stopped_edge_that_had_errors_above_stable_edges():
     edges = json.loads(tools_v1.call(dict(SNAP, spans=spans), "service_map", {}))["edges"]
     assert [e["callee"] for e in edges] == ["payment", "cart", "inventory"] and edges[1]["stopped"] is True
     assert "stopped" in next(s for s in tools_v1.SCHEMAS if s["function"]["name"] == "service_map")["function"]["description"]
+
+
+def test_include_load_given_as_yes_or_1_includes_the_rps_rows():
+    for value in ("yes", "1"):
+        assert any(c["signal"] == "rps" for c in out("top_changes", {"include_load": value})["changes"]), value
