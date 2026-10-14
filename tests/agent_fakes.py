@@ -1,6 +1,11 @@
-"""Scripted fake LLM and snapshot shared by the agent and tracing tests."""
+"""Agent fakes: a scripted LLM, message builders, OpenAI status errors and a recording Agent stand-in."""
 import json
 from types import SimpleNamespace
+
+try:
+    import httpx
+except ImportError:  # openai>=3 vendors its HTTP client as httpx2
+    import httpx2 as httpx
 
 SNAP = {"meta": {"alert": "Orders fail", "baseline_start": 0, "fault_start": 900, "end": 1200},
         "metrics": {"error_ratio": {"payment": [[900, 0.3]]}}, "spans": [], "logs": []}
@@ -52,5 +57,20 @@ class FakeLLM:
         return resp(item)
 
 
-def make_llm(script):
-    return FakeLLM(script)
+def status_error(cls, code, text="bad"):
+    """An OpenAI APIStatusError subclass instance, as the client raises it for an HTTP `code` response."""
+    return cls(text, response=httpx.Response(code, request=httpx.Request("POST", "http://x")), body=None)
+
+
+class RecordingAgent:
+    """Stands in for agent.Agent: keeps every instance, with its kwargs and the alerts it was asked to solve.
+    Clear `instances` at the start of each test that uses it."""
+    instances = []
+
+    def __init__(self, **kw):
+        self.kw, self.alerts = kw, []
+        RecordingAgent.instances.append(self)
+
+    def solve(self, snap):
+        self.alerts.append(snap["meta"]["alert"])
+        return "report", {}

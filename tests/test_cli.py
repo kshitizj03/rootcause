@@ -4,6 +4,7 @@ import subprocess
 
 import pytest
 
+from agent_fakes import RecordingAgent
 from helpers import FLAGS, flat_span
 from rootcause import cli, config, harness, inject, sanitize, scenarios, snapshot
 from rootcause import stack as stack_mod  # `stack` is a fixture below
@@ -535,19 +536,12 @@ def test_summary_with_no_records_says_so(monkeypatch, capsys, solver):
 
 def test_eval_agent_pins_the_batch_to_one_model(monkeypatch):
     from rootcause import agent
-    built = {}
-
-    class FakeAgent:
-        def __init__(self, **kw):
-            built.update(kw)
-
-        def solve(self, snap):
-            raise AssertionError("not called")
-
     _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 0, "stopped": None})
-    monkeypatch.setattr(agent, "Agent", FakeAgent)
+    monkeypatch.setattr(agent, "Agent", RecordingAgent)
+    RecordingAgent.instances.clear()
     assert cli.main(["eval", "agent-v0"]) == 0
-    assert built == {"models": agent.MODELS[:1], "attempts": 5}  # a per-day quota must stop the batch, not switch models mid-table
+    # a per-day quota must stop the batch, not switch models mid-table
+    assert [a.kw for a in RecordingAgent.instances] == [{"models": agent.MODELS[:1], "attempts": 5}]
 
 
 def test_eval_and_summary_resolve_solvers_through_the_solvers_table(monkeypatch, capsys):

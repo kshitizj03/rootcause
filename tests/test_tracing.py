@@ -1,18 +1,19 @@
 import json
 
+import openai
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from agent_fakes import FINAL, SNAP, FakeLLM, Msg, status_error, tool_call
 from rootcause import agent, tracing
-from tests_agent_fakes import FINAL, SNAP, Msg, make_llm, tool_call  # shared fakes module
 
 
 def traced_agent(script, **kw):
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
-    a = agent.Agent(llm=make_llm(script), min_interval=0, sleep=lambda s: None, clock=lambda: 0.0,
+    a = agent.Agent(llm=FakeLLM(script), min_interval=0, sleep=lambda s: None, clock=lambda: 0.0,
                     tracer=provider.get_tracer("test"), **kw)
     return a, exporter
 
@@ -49,7 +50,7 @@ def test_file_mode_writes_json_lines(tmp_path):
     assert json.loads(lines[0])["name"] == "x"
 
 
-def test_otlp_mode_with_dead_endpoint_does_not_hang(monkeypatch):
+def test_otlp_mode_with_dead_endpoint_does_not_hang():
     import time
     provider = tracing.setup("otlp", endpoint="http://127.0.0.1:9/v1/traces", set_global=False)
     t = time.monotonic()
@@ -60,9 +61,7 @@ def test_otlp_mode_with_dead_endpoint_does_not_hang(monkeypatch):
 
 
 def test_failed_attempt_span_is_error_with_exception_type_only():
-    from test_agent import server_error  # reuse the agent tests' 503 builder (httpx / httpx2 shim lives there)
-    err = server_error()
-    a, exporter = traced_agent([err, Msg(content=FINAL)])
+    a, exporter = traced_agent([status_error(openai.InternalServerError, 503, "overloaded"), Msg(content=FINAL)])
     a.solve(SNAP)
     chats = [s for s in exporter.get_finished_spans() if s.name.startswith("chat ")]
     assert [s.status.status_code.name for s in chats] == ["ERROR", "UNSET"]

@@ -1,36 +1,17 @@
 import json
 from types import SimpleNamespace
 
-try:
-    import httpx
-except ImportError:  # openai>=3 vendors its HTTP client as httpx2
-    import httpx2 as httpx
 import openai
 import pytest
 
+from agent_fakes import EMPTY, FINAL, SNAP, FakeLLM, Msg, status_error, tool_call
+from helpers import Clock
 from rootcause import agent
 from rootcause.score import Cause, Report
-from tests_agent_fakes import EMPTY, FINAL, SNAP, FakeLLM, Msg, tool_call
-
-
-def rate_limit(text):
-    return openai.RateLimitError(text, response=httpx.Response(429, request=httpx.Request("POST", "http://x")), body=None)
-
-
-class Clock:
-    def __init__(self):
-        self.t, self.sleeps = 0.0, []
-
-    def now(self):
-        return self.t
-
-    def sleep(self, s):
-        self.sleeps.append(s)
-        self.t += s
 
 
 def make(script, **kw):
-    llm, clock = FakeLLM(script), Clock()
+    llm, clock = FakeLLM(script), Clock(0.0)
     a = agent.Agent(llm=llm, sleep=clock.sleep, clock=clock.now, **kw)
     return a, llm, clock
 
@@ -73,23 +54,23 @@ def test_throttle_spaces_requests():
 
 
 def test_per_minute_rate_limit_backs_off_and_retries():
-    a, _, clock = make([rate_limit("Resource exhausted. Please retry."), Msg(content=FINAL)], min_interval=0)
+    a, _, clock = make([status_error(openai.RateLimitError, 429, "Resource exhausted. Please retry."), Msg(content=FINAL)], min_interval=0)
     report, info = a.solve(SNAP)
     assert report.verdict == "incident" and 15 in clock.sleeps
 
 
 def test_daily_quota_falls_back_then_raises():
-    a, llm, _ = make([rate_limit("Quota exceeded: GenerateRequestsPerDayPerProjectPerModel-FreeTier"),
+    a, llm, _ = make([status_error(openai.RateLimitError, 429, "Quota exceeded: GenerateRequestsPerDayPerProjectPerModel-FreeTier"),
                       Msg(content=FINAL)], min_interval=0)
     report, info = a.solve(SNAP)
     assert llm.requests[1]["model"] == agent.MODELS[1] and info["models"] == [agent.MODELS[1]]
-    b, _, _ = make([rate_limit("PerDay quota"), rate_limit("PerDay quota")], min_interval=0)
+    b, _, _ = make([status_error(openai.RateLimitError, 429, "PerDay quota"), status_error(openai.RateLimitError, 429, "PerDay quota")], min_interval=0)
     with pytest.raises(agent.QuotaExhausted):
         b.solve(SNAP)
 
 
 def test_server_errors_retry_then_fall_back():
-    err = openai.InternalServerError("overloaded", response=httpx.Response(503, request=httpx.Request("POST", "http://x")), body=None)
+    err = status_error(openai.InternalServerError, 503, "overloaded")
     a, llm, _ = make([err, err, err, Msg(content=FINAL)], min_interval=0)
     report, _ = a.solve(SNAP)
     assert report.verdict == "incident" and llm.requests[-1]["model"] == agent.MODELS[1]
@@ -104,19 +85,15 @@ def test_bad_tool_arguments_are_reported_to_the_model_not_raised():
 
 # --- retries, parallel tool calls, message history ---
 
-def server_error():
-    return openai.InternalServerError("overloaded", response=httpx.Response(503, request=httpx.Request("POST", "http://x")), body=None)
-
-
 def test_no_sleep_after_the_last_failed_attempt_of_a_model():
-    a, _, clock = make([server_error()] * 6, min_interval=0)
+    a, _, clock = make([status_error(openai.InternalServerError, 503, "overloaded")] * 6, min_interval=0)
     with pytest.raises(openai.InternalServerError):
         a.solve(SNAP)
     assert clock.sleeps == [15, 30, 15, 30]  # backoff only between attempts on the same model
 
 
 def test_exhaustion_persists_across_solves_on_one_agent():
-    a, llm, _ = make([rate_limit("PerDay quota"), Msg(content=FINAL), Msg(content=FINAL)], min_interval=0)
+    a, llm, _ = make([status_error(openai.RateLimitError, 429, "PerDay quota"), Msg(content=FINAL), Msg(content=FINAL)], min_interval=0)
     a.solve(SNAP)
     a.solve(SNAP)
     assert [r["model"] for r in llm.requests] == [agent.MODELS[0], agent.MODELS[1], agent.MODELS[1]]
@@ -183,10 +160,6 @@ def test_persistent_empty_choices_falls_back_then_raises_an_api_error():
 
 # --- served model, client errors, replay data ---
 
-def status_error(cls, code, text="bad"):
-    return cls(text, response=httpx.Response(code, request=httpx.Request("POST", "http://x")), body=None)
-
-
 def test_models_records_the_model_that_served_the_response():
     served = Msg(content=FINAL)
     served.served_by = "gemini-served-version"
@@ -217,10 +190,10 @@ def test_successful_solve_has_no_error():
 
 
 def test_server_and_rate_limit_errors_are_still_not_scored_away():
-    a, _, _ = make([server_error()] * 6, min_interval=0)
+    a, _, _ = make([status_error(openai.InternalServerError, 503, "overloaded")] * 6, min_interval=0)
     with pytest.raises(openai.InternalServerError):
         a.solve(SNAP)
-    b, _, _ = make([rate_limit("PerDay quota")] * 2, min_interval=0)
+    b, _, _ = make([status_error(openai.RateLimitError, 429, "PerDay quota")] * 2, min_interval=0)
     with pytest.raises(agent.QuotaExhausted):
         b.solve(SNAP)
 
@@ -256,7 +229,7 @@ def test_info_keeps_the_full_message_history_for_replay():
 
 
 def test_wait_s_totals_throttle_and_backoff_sleeps():
-    a, _, clock = make([rate_limit("Resource exhausted"), Msg(tool_calls=[tool_call("list_services", {})]), Msg(content=FINAL)],
+    a, _, clock = make([status_error(openai.RateLimitError, 429, "Resource exhausted"), Msg(tool_calls=[tool_call("list_services", {})]), Msg(content=FINAL)],
                        min_interval=4.5)
     _, info = a.solve(SNAP)
     assert info["wait_s"] == sum(clock.sleeps) and info["wait_s"] >= 15
@@ -285,7 +258,7 @@ def test_a_bad_api_key_400_mid_conversation_stops_the_batch():
 
 
 def test_attempts_per_model_is_configurable():
-    a, llm, clock = make([server_error()] * 4 + [Msg(content=FINAL)], min_interval=0, models=agent.MODELS[:1], attempts=5)
+    a, llm, clock = make([status_error(openai.InternalServerError, 503, "overloaded")] * 4 + [Msg(content=FINAL)], min_interval=0, models=agent.MODELS[:1], attempts=5)
     report, _ = a.solve(SNAP)
     assert report.verdict == "incident" and clock.sleeps == [15, 30, 60, 120]
 
