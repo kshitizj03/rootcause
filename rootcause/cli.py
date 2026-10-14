@@ -12,7 +12,7 @@ try:
 except ImportError:
     OpenAIError = ()  # `except ()` catches nothing
 
-from rootcause import config, env, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot
+from rootcause import config, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot, stack
 
 
 def _heuristic_solver():
@@ -196,7 +196,7 @@ def _record(args):
     if problems:
         print(json.dumps(problems, indent=1))
         return 2
-    summaries = harness.record_all(chosen, sanitize.flag_names(), inject.Injector(), demo_commit=env.demo_commit())
+    summaries = harness.record_all(chosen, sanitize.flag_names(), inject.Injector(), demo_commit=stack.demo_commit())
     return 0 if all(s["valid"] for s in summaries) else 1
 
 
@@ -307,7 +307,7 @@ def main(argv=None):
 
 def _dispatch(args):
     if args.cmd == "up":
-        env.compose("up", "-d", "--quiet-pull")
+        stack.compose("up", "-d", "--quiet-pull")
         if _needs_reset():
             print("state is dirty (a previous restore failed or the flag file backup is left over): run `python -m rootcause reset-flags` first",
                   file=sys.stderr)
@@ -315,9 +315,9 @@ def _dispatch(args):
         # a fresh stack has no clean 15-minute baseline yet: the first record waits the full cool-down
         harness.mark_restored(time.time(), config.STATE_FILE)
     elif args.cmd == "down":
-        env.compose("down")
+        stack.compose("down")
     elif args.cmd == "status":
-        print(json.dumps(env.probe(), indent=1))
+        print(json.dumps(stack.probe(), indent=1))
     elif args.cmd == "list":
         for s in scenarios.load_all():
             print(f"{s.id:45s} {s.category}")

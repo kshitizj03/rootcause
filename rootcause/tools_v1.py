@@ -3,13 +3,13 @@
 Reads only a loaded snapshot (meta, metrics, spans, logs). t < 0 is before the alert, t >= 0 after it."""
 from collections import defaultdict
 
-from rootcause import config, summary, tools
+from rootcause import config, summary, tools_v0
 
 
 def _fmt(row):
     sign = "+" if row["direction"] == "up" else "-"
-    return {"service": row["service"], "signal": row["signal"], "before": tools._sig(row["baseline"]),
-            "after": tools._sig(row["value"]), "change": f"{sign}{row['score']:.1f}x" if row["score"] >= 10 else f"{sign}{row['score']:.2f}x"}
+    return {"service": row["service"], "signal": row["signal"], "before": tools_v0._sig(row["baseline"]),
+            "after": tools_v0._sig(row["value"]), "change": f"{sign}{row['score']:.1f}x" if row["score"] >= 10 else f"{sign}{row['score']:.2f}x"}
 
 
 def top_changes(snap, n=10, include_load=False):
@@ -23,7 +23,7 @@ def top_changes(snap, n=10, include_load=False):
 def service_health(snap, service):
     rows = [r for r in summary.changes(snap) if r["service"] == service]
     if not rows:
-        return {"error": f"no metrics for {service!r}", "valid_services": tools._services(snap)}
+        return {"error": f"no metrics for {service!r}", "valid_services": tools_v0._services(snap)}
     return {"service": service, "signals": [_fmt(r) for r in rows]}
 
 
@@ -50,8 +50,8 @@ def service_map(snap, limit=20):
             "note": f"edges from parent/child spans across services; before = the {config.CAPTURE_LOOKBACK_S // 60} min before the alert, after = t >= 0; stopped = calls vanished after the alert"}
 
 
-TOOLS = {**tools.TOOLS, "top_changes": top_changes, "service_health": service_health, "service_map": service_map}
-SCHEMAS = tools.SCHEMAS + [
+TOOLS = {**tools_v0.TOOLS, "top_changes": top_changes, "service_health": service_health, "service_map": service_map}
+SCHEMAS = tools_v0.SCHEMAS + [
     {"type": "function", "function": {"name": "top_changes", "description": f"Start here. Every service's signals ranked by how much they changed from the {config.BASELINE_S // 60} minutes before the alert to after it (error_ratio, p95_ms, mem_mb peak, cpu_cores, restarts; rps only with include_load).",
                                       "parameters": {"type": "object", "properties": {"n": {"type": "integer"}, "include_load": {"type": "boolean"}}}}},
     {"type": "function", "function": {"name": "service_health", "description": "All signals of one service, before vs after the alert, with the change.",
@@ -62,4 +62,4 @@ SCHEMAS = tools.SCHEMAS + [
 
 
 def call(snap, name, raw_args):
-    return tools.call(snap, name, raw_args, registry=TOOLS)
+    return tools_v0.call(snap, name, raw_args, registry=TOOLS)

@@ -12,7 +12,7 @@ import re
 import math
 
 from rootcause import config, summary
-from rootcause.tools import _epoch
+from rootcause.tools_v0 import _epoch
 
 
 def _norm(s):

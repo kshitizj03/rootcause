@@ -5,7 +5,8 @@ import subprocess
 import pytest
 
 from helpers import FLAGS, flat_span
-from rootcause import cli, config, env, harness, inject, sanitize, scenarios, snapshot
+from rootcause import cli, config, harness, inject, sanitize, scenarios, snapshot
+from rootcause import stack as stack_mod  # `stack` is a fixture below
 
 INFO = ["docker", "info", "--format", "{{.NCPU}}"]
 
@@ -78,7 +79,7 @@ def test_list_prints_scenarios(capsys):
 
 def test_up_marks_state_so_first_record_waits_full_cooldown(state, monkeypatch):
     calls = []
-    monkeypatch.setattr(env, "compose", lambda *a: calls.append(a))
+    monkeypatch.setattr(stack_mod, "compose", lambda *a: calls.append(a))
     assert cli.main(["up"]) == 0
     assert calls == [("up", "-d", "--quiet-pull")]
     assert "last_restore" in json.loads(state.read_text())
@@ -86,7 +87,7 @@ def test_up_marks_state_so_first_record_waits_full_cooldown(state, monkeypatch):
 
 def test_up_does_not_clear_dirty_state(state, monkeypatch, capsys):
     state.write_text(json.dumps({"dirty": True, "error": "boom"}))
-    monkeypatch.setattr(env, "compose", lambda *a: None)
+    monkeypatch.setattr(stack_mod, "compose", lambda *a: None)
     assert cli.main(["up"]) == 3
     assert json.loads(state.read_text())["dirty"] is True
     assert "reset-flags" in capsys.readouterr().err
@@ -94,7 +95,7 @@ def test_up_does_not_clear_dirty_state(state, monkeypatch, capsys):
 
 def test_up_refuses_when_a_flags_backup_is_left_over(state, monkeypatch, capsys):
     config.FLAGS_FILE.with_name(config.FLAGS_FILE.name + ".orig").write_text("{}")
-    monkeypatch.setattr(env, "compose", lambda *a: None)
+    monkeypatch.setattr(stack_mod, "compose", lambda *a: None)
     assert cli.main(["up"]) == 3
     assert not state.exists()
     assert "reset-flags" in capsys.readouterr().err
@@ -211,7 +212,7 @@ def rec(monkeypatch):
     monkeypatch.setattr(scenarios, "load_all", lambda: FIXED)
     monkeypatch.setattr(inject, "flag_variants", lambda: {})
     monkeypatch.setattr(sanitize, "flag_names", lambda: ["f"])
-    monkeypatch.setattr(env, "demo_commit", lambda: "abc")
+    monkeypatch.setattr(stack_mod, "demo_commit", lambda: "abc")
     monkeypatch.setattr(inject, "flag_targeting_errors", lambda: {})
     monkeypatch.setattr(scenarios, "validate", lambda s, v, t: [])
     monkeypatch.setattr(harness, "record_all", lambda chosen, names, injector, **kw: calls.append(chosen) or

@@ -113,12 +113,12 @@ In a client config, use absolute paths, with the venv's python as `command` and 
 
 | Path | What |
 |---|---|
-| `rootcause/inject.py`, `harness.py`, `snapshot.py`, `env.py` | fault injection with guaranteed restore, cool-down, capture |
+| `rootcause/inject.py`, `harness.py`, `snapshot.py`, `stack.py` | fault injection with guaranteed restore, cool-down, capture |
 | `rootcause/sanitize.py` | leak filters and the leak scanner |
 | `rootcause/scenarios.py`, `scenarios/*.yaml` | scenario definitions, validation rules, notes |
 | `rootcause/score.py`, `evaluate.py` | report validation, scoring, resumable runs, per-category summaries |
 | `rootcause/summary.py`, `heuristic.py` | baseline-vs-fault change table and the heuristic |
-| `rootcause/tools.py`, `tools_v1.py`, `agent.py` | agent tools (v0, v1) and the Gemini tool loop |
+| `rootcause/tools_v0.py`, `tools_v1.py`, `agent.py` | agent tools (v0, v1) and the Gemini tool loop |
 | `rootcause/evidence.py`, `mcp_server.py` | evidence checker and MCP server |
 | `rootcause/report.py`, `tracing.py` | results report and figures; optional OpenTelemetry GenAI spans of agent runs |
 | `rootcause/site.py`, `site/` | data builder and static front end of the replay site |

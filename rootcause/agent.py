@@ -12,7 +12,7 @@ from openai import APIConnectionError, APITimeoutError, InternalServerError, Ope
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode, SpanKind
 
-from rootcause import config, tools
+from rootcause import config, tools_v0
 from rootcause.score import Report, parse_report
 
 NAME = "agent-v0"
@@ -111,7 +111,7 @@ def _per_day(err):
 
 class Agent:
     def __init__(self, llm=None, models=MODELS, max_steps=MAX_STEPS, min_interval=MIN_INTERVAL_S,
-                 sleep=time.sleep, clock=time.monotonic, toolset=tools, system=SYSTEM, name=NAME, attempts=ATTEMPTS, tracer=None):
+                 sleep=time.sleep, clock=time.monotonic, toolset=tools_v0, system=SYSTEM, name=NAME, attempts=ATTEMPTS, tracer=None):
         """toolset: any object/module with SCHEMAS and call(snap, name, raw_args); system/name label an agent variant.
         tracer: OpenTelemetry tracer for self-tracing (a no-op unless a provider is installed)."""
         self.tracer = tracer or trace.get_tracer("rootcause.agent")

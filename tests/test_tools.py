@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from rootcause import tools
+from rootcause import tools_v0 as tools
 
 T0 = 1000.0
 SNAP = {

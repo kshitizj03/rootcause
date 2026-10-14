@@ -142,7 +142,7 @@ def test_long_json_outputs_are_shortened_by_cutting_lists_so_they_still_parse():
 
 
 def test_outputs_the_tool_cut_for_the_agent_are_repaired_at_the_last_whole_item():
-    from rootcause import tools
+    from rootcause import tools_v0 as tools
     text = json.dumps({"trace_id": "abc", "spans": [{"t": i, "name": "op" * 30} for i in range(100)]})[:5000] + tools.TRUNCATED
     step = site._step({"tool": "get_trace", "args": "{}", "output": text})
     out = step["output"]

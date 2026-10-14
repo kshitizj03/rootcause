@@ -8,7 +8,7 @@ import shutil
 from datetime import date
 from pathlib import Path
 
-from rootcause import config, evaluate, report, scenarios, snapshot, tools
+from rootcause import config, evaluate, report, scenarios, snapshot, tools_v0
 
 MAX_OUTPUT = 3000
 TAIL_LISTS = {"samples"}  # search_logs returns the *last* N lines, so cutting keeps the newest
@@ -45,11 +45,11 @@ def _shrink(obj):
 
 
 def _repair(text):
-    """An output the tool itself cut for the agent (tools.TRUNCATED) is JSON cut mid-list: close it after the last
+    """An output the tool itself cut for the agent (tools_v0.TRUNCATED) is JSON cut mid-list: close it after the last
     whole item. None when that does not give an object."""
-    if not text.endswith(tools.TRUNCATED):
+    if not text.endswith(tools_v0.TRUNCATED):
         return None
-    head = text[:-len(tools.TRUNCATED)]
+    head = text[:-len(tools_v0.TRUNCATED)]
     end = head.rfind("}, {")
     fixed = _parse(head[:end + 1] + "]}") if end > 0 else None
     return {**fixed, "_cut_by_tool": True} if isinstance(fixed, dict) else None

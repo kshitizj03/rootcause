@@ -257,7 +257,7 @@ function sparkline(o, args = {}) {
     stopped ? note(stopped) : null);
 }
 
-/** One renderer per tool, written against the shapes in rootcause/tools.py and tools_v1.py. */
+/** One renderer per tool, written against the shapes in rootcause/tools_v0.py and tools_v1.py. */
 const RENDER = {
   list_services: (o) => h("p", { class: "out-line" }, `${plural(o.services.length, "service")}: ${o.services.join(", ")}.`),
   get_metric: sparkline,
