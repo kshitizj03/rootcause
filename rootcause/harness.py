@@ -93,7 +93,7 @@ def record(scenario, names, injector, fetch=backends, now=time.time, sleep=time.
         mark_restored(now(), state_file)
 
 
-def _write_index_row(out_dir, summary):
+def write_index_row(out_dir, summary):
     """Write summary to index.jsonl (append mode)."""
     with open(out_dir / "index.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps({k: v for k, v in summary.items() if k != "results"}) + "\n")
@@ -128,7 +128,7 @@ def record_all(scenarios, names, injector, out_dir=config.SNAPSHOTS, **kwargs):
                 stop = RuntimeError(f"Aborting after 3 consecutive failures: {e}")
         # Shared tail: append, write, print (once per scenario)
         summaries.append(summary)
-        _write_index_row(out_dir, summary)
+        write_index_row(out_dir, summary)
         print(f"    -> valid={summary['valid']} {summary.get('error', '')}", flush=True)
         if stop:
             raise stop

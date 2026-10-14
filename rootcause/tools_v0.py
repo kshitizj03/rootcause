@@ -10,11 +10,11 @@ MAX_TOOL_CHARS = 6000
 SIGNAL_NAMES = ("rps", "error_ratio", "p95_ms", "mem_mb", "cpu_cores", "uptime_s")
 
 
-def _sig(x):
+def round_sig(x):
     return float(f"{x:.4g}") if isinstance(x, (int, float)) else x
 
 
-def _epoch(ts):
+def epoch(ts):
     head, _, frac = ts.rstrip("Z").partition(".")
     return datetime.strptime(head, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp() + float("0." + (frac or "0"))
 
@@ -23,7 +23,7 @@ def _limit(limit, default):
     return max(1, min(200, int(default if limit is None else limit)))  # models often send explicit nulls
 
 
-def _flag(x):
+def _as_bool(x):
     return x.strip().lower() in ("true", "1", "yes") if isinstance(x, str) else bool(x)
 
 
@@ -34,14 +34,14 @@ def _window(since, until):
     return lo, hi
 
 
-def _services(snap):
+def services(snap):
     names = {s for series in snap["metrics"].values() for s in series}
     names |= {sp["service"] for sp in snap["spans"]} | {lg["service"] for lg in snap["logs"]}
     return sorted(names)
 
 
 def list_services(snap):
-    return {"services": _services(snap)}
+    return {"services": services(snap)}
 
 
 def get_metric(snap, service, signal):
@@ -55,24 +55,24 @@ def get_metric(snap, service, signal):
         rel = round(t - t0)
         minute = rel // 60
         if minute != last_minute:  # thin to one point per minute
-            points.append([rel, _sig(v)])
+            points.append([rel, round_sig(v)])
             last_minute = minute
     return {"service": service, "signal": signal, "points": points, "note": "t = seconds relative to the alert"}
 
 
 def search_traces(snap, service, errors_only=False, limit=10, since=None, until=None):
-    limit, errors_only, (lo, hi) = _limit(limit, 10), _flag(errors_only), _window(since, until)
+    limit, errors_only, (lo, hi) = _limit(limit, 10), _as_bool(errors_only), _window(since, until)
     t0 = snap["meta"]["fault_start"]
     spans = [s for s in snap["spans"] if s["service"] == service and (s["error"] or not errors_only)
              and lo <= s["start_ms"] / 1000 - t0 <= hi]
-    if not spans and service not in _services(snap):
-        return {"error": f"unknown service {service!r}", "valid_services": _services(snap)}
+    if not spans and service not in services(snap):
+        return {"error": f"unknown service {service!r}", "valid_services": services(snap)}
     ops = Counter(s["name"] for s in spans)
     msgs = Counter(s["message"][:150] for s in spans if s["error"] and s["message"])
     slow = sorted(spans, key=lambda s: -s["dur_ms"])[:limit]
     return {"service": service, "spans_found": len(spans), "errors": sum(s["error"] for s in spans),
             "operations": dict(ops.most_common(limit)), "error_messages": dict(msgs.most_common(5)),
-            "slowest": [{"trace_id": s["trace_id"], "name": s["name"], "dur_ms": _sig(s["dur_ms"]),
+            "slowest": [{"trace_id": s["trace_id"], "name": s["name"], "dur_ms": round_sig(s["dur_ms"]),
                          "t": round(s["start_ms"] / 1000 - t0), "error": s["error"]} for s in slow]}
 
 
@@ -82,7 +82,7 @@ def get_trace(snap, trace_id):
     if not spans:
         return {"error": f"no trace {trace_id!r} in this incident"}
     return {"trace_id": trace_id, "spans": [
-        {"service": s["service"], "name": s["name"], "t": round(s["start_ms"] / 1000 - t0), "dur_ms": _sig(s["dur_ms"]),
+        {"service": s["service"], "name": s["name"], "t": round(s["start_ms"] / 1000 - t0), "dur_ms": round_sig(s["dur_ms"]),
          "error": s["error"], "message": s["message"][:200], "parent_id": s["parent_id"], "span_id": s["span_id"]}
         for s in spans[:40]], "total_spans": len(spans)}
 
@@ -91,12 +91,12 @@ def search_logs(snap, service, text="", min_severity=0, limit=20, since=None, un
     limit, min_severity, (lo, hi) = _limit(limit, 20), int(min_severity or 0), _window(since, until)
     t0, needle = snap["meta"]["fault_start"], str(text or "").lower()
     logs = [lg for lg in snap["logs"] if lg["service"] == service and needle in str(lg["body"]).lower()
-            and (lg["severity_number"] or 0) >= min_severity and lo <= _epoch(lg["ts"]) - t0 <= hi]
-    if not logs and service not in _services(snap):
-        return {"error": f"unknown service {service!r}", "valid_services": _services(snap)}
-    logs.sort(key=lambda lg: _epoch(lg["ts"]))
+            and (lg["severity_number"] or 0) >= min_severity and lo <= epoch(lg["ts"]) - t0 <= hi]
+    if not logs and service not in services(snap):
+        return {"error": f"unknown service {service!r}", "valid_services": services(snap)}
+    logs.sort(key=lambda lg: epoch(lg["ts"]))
     return {"service": service, "total": len(logs), "samples": [  # the last `limit` lines of the filtered window
-        {"t": round(_epoch(lg["ts"]) - t0), "severity": lg["severity"], "body": str(lg["body"])[:200],
+        {"t": round(epoch(lg["ts"]) - t0), "severity": lg["severity"], "body": str(lg["body"])[:200],
          "trace_id": lg["trace_id"]} for lg in logs[-limit:]]}
 
 

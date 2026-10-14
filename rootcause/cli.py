@@ -241,7 +241,7 @@ def _revalidate(args, resanitize=False):
             print(f"{i}: error: {type(e).__name__}: {e}")
             all_valid = False
             continue
-        harness._write_index_row(Path(config.SNAPSHOTS), {"scenario": i, "path": path, "valid": res["valid"],
+        harness.write_index_row(Path(config.SNAPSHOTS), {"scenario": i, "path": path, "valid": res["valid"],
                                                           "leaks": res["leaks"],
                                                           "resanitized" if resanitize else "revalidated": True})
         if resanitize:

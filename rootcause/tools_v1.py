@@ -8,13 +8,13 @@ from rootcause import config, summary, tools_v0
 
 def _fmt(row):
     sign = "+" if row["direction"] == "up" else "-"
-    return {"service": row["service"], "signal": row["signal"], "before": tools_v0._sig(row["baseline"]),
-            "after": tools_v0._sig(row["value"]), "change": f"{sign}{row['score']:.1f}x" if row["score"] >= 10 else f"{sign}{row['score']:.2f}x"}
+    return {"service": row["service"], "signal": row["signal"], "before": tools_v0.round_sig(row["baseline"]),
+            "after": tools_v0.round_sig(row["value"]), "change": f"{sign}{row['score']:.1f}x" if row["score"] >= 10 else f"{sign}{row['score']:.2f}x"}
 
 
 def top_changes(snap, n=10, include_load=False):
     n = max(1, min(40, int(10 if n is None else n)))
-    rows = [r for r in summary.changes(snap) if include_load is True or str(include_load).lower() == "true" or r["signal"] != "rps"]
+    rows = [r for r in summary.changes(snap) if tools_v0._as_bool(include_load) or r["signal"] != "rps"]
     return {"changes": [_fmt(r) for r in rows[:n]],
             "note": f"change = |after - before| / max(before, small floor); before = {config.BASELINE_S // 60} min before the alert, "
                     f"after = from {config.RAMP_S} s after it; after = 0 can mean the service stopped reporting, not recovery."}
@@ -23,7 +23,7 @@ def top_changes(snap, n=10, include_load=False):
 def service_health(snap, service):
     rows = [r for r in summary.changes(snap) if r["service"] == service]
     if not rows:
-        return {"error": f"no metrics for {service!r}", "valid_services": tools_v0._services(snap)}
+        return {"error": f"no metrics for {service!r}", "valid_services": tools_v0.services(snap)}
     return {"service": service, "signals": [_fmt(r) for r in rows]}
 
 

@@ -67,10 +67,10 @@ def test_search_logs_filters_text_and_severity():
 
 
 def test_epoch_handles_real_log_timestamp_shapes():
-    assert tools._epoch("1970-01-01T00:16:50Z") == 1010.0
-    assert tools._epoch("1970-01-01T00:16:50.5Z") == 1010.5
-    assert tools._epoch("1970-01-01T00:16:50.584123456Z") == 1010.584123456  # 9-digit fraction
-    assert abs(tools._epoch("2026-10-06T21:17:54.584123456Z") - tools._epoch("2026-10-06T21:17:54Z") - 0.584123456) < 1e-3
+    assert tools.epoch("1970-01-01T00:16:50Z") == 1010.0
+    assert tools.epoch("1970-01-01T00:16:50.5Z") == 1010.5
+    assert tools.epoch("1970-01-01T00:16:50.584123456Z") == 1010.584123456  # 9-digit fraction
+    assert abs(tools.epoch("2026-10-06T21:17:54.584123456Z") - tools.epoch("2026-10-06T21:17:54Z") - 0.584123456) < 1e-3
 
 
 def test_bad_arguments_never_raise():

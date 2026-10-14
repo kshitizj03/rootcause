@@ -12,16 +12,16 @@ import re
 import math
 
 from rootcause import config, summary
-from rootcause.tools_v0 import _epoch
+from rootcause.tools_v0 import epoch
 
 
 def _norm(s):
     return re.sub(r"\s+", " ", str(s)).strip().lower()
 
 
-def _t(ts):
+def _epoch_or_none(ts):
     try:
-        return _epoch(ts)
+        return epoch(ts)
     except (ValueError, TypeError, AttributeError):
         return None  # a malformed timestamp: the line doesn't count
 
@@ -66,7 +66,7 @@ def _check(item, snap, rows):
         quote = _norm(item["quote"])
         if len(quote) < 8:
             return False, False, "quote too short to be specific"
-        lines = [(_t(lg["ts"]), _norm(lg["body"])) for lg in snap["logs"] if lg["service"] == item["service"]]
+        lines = [(_epoch_or_none(lg["ts"]), _norm(lg["body"])) for lg in snap["logs"] if lg["service"] == item["service"]]
         lines = [(t, b) for t, b in lines if t is not None and quote in b]
         if not any(t >= t0 for t, _ in lines):
             return False, False, "no such log line in the incident window"
