@@ -162,6 +162,26 @@ def _paired_section(data, solvers):
             *(f"{s}: partial batch ({note})" for s, note in partial.items())]
 
 
+def _step_limit_section(data, solvers):
+    from rootcause.agent import MAX_STEPS  # lazily: the report needs no model client otherwise
+    rows = []
+    for s in solvers:
+        recs = [r for r in data["records"][s] if r["category"] != "control" and "turns" in r]
+        if not recs:
+            continue
+        hit = [r for r in recs if r["turns"] >= MAX_STEPS]
+        free = [r for r in recs if r["turns"] < MAX_STEPS]
+        acc = lambda rs: _f(sum(r["score"]["correct"] for r in rs) / len(rs)) if rs else "-"
+        rows.append([s, str(len(recs)), f"{len(hit)} ({len(hit) / len(recs):.0%})",
+                     f"{sum(r['report']['verdict'] == 'no_incident' for r in hit)} of {len(hit)}", acc(hit), acc(free)])
+    return [f"## Step limit (all split, fault runs)",
+            f"An agent that is still calling tools after {MAX_STEPS} model turns is told to give its final answer. "
+            "This splits each agent's fault runs by whether that happened: how many hit the limit, how many of those then "
+            "answered \"no incident\", and the accuracy (mean over runs, not per scenario) with and without hitting it.",
+            _table(["solver", "fault runs", "hit the limit", "then said no incident", "accuracy when hit",
+                    "accuracy otherwise"], rows) if rows else "No agent runs yet."]
+
+
 def _per_scenario(data, solvers):
     means = {s: _means(data["records"][s]) for s in solvers}
     one = lambda s, sid: f"{_f(means[s][sid][0])} ({means[s][sid][1]} run{'' if means[s][sid][1] == 1 else 's'})" if sid in means[s] else "-"
@@ -297,7 +317,7 @@ def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, 
                               "(neither proves that the incident caused it).",
                               [("grounded", "all incidents", "grounded"), ("distinctive", "all incidents", "distinctive")],
                               skip=_evidence_skip(data)),
-                _paired_section(data, solvers), _cost(data, solvers), _per_scenario(data, solvers), _coverage_section(data, solvers), _provenance(data, solvers), _not_run(data, solvers)]
+                _paired_section(data, solvers), _step_limit_section(data, solvers), _cost(data, solvers), _per_scenario(data, solvers), _coverage_section(data, solvers), _provenance(data, solvers), _not_run(data, solvers)]
     path = out_dir / "report.md"
     path.write_text("\n\n".join("\n\n".join(s) for s in sections) + "\n", encoding="utf-8")
     return path

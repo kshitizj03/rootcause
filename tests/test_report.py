@@ -130,3 +130,23 @@ def test_report_has_a_paired_section_for_solver_pairs_with_records(tmp_path, mon
     sec = md.split("## Paired comparisons")[1].split("\n## ")[0]
     assert "| agent-v1 vs heuristic | 2/2 | 1 / 1 / 0 | +0.50 | n/a (too few incidents or no spread) |" in sec  # no controls
     assert "agent-v0" not in sec  # no records, no row
+
+
+def test_step_limit_section_splits_fault_runs_by_whether_they_hit_the_limit(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "HELDOUT", ())
+    monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario(s, "easy", "x", {}, {}, []) for s in "abcd"]
+                        + [scenarios.Scenario("c0", "control", "x", {}, {}, [])])
+    runs = tmp_path / "runs"
+    for sid, turns, verdict, correct in (("a", 15, "no_incident", 0.0), ("b", 15, "incident", 1.0), ("c", 4, "incident", 1.0),
+                                         ("d", 15, "no_incident", 0.0), ("c0", 15, "no_incident", 1.0)):
+        write(runs, "agent-v1", sid, "control" if sid == "c0" else "easy", 0, correct)
+        f = runs / "agent-v1" / f"{sid}__0.json"
+        r = json.loads(f.read_text())
+        r["turns"], r["report"]["verdict"] = turns, verdict
+        f.write_text(json.dumps(r))
+    write(runs, "heuristic", "a", "easy", 0, 1.0, tokens=False)
+    md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["heuristic", "agent-v1"]).read_text(encoding="utf-8")
+    sec = md.split("## Step limit")[1].split("\n## ")[0]
+    # 4 fault runs (the control is left out); 3 hit the 15-step limit; of those 2 said no incident, 1 was right
+    assert "| agent-v1 | 4 | 3 (75%) | 2 of 3 | 0.33 | 1.00 |" in sec
+    assert "heuristic" not in sec  # no model, no step limit
