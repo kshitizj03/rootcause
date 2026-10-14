@@ -257,7 +257,7 @@ def _chart(figsize, title, xlabel, ylabel, draw, path):
         ax.spines[side].set_color(GRID)
     if ok:
         if figsize[0] >= 8:  # wide grouped bars: legend below the axis, outside the plot
-            ax.legend(frameon=False, fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncols=len(ax.get_legend_handles_labels()[0]))
+            ax.legend(frameon=False, fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncols=min(3, len(ax.get_legend_handles_labels()[0])))
         else:
             ax.legend(frameon=False, fontsize=8, loc="best")
     else:

@@ -14,7 +14,7 @@ def _fmt(row):
 
 def top_changes(snap, n=10, include_load=False):
     n = max(1, min(40, int(10 if n is None else n)))
-    rows = [r for r in summary.changes(snap) if tools_v0._as_bool(include_load) or r["signal"] != "rps"]
+    rows = [r for r in summary.changes(snap) if tools_v0.as_bool(include_load) or r["signal"] != "rps"]
     return {"changes": [_fmt(r) for r in rows[:n]],
             "note": f"change = |after - before| / max(before, small floor); before = {config.BASELINE_S // 60} min before the alert, "
                     f"after = from {config.RAMP_S} s after it; after = 0 can mean the service stopped reporting, not recovery."}

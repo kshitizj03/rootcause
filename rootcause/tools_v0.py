@@ -24,7 +24,7 @@ def _limit(limit, default):
     return max(1, min(200, int(default if limit is None else limit)))  # models often send explicit nulls
 
 
-def _as_bool(x):
+def as_bool(x):
     return x.strip().lower() in ("true", "1", "yes") if isinstance(x, str) else bool(x)
 
 
@@ -62,7 +62,7 @@ def get_metric(snap, service, signal):
 
 
 def search_traces(snap, service, errors_only=False, limit=10, since=None, until=None):
-    limit, errors_only, (lo, hi) = _limit(limit, 10), _as_bool(errors_only), _window(since, until)
+    limit, errors_only, (lo, hi) = _limit(limit, 10), as_bool(errors_only), _window(since, until)
     t0 = snap["meta"]["fault_start"]
     spans = [s for s in snap["spans"] if s["service"] == service and (s["error"] or not errors_only)
              and lo <= s["start_ms"] / 1000 - t0 <= hi]
