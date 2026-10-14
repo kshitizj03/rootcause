@@ -112,7 +112,7 @@ def sanitize_spans(spans, names):
         attrs = {k: v for k, v in sp["attributes"].items() if not k.startswith("feature_flag")}
         events = [e for e in sp["events"] if not e["name"].startswith("feature_flag")]
         sp = _strip_keys(dict(sp, attributes=attrs, events=events), pat)
-        # ponytail: drops whole spans whose remaining content matches; their children lose a parent, fine for diagnosis
+        # Drops whole spans whose remaining content matches; their children lose a parent, which is fine for diagnosis.
         if _matches(sp, pat):
             continue
         kept.append(sp)

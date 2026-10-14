@@ -13,7 +13,7 @@ SOLVER_ORDER = ["heuristic", "agent-v0", "agent-v1", "agent-v1-nopriors", "agent
                 "agent-v0-nemotron", "agent-v1-nemotron", "agent-v1-nemotron-nopriors", "agent-v1-nemotron-vague"]
 # the figures show the heuristic and each model's v0 / v1; ablations are in the tables and paired comparisons only
 FIGURE_SOLVERS = ("heuristic", "agent-v0", "agent-v1", "agent-v0-nemotron", "agent-v1-nemotron")
-# dataviz categorical slots 1-5 (light surface, validated); one fixed colour per solver in both charts
+# categorical palette; one fixed colour per solver in both charts
 COLOURS = {"heuristic": "#2a78d6", "agent-v0": "#eb6834", "agent-v1": "#1baf7a", "agent-v1-nopriors": "#eda100",
            "agent-v1-vague": "#e87ba4", "agent-v0-nemotron": "#b9a6ea", "agent-v1-nemotron": "#7d5ccf"}
 SPLITS = ("all", "tune", "heldout")

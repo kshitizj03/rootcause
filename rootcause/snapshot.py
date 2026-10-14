@@ -96,7 +96,7 @@ def resanitize(path, names, dry_run=False):
         rows = _read_jsonl_gz(path / f"{name}.jsonl.gz")
         kept[name] = _dedupe_logs(clean(rows, names)) if name == "logs" else clean(rows, names)
         counts[name] = (len(rows), len(kept[name]))
-        # ponytail: per-row re-run to find what was dropped (rebuilds the pattern each row); dry-run only
+        # Dry run only: re-runs the filter per row to list what was dropped (rebuilds the pattern each row).
         dropped[name] = [r for r in rows if not clean([r], names)] if dry_run else []
     metrics = json.loads((path / "metrics.json").read_text(encoding="utf-8")) if (path / "metrics.json").exists() else {}
     clean_metrics = sanitize.sanitize_metrics(metrics)

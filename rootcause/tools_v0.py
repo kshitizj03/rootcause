@@ -1,7 +1,8 @@
 """Agent v0 tools: naive, read-only views over one loaded snapshot (meta, metrics, spans, logs only).
 
 Times are seconds relative to the alert (t=0 = meta.fault_start). v0 deliberately has no baseline
-comparison or ranking; the change-aware tools come in week 3 (ablation: naive vs change-aware)."""
+comparison or ranking; the change-aware tools are in tools_v1.py (the v0/v1 comparison is the naive vs change-aware
+ablation)."""
 import json
 from collections import Counter
 from datetime import datetime, timezone

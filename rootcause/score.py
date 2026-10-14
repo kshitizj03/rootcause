@@ -117,7 +117,7 @@ def report_to_dict(r):
 
 
 def score(report, truth):
-    """Spec 8b. truth = truth.json content ({"causes": [{"accept": [...], "fault_type": ...}, ...]})."""
+    """truth = truth.json content ({"causes": [{"accept": [...], "fault_type": ...}, ...]})."""
     abstained = report.verdict == "insufficient_evidence"
     causes = truth["causes"]
     if not causes:  # control
@@ -134,7 +134,8 @@ def score(report, truth):
                 "fault_type_ok": bool(correct) and report.causes[0].fault_type == causes[0]["fault_type"],
                 "false_alarm": False, "abstained": False}
     used, matched = set(), []
-    # ponytail: greedy distinct matching; fault_type_ok is order-dependent when two true causes share a service. Fine for disjoint accept lists; use optimal matching if overlapping scenarios are added.
+    # Greedy distinct matching: fault_type_ok is order-dependent when two true causes share a service. Fine for
+    # disjoint accept lists; switch to optimal matching if overlapping scenarios are added.
     for tc in causes:  # each reported cause may match at most one true cause
         hit = next((i for i, c in enumerate(report.causes) if i not in used and c.service in set(tc["accept"])), None)
         if hit is not None:

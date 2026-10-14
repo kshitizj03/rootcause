@@ -32,22 +32,18 @@ def _write_dirty(state_file, error, t):
 
 def wait_cooldown(now=time.time, sleep=time.sleep, state_file=config.STATE_FILE):
     state_file = Path(state_file)
-    t_now = now()  # Compute once, use for all time calculations
-    remaining = config.COOLDOWN_S  # Default: unknown history = wait full cooldown
+    t_now = now()
+    remaining = config.COOLDOWN_S
 
     if state_file.exists():
         try:
             state = json.loads(state_file.read_text(encoding="utf-8"))
-            # Check if state is dirty (truthy "dirty" field)
             if state.get("dirty"):
                 raise DirtyStateError(f"State is dirty (restore failed): {state.get('error', 'unknown error')}. Run `python -m rootcause reset-flags` to recover.")
-            # Calculate remaining cooldown
             remaining = config.COOLDOWN_S - (t_now - state.get("last_restore", t_now))
         except (json.JSONDecodeError, ValueError, TypeError, AttributeError, UnicodeDecodeError):
-            # Any unreadable state: treat as unknown history
             remaining = config.COOLDOWN_S
 
-    # Sleep only if remaining > 0
     if remaining > 0:
         print(f"  cooling down {remaining / 60:.1f} min so the baseline window is fault-free", flush=True)
         sleep(remaining)
@@ -78,14 +74,11 @@ def record(scenario, names, injector, fetch=backends, now=time.time, sleep=time.
         try:
             injector.restore()
         except Exception as restore_error:
-            # Restore failed: write dirty state and raise RestoreError
             error_msg = f"{type(restore_error).__name__}: {restore_error}"
             try:
                 _write_dirty(state_file, error_msg, now())
             except Exception as write_error:
-                # State file write/mkdir failed: append to message
                 error_msg = f"{error_msg}; state file NOT written: {type(write_error).__name__}: {write_error}"
-            # Build message: restore error + original in-flight error if there was one
             msg = error_msg
             if in_flight:
                 msg = f"{msg}; prior error: {type(in_flight).__name__}: {in_flight}"
@@ -107,26 +100,22 @@ def record_all(scenarios, names, injector, out_dir=config.SNAPSHOTS, **kwargs):
     for i, sc in enumerate(scenarios, 1):
         print(f"[{i}/{len(scenarios)}] {sc.id} ({sc.category})", flush=True)
         summary = None
-        stop = None  # Exception to re-raise after tail
+        stop = None
         try:
             summary = record(sc, names, injector, out_dir=out_dir, **kwargs)
             consecutive_failures = 0
         except DirtyStateError:
-            # Dirty state: stop batch immediately without writing a scenario row
             raise
         except RestoreError as e:
-            # Restore failure: write row and stop batch
             summary = {"scenario": sc.id, "valid": False, "error": str(e)}
             if e.summary:
                 summary["path"] = e.summary["path"]
             stop = e
         except Exception as e:
-            # Other failures: increment counter, create summary
             consecutive_failures += 1
             summary = {"scenario": sc.id, "valid": False, "error": f"{type(e).__name__}: {e}"}
             if consecutive_failures >= 3:
                 stop = RuntimeError(f"Aborting after 3 consecutive failures: {e}")
-        # Shared tail: append, write, print (once per scenario)
         summaries.append(summary)
         write_index_row(out_dir, summary)
         print(f"    -> valid={summary['valid']} {summary.get('error', '')}", flush=True)
