@@ -15,7 +15,7 @@ from pathlib import Path
 
 import torch
 from huggingface_hub import snapshot_download
-from hunch.infer import Hunch
+from hunch.fast import FastHunch
 
 ROOT = Path(__file__).resolve().parents[2]
 IN, OUT = ROOT / ".cache" / "laya" / "inputs.json", ROOT / ".cache" / "hunch" / "predictions.json"
@@ -36,7 +36,9 @@ def request(it):
 
 
 def load(repo, base):
-    h = Hunch.load(snapshot_download(repo), model=base, device="cpu")  # Hunch.load builds fp32 weights
+    # FastHunch reads the state once per request; plain Hunch scores 21 copies of a ~2.7k-token state and overflows
+    # its token budget. Same answers up to rounding (Hunch's scripts/check_fast.py). Hunch.load builds fp32 weights.
+    h = FastHunch.load(snapshot_download(repo), model=base, device="cpu")
     h.scorer.to(torch.bfloat16).to("cuda")
     h.device, h.amp_dtype, h.T = torch.device("cuda"), torch.bfloat16, 1.0
     return h
