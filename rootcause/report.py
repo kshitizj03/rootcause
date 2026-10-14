@@ -19,10 +19,10 @@ COLOURS = {"heuristic": "#2a78d6", "agent-v0": "#eb6834", "agent-v1": "#1baf7a",
 SPLITS = ("all", "tune", "heldout")
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
 NOT_RUN = "not run"
-DISCLOSURE = ("During week-3 development a reviewer viewed v1 tool output on one held-out incident (valkey-cart-paused); "
-              "the incomplete-services list, which no tuning snapshot exercised, was removed before any v1 run; the other "
-              "changes from that commit (stopped service-map edges, the 'after = 0 can mean the service stopped "
-              "reporting' caveat) are each exercised by the tuning snapshot payment-unreachable.")
+DISCLOSURE = ("During agent-v1 development, v1 tool output was viewed on one held-out incident (valkey-cart-paused). "
+              "The one feature it suggested that no tuning snapshot exercised (an incomplete-services list) was removed "
+              "before any v1 run; the other changes from that time (stopped service-map edges, the 'after = 0 can mean "
+              "the service stopped reporting' caveat) are each exercised by the tuning snapshot payment-unreachable.")
 # (a, b): is a better than b? Each is shown only when both have records.
 MIN_PAIRED = 5  # fewer shared incidents than this: no interval
 PAIRS = [("agent-v0", "heuristic"), ("agent-v1", "heuristic"), ("agent-v1", "agent-v0"),
