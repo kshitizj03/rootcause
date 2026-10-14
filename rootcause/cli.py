@@ -278,6 +278,11 @@ def _eval(args):
 
 
 def _eval_traced(args):
+    found = {sid for sid, _, _ in evaluate.targets(args.ids)} if args.ids else set()
+    unknown = [i for i in args.ids if i not in found]
+    if unknown:  # evaluate.run would silently skip them
+        print(f"unknown or unrecorded scenario ids: {sorted(unknown)}")
+        return 2
     name, solve, stop_on = SOLVERS[args.solver]()
     out = evaluate.run(name, solve, runs=args.runs, ids=args.ids or None, stop_on=stop_on)
     print(f"{out['completed']} new runs" + (f"; stopped: {out['stopped']}" if out["stopped"] else ""))

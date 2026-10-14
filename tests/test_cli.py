@@ -479,6 +479,14 @@ def _stub_eval(monkeypatch, run):
     monkeypatch.setattr(evaluate, "format_summary", lambda rows: "TABLE")
 
 
+def test_eval_unknown_or_unrecorded_ids_exit_2_and_run_nothing(monkeypatch, capsys):
+    from rootcause import evaluate
+    _stub_eval(monkeypatch, lambda *a, **k: pytest.fail("must not run"))
+    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [("payment-failure-50", "easy", "p")])
+    assert cli.main(["eval", "heuristic", "payment-failure-50", "payment-failur-50"]) == 2
+    assert "unknown or unrecorded scenario ids: ['payment-failur-50']" in capsys.readouterr().out
+
+
 def test_eval_quota_stop_exits_4_and_says_how_to_resume(monkeypatch, capsys):
     _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 2, "stopped": "QuotaExhausted: daily"})
     assert cli.main(["eval", "agent-v0"]) == 4
