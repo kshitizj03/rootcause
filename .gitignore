@@ -3,8 +3,8 @@
 .cache/
 vendor/
 data/
-runs/
 __pycache__/
 .pytest_cache/
 site/data/
 site/figures/
+*.orig
