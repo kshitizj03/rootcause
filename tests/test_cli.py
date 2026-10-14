@@ -476,7 +476,7 @@ def test_eval_without_tracing_never_imports_the_opentelemetry_module(monkeypatch
     assert cli.main(["eval", "heuristic"]) == 0
 
 
-# --- cleanup: eval exit codes and summary messages ---
+# --- eval exit codes and summary messages ---
 
 def _stub_eval(monkeypatch, run):
     from rootcause import evaluate
@@ -531,7 +531,7 @@ def test_summary_with_no_records_says_so(monkeypatch, capsys, solver):
     assert f"no runs recorded for {solver}" in capsys.readouterr().out
 
 
-# --- final review: one model per eval batch, one SOLVERS table, expected scenario counts ---
+# --- solver table, one model per batch, expected counts ---
 
 def test_eval_agent_pins_the_batch_to_one_model(monkeypatch):
     from rootcause import agent

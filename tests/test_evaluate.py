@@ -100,7 +100,7 @@ def test_summarise_means_and_spread_over_runs(tmp_path):
     assert "| easy |" in evaluate.format_summary(list(rows.values()))
 
 
-# --- cleanup: partial batches, record layout, console-safe table ---
+# --- partial batches, record layout, console-safe table ---
 
 def write_recs(d, recs):
     d.mkdir(exist_ok=True)
@@ -139,7 +139,7 @@ def test_solver_info_cannot_overwrite_record_fields(lib):
     assert rec["seconds"] >= 0 and isinstance(rec["report"], dict) and isinstance(rec["score"], dict) and rec["extra"] == 1
 
 
-# --- final review: scenario-balanced table, run-major order, code version ---
+# --- scenario-balanced table, run-major order, code version ---
 
 def write_scored(d, recs):
     """recs: (scenario, category, run, correct). Other score fields follow from correct."""

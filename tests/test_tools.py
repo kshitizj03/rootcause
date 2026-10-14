@@ -96,7 +96,7 @@ def test_tools_never_touch_answer_files():
     assert "truth" not in src and "validation" not in src and "index.jsonl" not in src
 
 
-# --- cleanup: time windows, text=None, coercions, schema, never-raises ---
+# --- time windows, text=None, coercions, schema, never-raises ---
 
 def spread_logs(n, severity=None):
     return [{"ts": f"1970-01-01T00:{(1000 + i) // 60:02d}:{(1000 + i) % 60:02d}.000Z", "service": "payment", "severity": "INFO",

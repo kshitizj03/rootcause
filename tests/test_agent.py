@@ -102,7 +102,7 @@ def test_bad_tool_arguments_are_reported_to_the_model_not_raised():
     assert report.verdict == "incident" and "error" in info["transcript"][0]["output"]
 
 
-# --- cleanup ---
+# --- retries, parallel tool calls, message history ---
 
 def server_error():
     return openai.InternalServerError("overloaded", response=httpx.Response(503, request=httpx.Request("POST", "http://x")), body=None)
@@ -181,7 +181,7 @@ def test_persistent_empty_choices_falls_back_then_raises_an_api_error():
     assert {r["model"] for r in llm.requests} == set(agent.MODELS)
 
 
-# --- final review: served model, 4xx scored, reusable agent, replay data ---
+# --- served model, client errors, replay data ---
 
 def status_error(cls, code, text="bad"):
     return cls(text, response=httpx.Response(code, request=httpx.Request("POST", "http://x")), body=None)
