@@ -20,7 +20,7 @@ def test_changes_rank_relative_rise_with_floors():
 def test_memory_uses_the_window_peak():
     pts = series(60.0, 60.0)
     pts[-5][1] = 500.0  # one sawtooth peak inside the fault window
-    row = next(r for r in summary.changes(snap({"mem_mb": {"recommendation": pts}})))
+    row = summary.changes(snap({"mem_mb": {"recommendation": pts}}))[0]
     assert row["value"] == 500.0 and row["fault_type"] == "resource"
 
 

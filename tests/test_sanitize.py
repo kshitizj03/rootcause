@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from helpers import FLAGS, flat_log, flat_span
 from rootcause import sanitize, snapshot
 
@@ -86,19 +88,14 @@ def test_legacy_redaction_stubs_are_dropped_and_flagged():
 
 def test_scan_snapshot_raises_filenotfound_for_missing_files(tmp_path):
     (tmp_path / "metrics.json").write_text(json.dumps({}))
-    # logs.jsonl.gz is missing
     (tmp_path / "spans.jsonl.gz").write_text("")
-    try:
+    with pytest.raises(FileNotFoundError, match="logs.jsonl.gz"):
         sanitize.scan_snapshot(tmp_path, NAMES)
-        assert False, "Should have raised FileNotFoundError"
-    except FileNotFoundError as e:
-        assert "logs.jsonl.gz" in str(e)
 
 
 def test_find_leaks_separator_tolerant_flag_matching():
-    text = "kafka_queue_problems kafka-queue-problems kafka.queue.problems KAFKA_QUEUE_PROBLEMS"
-    hits = sanitize.find_leaks(text, NAMES)
-    assert any("kafka" in h for h in hits), f"Should detect kafka variations in {hits}"
+    for variant in ("kafka_queue_problems", "kafka-queue-problems", "kafka.queue.problems", "KAFKA_QUEUE_PROBLEMS"):
+        assert sanitize.find_leaks(variant, NAMES) == [variant.lower()], variant
     # Spaces are NOT separators in flag patterns - ordinary English shouldn't match
     text_with_spaces = "kafka queue problems some payment failure text"
     hits_spaces = sanitize.find_leaks(text_with_spaces, NAMES)

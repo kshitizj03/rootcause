@@ -419,10 +419,9 @@ def test_resanitize_write_failure_leaves_originals_untouched(resan, monkeypatch)
     assert sorted(p.name for p in resan.iterdir()) == sorted(["meta.json", "truth.json", "metrics.json"] + list(before))
 
 
-def test_resanitize_bad_snapshot_is_reported_skipped_and_exit_nonzero(resan, snaps, capsys, monkeypatch):
+def test_resanitize_bad_snapshot_is_reported_skipped_and_exit_nonzero(resan, snaps, capsys):
     good = _leaky_snapshot(snaps, "incident__y")
     (resan / "logs.jsonl.gz").write_bytes(b"not gzip")
-    monkeypatch.setattr(scenarios, "load_all", lambda: FIXED)
     _index(snaps, {"scenario": "s1", "path": str(resan), "valid": True}, {"scenario": "s2", "path": str(good), "valid": True})
     spans_before = (resan / "spans.jsonl.gz").read_bytes()
     assert cli.main(["resanitize"]) == 1
@@ -441,13 +440,17 @@ def test_eval_and_summary_commands_parse():
     assert p.parse_args(["summary", "heuristic"]).solver == "heuristic"
 
 
-def test_eval_heuristic_runs_and_prints_summary(monkeypatch, capsys):
+def _stub_eval(monkeypatch, run):
     from rootcause import evaluate
-    calls = {}
-    monkeypatch.setattr(evaluate, "run", lambda name, solve, runs, ids, stop_on=(): calls.update(name=name, runs=runs, ids=ids) or {"completed": 3, "stopped": None})
+    monkeypatch.setattr(evaluate, "run", run)
     monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: [{"category": "easy"}])
     monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
     monkeypatch.setattr(evaluate, "format_summary", lambda rows: "TABLE")
+
+
+def test_eval_heuristic_runs_and_prints_summary(monkeypatch, capsys):
+    calls = {}
+    _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): calls.update(name=name, runs=runs, ids=ids) or {"completed": 3, "stopped": None})
     assert cli.main(["eval", "heuristic"]) == 0
     assert calls == {"name": "heuristic", "runs": 1, "ids": None}
     assert "TABLE" in capsys.readouterr().out
@@ -463,14 +466,6 @@ def test_eval_without_tracing_never_imports_the_opentelemetry_module(monkeypatch
 
 
 # --- eval exit codes and summary messages ---
-
-def _stub_eval(monkeypatch, run):
-    from rootcause import evaluate
-    monkeypatch.setattr(evaluate, "run", run)
-    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: [{"category": "easy"}])
-    monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
-    monkeypatch.setattr(evaluate, "format_summary", lambda rows: "TABLE")
-
 
 def test_eval_unknown_or_unrecorded_ids_exit_2_and_run_nothing(monkeypatch, capsys):
     from rootcause import evaluate
@@ -529,7 +524,7 @@ def test_eval_agent_pins_the_batch_to_one_model(monkeypatch):
     assert [a.kw for a in RecordingAgent.instances] == [{"models": agent.MODELS[:1], "attempts": 5}]
 
 
-def test_eval_and_summary_resolve_solvers_through_the_solvers_table(monkeypatch, capsys):
+def test_eval_and_summary_resolve_solvers_through_the_solvers_table(monkeypatch):
     from rootcause import evaluate
     seen = {}
     solve = lambda snap: None

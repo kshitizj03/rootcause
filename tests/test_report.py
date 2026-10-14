@@ -28,7 +28,7 @@ def test_build_writes_markdown_and_figures_and_marks_missing_solvers(tmp_path, m
     for heading in ("Accuracy by category", "False alarms", "Evidence", "Cost", "Per-scenario", "coverage", "Not run"):
         assert heading.lower() in md.lower()
     assert "agent-v1-vague" in md.split("Not run")[1] and "20 requests" in md
-    assert "| c* |" in md or "c*" in md  # held-out scenarios are marked
+    assert "| c* | control | 1.00 (1 run) | 1.00 (2 runs) | not run |" in md  # held-out scenarios are marked
     assert (tmp_path / "out" / "figures" / "accuracy_by_category.png").stat().st_size > 1000
     assert (tmp_path / "out" / "figures" / "coverage.png").stat().st_size > 1000
 

@@ -35,12 +35,9 @@ def failing_prom_range(*args):
 
 def test_record_injects_waits_captures_and_restores(tmp_path):
     clock, inj = Clock(), FakeInjector()
-    # Set up state to skip cooldown (mark as restored in the past, beyond cooldown window)
-    harness.mark_restored(clock.t - config.COOLDOWN_S - 1, tmp_path / "state.json")
-    clock.sleeps.clear()  # Reset sleep tracking
+    harness.mark_restored(clock.t - config.COOLDOWN_S - 1, tmp_path / "state.json")  # restored long enough ago: no cooldown
     out = run(tmp_path, clock, inj)
     assert inj.calls == ["apply", "restore"]
-    # settle_s + INGEST_LAG_S (no cooldown since we primed the state far enough in past)
     assert clock.sleeps == [SCENARIO.settle_s, config.INGEST_LAG_S]
     assert out["valid"] is True
     assert json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))["last_restore"] == clock.t
@@ -67,7 +64,7 @@ class SlowInjector(FakeInjector):
         self.clock.t += self.delay
 
 
-def test_t_inject_taken_after_apply_and_t_end_is_computed(tmp_path):
+def test_t_inject_taken_after_apply_and_t_end_is_computed(tmp_path, monkeypatch):
     """meta timing must not encode how long apply took: t_end == t_inject + settle_s exactly, t_inject after apply."""
     clock = Clock()
     harness.mark_restored(clock.t - config.COOLDOWN_S - 1, tmp_path / "state.json")
@@ -78,13 +75,9 @@ def test_t_inject_taken_after_apply_and_t_end_is_computed(tmp_path):
         return {"scenario": scenario.id, "path": str(out_dir / "incident__123"), "valid": True,
                 "results": [], "leaks": {}}
 
-    original_capture = snapshot.capture
-    snapshot.capture = recording_capture
-    try:
-        harness.record(SCENARIO, NAMES, SlowInjector(clock, 7.3), fetch=fake_fetch(t_inject=clock.t), now=clock.now,
-                       sleep=clock.sleep, state_file=tmp_path / "state.json", out_dir=tmp_path / "snaps")
-    finally:
-        snapshot.capture = original_capture
+    monkeypatch.setattr(snapshot, "capture", recording_capture)
+    harness.record(SCENARIO, NAMES, SlowInjector(clock, 7.3), fetch=fake_fetch(t_inject=clock.t), now=clock.now,
+                   sleep=clock.sleep, state_file=tmp_path / "state.json", out_dir=tmp_path / "snaps")
     assert seen["t_inject"] == start + 7.3                         # after apply returned
     assert seen["t_end"] == seen["t_inject"] + SCENARIO.settle_s   # computed, exactly
     assert seen["now"] == seen["t_end"] + config.INGEST_LAG_S      # still sleeps settle + ingest lag before capture
@@ -128,7 +121,6 @@ def test_restore_failure_writes_dirty_state_and_raises_restore_error(tmp_path):
     clock, inj = Clock(100_000.0), FakeInjector(fail_restore=True)
     with pytest.raises(harness.RestoreError, match="restore failed"):
         run(tmp_path, clock, inj)
-    # State should be dirty, not marked clean
     state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
     assert state.get("dirty") is True
     assert "error" in state
@@ -150,7 +142,6 @@ def test_restore_failure_summary_has_path_if_capture_succeeded(tmp_path):
     clock, inj = Clock(), FakeInjector(fail_restore=True)
     with pytest.raises(harness.RestoreError) as exc_info:
         run(tmp_path, clock, inj)
-    # The summary should be available on the exception
     assert exc_info.value.summary is not None
     assert "path" in exc_info.value.summary
 
@@ -215,7 +206,6 @@ def test_record_all_continues_after_non_restore_failure_and_writes_index(tmp_pat
     clock = Clock()
     bad = Scenario(id="bad", category="easy", alert="x", inject={"flags": {"adFailure": "on"}},
                    truth=SCENARIO.truth, checks=SCENARIO.checks)
-    # Use an injector that fails only on injection with "adFailure" key
     class SelectiveFailInjector(FakeInjector):
         def apply(self, injection):
             self.calls.append("apply")
@@ -231,7 +221,6 @@ def test_record_all_continues_after_non_restore_failure_and_writes_index(tmp_pat
     assert summaries[1]["valid"] is True
     lines = (tmp_path / "snaps" / "index.jsonl").read_text().splitlines()
     assert len(lines) == 2
-    # Parse lines to verify format
     row0 = json.loads(lines[0])
     assert row0["scenario"] == "bad" and "error" in row0 and "path" not in row0 and "results" not in row0
     row1 = json.loads(lines[1])
@@ -251,10 +240,8 @@ def test_record_all_aborts_after_3_consecutive_failures(tmp_path):
         harness.record_all(scenarios, NAMES, inj, fetch=fake_fetch(t_inject=clock.t),
                           now=clock.now, sleep=clock.sleep, state_file=tmp_path / "state.json",
                           out_dir=tmp_path / "snaps")
-    # 3 scenarios should have rows (the 3 failures before abort); 4th is not attempted
     lines = (tmp_path / "snaps" / "index.jsonl").read_text().splitlines()
     assert len(lines) == 3
-    # Last row should be the 3rd failure
     assert json.loads(lines[2])["scenario"] == "bad2"
 
 
@@ -268,7 +255,6 @@ def test_record_all_restore_error_stops_batch(tmp_path):
         harness.record_all([bad, SCENARIO], NAMES, inj, fetch=fake_fetch(t_inject=clock.t),
                           now=clock.now, sleep=clock.sleep, state_file=tmp_path / "state.json",
                           out_dir=tmp_path / "snaps")
-    # Only first scenario should have row; second was never injected
     lines = (tmp_path / "snaps" / "index.jsonl").read_text().splitlines()
     assert len(lines) == 1
     row = json.loads(lines[0])
@@ -284,7 +270,6 @@ def test_record_all_dirty_state_stops_batch_without_row(tmp_path):
         harness.record_all([SCENARIO], NAMES, FakeInjector(), fetch=fake_fetch(t_inject=clock.t),
                           now=clock.now, sleep=clock.sleep, state_file=state_file,
                           out_dir=tmp_path / "snaps")
-    # No scenario row written (index.jsonl doesn't exist)
     assert not (tmp_path / "snaps" / "index.jsonl").exists()
 
 
@@ -292,9 +277,7 @@ def test_index_jsonl_survives_prior_lines(tmp_path):
     """Pre-existing lines in index.jsonl are preserved when appending."""
     index_file = tmp_path / "snaps" / "index.jsonl"
     index_file.parent.mkdir(parents=True, exist_ok=True)
-    # Write a pre-existing line
     index_file.write_text('{"scenario": "old", "valid": true}\n', encoding="utf-8")
-    # Now run record_all
     clock = Clock()
     harness.record_all([SCENARIO], NAMES, FakeInjector(), fetch=fake_fetch(t_inject=clock.t),
                       now=clock.now, sleep=clock.sleep, state_file=tmp_path / "state.json",

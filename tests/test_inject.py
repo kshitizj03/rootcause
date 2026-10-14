@@ -1,7 +1,5 @@
 import json
 import shutil
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -82,138 +80,70 @@ def test_restore_runs_every_undo_even_if_one_fails(flags_file):
     assert flags_file.read_text() == original
 
 
-def test_leftover_backup_resets_file_to_pristine_before_applying(flags_file):
+@pytest.mark.parametrize("payload", [{"flags": {"adHighCpu": "on"}}, {"docker": [{"action": "pause", "container": "valkey-cart"}]}, {}],
+                         ids=["flags", "docker-only", "empty"])
+def test_leftover_backup_resets_file_to_pristine_before_applying(flags_file, payload):
+    """A backup left by a crashed run means the file may still hold that run's fault: apply starts from the backup."""
     pristine = flags_file.read_text(encoding="utf-8")
     backup = flags_file.with_name(flags_file.name + ".orig")
     shutil.copy(flags_file, backup)
-
-    # Corrupt the flags file (simulate crashed run with old fault)
     cfg = json.loads(pristine)
     cfg["flags"]["paymentFailure"]["defaultVariant"] = "50%"
     flags_file.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
     inj = Injector(flags_file=flags_file, run=lambda cmd: None)
-    inj.apply({"flags": {"adHighCpu": "on"}})
+    inj.apply(payload)
 
     flags = json.loads(flags_file.read_text(encoding="utf-8"))["flags"]
-    # paymentFailure should be reset to pristine (off), not kept at 50%
     assert flags["paymentFailure"]["defaultVariant"] == "off"
-    assert flags["adHighCpu"]["defaultVariant"] == "on"
-
+    assert all(flags[k]["defaultVariant"] == v for k, v in payload.get("flags", {}).items())
     inj.restore()
     assert flags_file.read_text(encoding="utf-8") == pristine
     assert not backup.exists()
 
 
-def test_file_restore_error_does_not_block_docker_undos():
-    with tempfile.TemporaryDirectory() as tmp:
-        flags_file = Path(tmp) / "demo.flagd.json"
-        shutil.copy(FLAGS, flags_file)
+def test_file_restore_error_does_not_block_docker_undos(flags_file):
+    calls = []
+    inj = Injector(flags_file=flags_file, run=calls.append)
+    inj.apply({"flags": {"adHighCpu": "on"},
+               "docker": [{"action": "pause", "container": "valkey-cart"}]})
 
-        calls = []
-        inj = Injector(flags_file=flags_file, run=calls.append)
-        # Apply both flags and docker so that backup is created
+    with patch("rootcause.inject.shutil.copy", side_effect=PermissionError("access denied")):
+        with pytest.raises(RuntimeError, match="file restore"):
+            inj.restore()
+    assert ["docker", "unpause", "valkey-cart"] in calls
+
+
+def test_unknown_docker_action_rejected_before_any_write(flags_file):
+    original = flags_file.read_text(encoding="utf-8")
+    calls = []
+    inj = Injector(flags_file=flags_file, run=calls.append)
+    with pytest.raises(ValueError):
         inj.apply({"flags": {"adHighCpu": "on"},
-                   "docker": [{"action": "pause", "container": "valkey-cart"}]})
-
-        # Patch shutil.copy to raise PermissionError during restore
-        with patch("rootcause.inject.shutil.copy", side_effect=PermissionError("access denied")):
-            with pytest.raises(RuntimeError) as exc_info:
-                inj.restore()
-
-            # Docker undo should still have been attempted
-            assert ["docker", "unpause", "valkey-cart"] in calls
-            # Error should mention the file restore error
-            assert "file restore" in str(exc_info.value)
+                   "docker": [{"action": "unknown_action", "container": "valkey-cart"}]})
+    assert flags_file.read_text(encoding="utf-8") == original
+    assert not flags_file.with_name(flags_file.name + ".orig").exists()
+    assert calls == []
 
 
-def test_unknown_docker_action_rejected_before_any_write():
-    with tempfile.TemporaryDirectory() as tmp:
-        flags_file = Path(tmp) / "demo.flagd.json"
-        shutil.copy(FLAGS, flags_file)
-        original = flags_file.read_text(encoding="utf-8")
-
-        calls = []
-        inj = Injector(flags_file=flags_file, run=calls.append)
-
-        with pytest.raises(ValueError):
-            inj.apply({"flags": {"adHighCpu": "on"},
-                      "docker": [{"action": "unknown_action", "container": "valkey-cart"}]})
-
-        # File should not be modified
-        assert flags_file.read_text(encoding="utf-8") == original
-        # No .orig should be created
-        assert not flags_file.with_name(flags_file.name + ".orig").exists()
-        # Runner should never have been called
-        assert len(calls) == 0
-
-
-def test_partial_docker_failure_during_apply_undoes_prior_action_only():
-    with tempfile.TemporaryDirectory() as tmp:
-        flags_file = Path(tmp) / "demo.flagd.json"
-        shutil.copy(FLAGS, flags_file)
-        pristine = flags_file.read_text(encoding="utf-8")
-
-        calls = []
-
-        def fail(cmd):
-            if cmd[1] == "update" and cmd[3] == "0.05":
-                raise RuntimeError("cpu update failed")
-
-        inj = Injector(flags_file=flags_file, run=fake_run(calls, fail))
-
-        # Second docker action should fail during apply
-        with pytest.raises(RuntimeError):
-            inj.apply({"docker": [{"action": "pause", "container": "valkey-cart"},
-                                  {"action": "cpus", "container": "currency", "value": 0.05}]})
-
-        # First action was applied but second failed
-        assert ["docker", "pause", "valkey-cart"] in calls
-
-        # Now restore should undo just the first action
-        inj.restore()
-        assert ["docker", "unpause", "valkey-cart"] in calls
-        assert not any(c[1] == "update" and c[3] == "16" for c in calls)  # the failed cpus action has nothing to undo
-        # File should be pristine (no flags were changed)
-        assert flags_file.read_text(encoding="utf-8") == pristine
-
-
-def test_leftover_backup_reset_on_docker_only_apply(flags_file):
-    """Docker-only apply should restore from backup if it exists."""
+def test_partial_docker_failure_during_apply_undoes_prior_action_only(flags_file):
     pristine = flags_file.read_text(encoding="utf-8")
-    backup = flags_file.with_name(flags_file.name + ".orig")
-    shutil.copy(flags_file, backup)
+    calls = []
 
-    # Corrupt the flags file (simulate crashed run with old fault)
-    cfg = json.loads(pristine)
-    cfg["flags"]["paymentFailure"]["defaultVariant"] = "50%"
-    flags_file.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    def fail(cmd):
+        if cmd[1] == "update" and cmd[3] == "0.05":
+            raise RuntimeError("cpu update failed")
 
-    # Docker-only apply should reset file to pristine
-    inj = Injector(flags_file=flags_file, run=lambda cmd: None)
-    inj.apply({"docker": [{"action": "pause", "container": "valkey-cart"}]})
+    inj = Injector(flags_file=flags_file, run=fake_run(calls, fail))
+    with pytest.raises(RuntimeError):
+        inj.apply({"docker": [{"action": "pause", "container": "valkey-cart"},
+                              {"action": "cpus", "container": "currency", "value": 0.05}]})
+    assert ["docker", "pause", "valkey-cart"] in calls
 
-    flags = json.loads(flags_file.read_text(encoding="utf-8"))["flags"]
-    assert flags["paymentFailure"]["defaultVariant"] == "off"
-
-
-def test_leftover_backup_reset_on_empty_apply(flags_file):
-    """Empty apply should restore from backup if it exists."""
-    pristine = flags_file.read_text(encoding="utf-8")
-    backup = flags_file.with_name(flags_file.name + ".orig")
-    shutil.copy(flags_file, backup)
-
-    # Corrupt the flags file (simulate crashed run with old fault)
-    cfg = json.loads(pristine)
-    cfg["flags"]["paymentFailure"]["defaultVariant"] = "50%"
-    flags_file.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
-
-    # Empty apply should reset file to pristine
-    inj = Injector(flags_file=flags_file, run=lambda cmd: None)
-    inj.apply({})
-
-    flags = json.loads(flags_file.read_text(encoding="utf-8"))["flags"]
-    assert flags["paymentFailure"]["defaultVariant"] == "off"
+    inj.restore()
+    assert ["docker", "unpause", "valkey-cart"] in calls
+    assert not any(c[1] == "update" and c[3] == "16" for c in calls)  # the failed cpus action has nothing to undo
+    assert flags_file.read_text(encoding="utf-8") == pristine
 
 
 def test_cpus_action_without_value_rejected_upfront(flags_file):
