@@ -84,6 +84,9 @@ def validate(s, variants, targeting_errs=None):
             errs.append(f"unknown check target {chk.get('service')}")
         if not any(k in chk for k in ("at_least", "at_most", "ratio_at_least")):
             errs.append(f"check without a threshold: {chk}")
+        if "ratio_at_least" in chk and chk.get("signal") in signals.SIGNALS and chk["signal"] not in signals.FLOORS:
+            errs.append(f"ratio_at_least is not supported on {chk['signal']} (no ratio floor in signals.FLOORS); "
+                        "use at_least/at_most, or the restarts signal for uptime")
         # Validate stat if present
         if "stat" in chk and chk["stat"] not in ("mean", "max"):
             errs.append(f"stat must be 'mean' or 'max', got {chk['stat']!r}")

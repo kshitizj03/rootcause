@@ -99,6 +99,12 @@ def test_alert_leak_checks_spaced_and_plural_forms():
     assert any("names root cause" in e for e in errs), f"Expected root cause for 'recommendations', got: {errs}"
 
 
+def test_ratio_check_on_a_signal_without_a_floor_is_rejected():
+    errs = scenarios.validate(make(checks=[{"service": "payment", "signal": "uptime_s", "ratio_at_least": 2}]), VARIANTS)
+    assert any("ratio_at_least is not supported on uptime_s" in e for e in errs)
+    assert scenarios.validate(make(checks=[{"service": "payment", "signal": "restarts", "ratio_at_least": 2}]), VARIANTS) == []
+
+
 def test_validate_stat_must_be_mean_or_max():
     """Signal checks with stat must have valid value: mean or max."""
     errs = scenarios.validate(make(checks=[{"service": "payment", "signal": "p95_ms", "stat": "median", "at_least": 100}]), VARIANTS)
