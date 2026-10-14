@@ -27,7 +27,7 @@ class Report:
 _EVIDENCE_FIELDS = {"metric": ("service", "signal"), "trace": ("trace_id",), "log": ("service", "quote")}
 
 
-def _service(s):
+def _normalise_service(s):
     return re.sub(r"[\s_]+", "-", s.strip().lower())
 
 
@@ -44,9 +44,9 @@ def _evidence_item(e):
         return {"kind": "text", "text": json.dumps(e, default=str)[:MAX_TEXT]}
     item = {"kind": kind, **{f: e[f].strip() for f in need}}
     if "service" in item:
-        item["service"] = _service(item["service"])
+        item["service"] = _normalise_service(item["service"])
     if kind == "trace":
-        item["service"] = _service(e["service"]) if e.get("service") is not None else None
+        item["service"] = _normalise_service(e["service"]) if e.get("service") is not None else None
     if kind in ("metric", "trace"):
         item["claim"] = str(e.get("claim", ""))[:MAX_TEXT]
     if kind == "log":
@@ -80,7 +80,7 @@ def make_report(d):
             service = c.get("service")
             if not isinstance(service, str):
                 raise ValueError("cause service must be a non-empty string")
-            service = _service(service)
+            service = _normalise_service(service)
             fault_type = str(c.get("fault_type", "")).strip().lower()
             if not service:
                 raise ValueError("cause service must be a non-empty string")
