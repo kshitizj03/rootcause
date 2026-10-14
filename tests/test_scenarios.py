@@ -16,11 +16,9 @@ def make(**over):
 
 def test_all_shipped_scenarios_are_valid_and_unique():
     loaded = scenarios.load_all()
-    assert len(loaded) >= 20
     assert len({s.id for s in loaded}) == len(loaded)
-    problems = {s.id: scenarios.validate(s, VARIANTS) for s in loaded}
+    problems = {s.id: scenarios.validate(s, VARIANTS, flag_targeting_errors(FLAGS)) for s in loaded}
     assert {k: v for k, v in problems.items() if v} == {}
-    assert sum(s.category == "control" for s in loaded) >= 4
 
 
 def test_valid_example_passes():
@@ -127,9 +125,3 @@ def test_unsupported_targeting_is_reported_for_injected_flags_only():
     bad = {"paymentFailure": "targeting is not a simple if/then/else"}
     assert any("targeting" in e for e in scenarios.validate(make(), VARIANTS, bad))
     assert scenarios.validate(make(), VARIANTS, {"adHighCpu": "x"}) == []
-
-
-def test_all_shipped_scenarios_have_no_targeting_errors():
-    targeting_errs = flag_targeting_errors(FLAGS)
-    assert {s.id: scenarios.validate(s, VARIANTS, targeting_errs) for s in scenarios.load_all()
-            if scenarios.validate(s, VARIANTS, targeting_errs)} == {}

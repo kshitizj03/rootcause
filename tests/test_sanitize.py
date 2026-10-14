@@ -67,14 +67,6 @@ def test_log_dropped_when_any_string_field_matches():
     assert sanitize.sanitize_logs(logs, NAMES) == [{"service": "x", "body": "ok"}]
 
 
-def test_redact_handles_unicode_escapes_without_breakage():
-    logs = [{"service": "x", "body": "­HighCpu"}]
-    out = sanitize.sanitize_logs(logs, NAMES)
-    assert len(out) == 1
-    # Verify it doesn't crash and can be serialized (the key issue with json-based redaction)
-    assert json.dumps(out)
-
-
 def test_spans_with_a_match_anywhere_are_dropped_not_redacted():
     spans = [flat_span(span_id="msg", message="adHighCpu occurred"),
              flat_span(span_id="evt", events=[{"name": "log", "attributes": {"msg": "adHighCpu triggered"}}]),

@@ -89,7 +89,7 @@ def test_capture_empty_spans_and_logs(tmp_path):
 
 
 def test_hidden_services_never_queried(tmp_path):
-    """Ensure flagd and flagd-ui are never queried for spans or logs."""
+    """Hidden services (flagd, flagd-ui, load-generator) are never queried for spans or logs, in either window."""
     calls = {"jaeger_raw": [], "os_logs": []}
 
     def recording_fetch():
@@ -111,7 +111,7 @@ def test_hidden_services_never_queried(tmp_path):
                                 inject={}, truth={"causes": []}, checks=[])
     snapshot.capture(control_scenario, T_INJECT, T_END, NAMES, fetch=recording_fetch(), out_dir=tmp_path)
 
-    # Verify flagd and flagd-ui never appear in queries
+    assert calls["jaeger_raw"] and calls["os_logs"]
     assert "flagd" not in calls["jaeger_raw"]
     assert "flagd-ui" not in calls["jaeger_raw"]
     assert "load-generator" not in calls["jaeger_raw"]
@@ -159,17 +159,6 @@ def test_capture_fetches_pre_fault_and_fault_windows_per_service(tmp_path):
     assert {s["span_id"].split("-")[1] for s in cart_spans} == {str(since), str(T_INJECT)}
     assert sum(l["body"].startswith("pre") for l in snap["logs"]) == len(config.KNOWN_TARGETS) * config.LOGS_PER_SERVICE
     assert sum(l["body"].startswith("fault") for l in snap["logs"]) == len(config.KNOWN_TARGETS) * config.LOGS_PER_SERVICE
-
-
-def test_hidden_services_not_queried_in_either_window(tmp_path):
-    calls = []
-    fetch = SimpleNamespace(
-        prom_range=lambda q, s, e, step: [],
-        jaeger_raw=lambda service, s, e, n: calls.append(service) or {"result": {"resourceSpans": []}},
-        os_logs=lambda q, s, e, n: calls.append(q) or [])
-    control = Scenario(id="control-test", category="control", alert="Baseline.", inject={}, truth={"causes": []}, checks=[])
-    snapshot.capture(control, T_INJECT, T_END, NAMES, fetch=fetch, out_dir=tmp_path)
-    assert calls and not any("flagd" in c for c in calls)
 
 
 def test_validate_snapshot_rescores_stored_metrics_against_changed_checks(tmp_path):
