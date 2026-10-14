@@ -222,8 +222,15 @@ def rec(monkeypatch):
 
 def test_record_unknown_or_missing_ids_exit_2(rec, capsys):
     assert cli.main(["record", "nope"]) == 2
+    assert "unknown scenario ids: ['nope']" in capsys.readouterr().out
     assert cli.main(["record"]) == 2
+    assert "give scenario ids or --all" in capsys.readouterr().out
     assert rec == []
+
+
+def test_cli_solver_keys_are_the_reported_solvers():
+    from rootcause import evaluate
+    assert set(cli.SOLVERS) == {s for s in evaluate.SOLVER_ORDER if not s.startswith(("laya-", "hunch-"))}
 
 
 def test_record_validation_failure_exit_2_and_nothing_recorded(rec, monkeypatch, capsys):

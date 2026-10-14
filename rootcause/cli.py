@@ -7,10 +7,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-try:
-    from openai import OpenAIError  # the Gemini client's base error; the CLI still works without openai installed
-except ImportError:
-    OpenAIError = ()  # `except ()` catches nothing
+from openai import OpenAIError  # the model clients' base error
 
 from rootcause import config, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot, stack
 
@@ -41,11 +38,15 @@ def _agent_v1_nopriors_solver():
     return "agent-v1-nopriors", _v1_agent(agent.SYSTEM_V1_NOPRIORS, "agent-v1-nopriors").solve, (agent.QuotaExhausted,)
 
 
+def _vague(solve):
+    """The same solver, shown agent.VAGUE_ALERT instead of the scenario's alert."""
+    from rootcause import agent
+    return lambda snap: solve({**snap, "meta": {**snap["meta"], "alert": agent.VAGUE_ALERT}})
+
+
 def _agent_v1_vague_solver():
     from rootcause import agent
-    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-vague")
-    solve = lambda snap: a.solve({**snap, "meta": {**snap["meta"], "alert": agent.VAGUE_ALERT}})
-    return "agent-v1-vague", solve, (agent.QuotaExhausted,)
+    return "agent-v1-vague", _vague(_v1_agent(agent.SYSTEM_V1, "agent-v1-vague").solve), (agent.QuotaExhausted,)
 
 
 def _nemotron_kwargs():
@@ -72,8 +73,7 @@ def _agent_v1_nemotron_nopriors_solver():
 def _agent_v1_nemotron_vague_solver():
     from rootcause import agent
     a = _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron-vague", **_nemotron_kwargs())
-    solve = lambda snap: a.solve({**snap, "meta": {**snap["meta"], "alert": agent.VAGUE_ALERT}})
-    return "agent-v1-nemotron-vague", solve, (agent.QuotaExhausted,)
+    return "agent-v1-nemotron-vague", _vague(a.solve), (agent.QuotaExhausted,)
 
 
 SOLVERS = {"heuristic": _heuristic_solver, "agent-v0": _agent_v0_solver,
@@ -184,9 +184,12 @@ def _needs_reset():
 def _record(args):
     chosen = scenarios.load_all()
     if not args.all:
+        if not args.ids:
+            print("give scenario ids or --all")
+            return 2
         unknown = set(args.ids) - {s.id for s in chosen}
-        if unknown or not args.ids:
-            print(f"unknown or missing scenario ids: {sorted(unknown)}")
+        if unknown:
+            print(f"unknown scenario ids: {sorted(unknown)}")
             return 2
         chosen = [s for s in chosen if s.id in args.ids]
     variants = inject.flag_variants()
