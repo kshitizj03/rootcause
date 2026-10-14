@@ -17,7 +17,7 @@ def _heuristic_solver():
 
 
 def _agent_v0_solver():
-    from rootcause import agent  # imported lazily: only the agent needs the Gemini client
+    from rootcause import agent  # imported lazily: only the agents need it (and OpenTelemetry)
     # one model per batch (and patient retries, since 503 overloads are common): a per-day quota stops the run (resume tomorrow) instead of silently mixing models in the table
     return agent.NAME, agent.Agent(models=agent.MODELS[:1], attempts=5).solve, (agent.QuotaExhausted,)
 
