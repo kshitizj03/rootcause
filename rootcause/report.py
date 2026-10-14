@@ -9,9 +9,13 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from rootcause import config, evaluate, scenarios  # noqa: E402
 
-SOLVER_ORDER = ["heuristic", "agent-v0", "agent-v1", "agent-v1-nopriors", "agent-v1-vague", "agent-v1-nemotron"]
+SOLVER_ORDER = ["heuristic", "agent-v0", "agent-v1", "agent-v1-nopriors", "agent-v1-vague",
+                "agent-v0-nemotron", "agent-v1-nemotron", "agent-v1-nemotron-nopriors", "agent-v1-nemotron-vague"]
+# the figures show the heuristic and each model's v0 / v1; ablations are in the tables and paired comparisons only
+FIGURE_SOLVERS = ("heuristic", "agent-v0", "agent-v1", "agent-v0-nemotron", "agent-v1-nemotron")
 # dataviz categorical slots 1-5 (light surface, validated); one fixed colour per solver in both charts
-COLOURS = dict(zip(SOLVER_ORDER, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#7d5ccf"]))
+COLOURS = {"heuristic": "#2a78d6", "agent-v0": "#eb6834", "agent-v1": "#1baf7a", "agent-v1-nopriors": "#eda100",
+           "agent-v1-vague": "#e87ba4", "agent-v0-nemotron": "#b9a6ea", "agent-v1-nemotron": "#7d5ccf"}
 SPLITS = ("all", "tune", "heldout")
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
 NOT_RUN = "not run"
@@ -23,7 +27,8 @@ DISCLOSURE = ("During week-3 development a reviewer viewed v1 tool output on one
 MIN_PAIRED = 5  # fewer shared incidents than this: no interval
 PAIRS = [("agent-v0", "heuristic"), ("agent-v1", "heuristic"), ("agent-v1", "agent-v0"),
          ("agent-v1-nopriors", "agent-v1"), ("agent-v1-vague", "agent-v1"), ("agent-v1-nemotron", "heuristic"),
-         ("agent-v1-nemotron", "agent-v1")]
+         ("agent-v1-nemotron", "agent-v1"), ("agent-v1-nemotron", "agent-v0-nemotron"),
+         ("agent-v1-nemotron-nopriors", "agent-v1-nemotron"), ("agent-v1-nemotron-vague", "agent-v1-nemotron")]
 FLASH_NOTE = ("A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run "
               "takes about 10, so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparison is instead "
               "agent-v1-nemotron: agent v1 unchanged (prompt, tools, step limit) on `nvidia/nemotron-3-super-120b-a12b` "
@@ -234,7 +239,7 @@ def _chart(figsize, title, xlabel, ylabel, draw, path):
 
 def _bars(data, solvers):
     rows = _rows(data, "all", solvers)
-    shown, cats = [s for s in solvers if rows[s]], _categories(rows)
+    shown, cats = [s for s in solvers if rows[s] and s in FIGURE_SOLVERS], _categories(rows)
 
     def draw(ax):
         width = 0.8 / max(len(shown), 1)
@@ -259,7 +264,7 @@ def _bars(data, solvers):
 def _lines(data, solvers):
     def draw(ax):
         drawn = False
-        for s in solvers:
+        for s in (s for s in solvers if s in FIGURE_SOLVERS):
             curve = evaluate.coverage_curve(data["records"][s]) if s.startswith("agent") else []
             if curve:
                 drawn = True

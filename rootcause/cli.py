@@ -48,15 +48,39 @@ def _agent_v1_vague_solver():
     return "agent-v1-vague", solve, (agent.QuotaExhausted,)
 
 
+def _nemotron():
+    from rootcause import agent  # another model family on NVIDIA's free endpoint (NVIDIA_API_KEY in .env)
+    return {"llm": agent.make_nvidia_client(), "models": [agent.NEMOTRON]}
+
+
+def _agent_v0_nemotron_solver():
+    from rootcause import agent  # agent v0 exactly (naive tools, v0 prompt), on Nemotron
+    return "agent-v0-nemotron", agent.Agent(**_nemotron(), attempts=5, name="agent-v0-nemotron").solve, (agent.QuotaExhausted,)
+
+
 def _agent_v1_nemotron_solver():
-    from rootcause import agent  # agent-v1 exactly, on another model family (NVIDIA_API_KEY in .env)
-    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron", llm=agent.make_nvidia_client(), models=[agent.NEMOTRON])
-    return "agent-v1-nemotron", a.solve, (agent.QuotaExhausted,)
+    from rootcause import agent  # agent-v1 exactly, on Nemotron
+    return "agent-v1-nemotron", _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron", **_nemotron()).solve, (agent.QuotaExhausted,)
+
+
+def _agent_v1_nemotron_nopriors_solver():
+    from rootcause import agent
+    a = _v1_agent(agent.SYSTEM_V1_NOPRIORS, "agent-v1-nemotron-nopriors", **_nemotron())
+    return "agent-v1-nemotron-nopriors", a.solve, (agent.QuotaExhausted,)
+
+
+def _agent_v1_nemotron_vague_solver():
+    from rootcause import agent
+    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron-vague", **_nemotron())
+    solve = lambda snap: a.solve({**snap, "meta": {**snap["meta"], "alert": agent.VAGUE_ALERT}})
+    return "agent-v1-nemotron-vague", solve, (agent.QuotaExhausted,)
 
 
 SOLVERS = {"heuristic": _heuristic_solver, "agent": _agent_solver,
            "agent-v1": _agent_v1_solver, "agent-v1-nopriors": _agent_v1_nopriors_solver,
-           "agent-v1-vague": _agent_v1_vague_solver, "agent-v1-nemotron": _agent_v1_nemotron_solver}  # CLI name -> factory of (record name, solve, stop_on)
+           "agent-v1-vague": _agent_v1_vague_solver, "agent-v1-nemotron": _agent_v1_nemotron_solver,
+           "agent-v0-nemotron": _agent_v0_nemotron_solver, "agent-v1-nemotron-nopriors": _agent_v1_nemotron_nopriors_solver,
+           "agent-v1-nemotron-vague": _agent_v1_nemotron_vague_solver}  # CLI name -> factory of (record name, solve, stop_on)
 
 
 class _Subparser(argparse.ArgumentParser):
