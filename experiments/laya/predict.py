@@ -2,7 +2,8 @@
 
 Two variants, both fixed before any result was seen:
   laya-multilingual  the full change table, laya-multilingual with max_len=8192 (the primary test)
-  laya-english       the top 20 rows, the English checkpoint (512-token context)
+  laya-english       the top 20 rows, the English checkpoint (truncates at 1,024 input tokens, questions included,
+                     as usage.input_tokens showed)
 Zero-shot: no fine-tuning, no temperature fitting, nothing learned from these incidents.
 
     HF_HOME=.cache/hf  (any local cache path)

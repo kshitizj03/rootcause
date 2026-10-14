@@ -12,7 +12,7 @@ from pathlib import Path
 from rootcause import config, scenarios, snapshot, summary
 
 OUT = config.ROOT / ".cache" / "laya" / "inputs.json"
-TOP = 20  # rows given to the English checkpoint, whose context is 512 tokens
+TOP = 20  # rows given to the English checkpoint, which truncates at 1,024 input tokens, questions included
 
 
 def _num(x):

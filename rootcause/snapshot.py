@@ -134,9 +134,8 @@ def validate_snapshot(path, scenario, names):
 
 
 def load(path):
-    """Load what an agent may see: meta.json plus sanitize.SNAPSHOT_TOOL_FILES (metrics, spans, logs) and nothing else.
-    Agent tools may read ONLY those. validation.json, truth.json, index.jsonl and the repository (scenarios/,
-    NOTES.md) name the answer and must never be exposed."""
+    """Load what an agent may see: meta.json plus sanitize.SNAPSHOT_TOOL_FILES (metrics, spans, logs) and nothing else
+    (the tool boundary is documented at sanitize.SNAPSHOT_TOOL_FILES)."""
     path = Path(path)
     return {"meta": json.loads((path / "meta.json").read_text(encoding="utf-8")),
             "metrics": json.loads((path / "metrics.json").read_text(encoding="utf-8")),

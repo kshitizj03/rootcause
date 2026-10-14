@@ -11,7 +11,7 @@ PHRASES = [r"feature[\s_\-.]?flags?", r"flagd", r"openfeature", r"ofrep", r"flag
            # "lock wait timeout" / "server overloaded" / "lock contention" wording from real systems stays.
            r"\bproblempattern\b", r"overload simulation", r"\block contention (?:scenario|transaction)\b"]
 # TOOL BOUNDARY: agent tools may read ONLY meta.json plus these files. validation.json, truth.json, index.jsonl and the
-# repository (scenarios/, NOTES.md) name the answer and must never be exposed to an agent.
+# repository (scenarios/, including scenarios/NOTES.md) name the answer and must never be exposed to an agent.
 SNAPSHOT_TOOL_FILES = ("metrics.json", "spans.jsonl.gz", "logs.jsonl.gz")  # what agent tools can read (besides meta.json)
 
 
@@ -36,8 +36,8 @@ def leak_pattern(names):
 
 # Benign strings that would otherwise trip the leak pattern; rewritten (not dropped) before the key-strip and drop test.
 NEUTRAL_REWRITES = [
-    # vendor src/product-catalog/main.go:397 (demo self-reports the flag; a real service says a plain error). Exact demo string,
-    # so case-sensitive; "[redacted]" is the stub older snapshots hold.
+    # upstream open-telemetry/opentelemetry-demo src/product-catalog/main.go (the demo self-reports the flag; a real
+    # service says a plain error). Exact demo string, so case-sensitive; "[redacted]" is the stub older snapshots hold.
     (re.compile(r"Product Catalog Fail (?:Feature Flag|\[redacted\]) Enabled"), "Product Catalog Fail"),
 ]
 

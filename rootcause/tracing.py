@@ -1,5 +1,6 @@
 """Self-tracing for the agent: OpenTelemetry spans exported over OTLP/HTTP or to a JSONL file. Off unless asked for.
-The agent only ever puts names, models and token counts on spans (never prompts or tool arguments/outputs)."""
+The agent only ever puts names, models, token and request counts, the verdict and error types on spans (never prompts
+or tool arguments/outputs)."""
 from pathlib import Path
 
 from opentelemetry import trace

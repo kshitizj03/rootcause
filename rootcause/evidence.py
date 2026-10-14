@@ -1,7 +1,8 @@
 """Check that a report's cited evidence exists in the snapshot it was made from.
 
 Two measures per cited item (neither proves the claim it is attached to):
-- grounded: the citation exists in the snapshot within the incident window (t >= fault_start).
+- grounded: the citation exists in the snapshot (traces and logs: within the incident window, t >= fault_start;
+  metrics: the series has both windows).
 - distinctive (stricter): the citation also points at something anomalous. A metric must have changed notably
   (its change score >= 0.5; grounded only needs the series to exist); a log quote must appear in no pre-alert log of that service; a trace must contain an error span, or a
   span (of the cited service, else any) lasting longer than that service's pre-alert p95 (an error span anywhere

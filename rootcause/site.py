@@ -1,6 +1,6 @@
 """Build the JSON behind the static replay site (site/data/) from recorded run records.
 
-Post-hoc only: it shows ground truth, so nothing else in rootcause/ may import it. Run records are copied through an
+Post-hoc only: it shows ground truth, so no solver or evaluation code may import it (only the CLI). Run records are copied through an
 allow-list of fields (never `messages`, `code` or paths), and tool outputs are cut to MAX_OUTPUT characters (by
 halving their longest lists while that is enough, so they still parse; as plain text otherwise)."""
 import json

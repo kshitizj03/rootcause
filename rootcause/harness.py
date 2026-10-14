@@ -7,7 +7,7 @@ from rootcause import backends, config, snapshot
 
 
 class RestoreError(RuntimeError):
-    """Raised when restore fails. Carries the capture summary path if available."""
+    """Raised when restore fails. Carries the capture summary dict (or None) so the caller can still index the snapshot."""
     def __init__(self, message, summary=None):
         super().__init__(message)
         self.summary = summary

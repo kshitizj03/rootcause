@@ -1,4 +1,5 @@
-"""Agent v0: a plain Gemini (OpenAI-compatible) tool loop over one snapshot.
+"""The diagnosis agent: an OpenAI-compatible tool loop (Gemini or NVIDIA) over one snapshot, plus the v0/v1 prompts
+and their ablations.
 
 Returns a validated Report plus transcript, full message history and token usage. Free tier only: requests are spaced out, per-minute
 rate limits back off, a per-day quota falls back to the next model and finally raises QuotaExhausted so a batch

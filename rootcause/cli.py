@@ -1,4 +1,4 @@
-"""Command line: manage the demo, list/record scenarios, check snapshots for leaks."""
+"""Command line: demo stack, scenario recording and checks, evaluation, report/site generation, MCP server."""
 import argparse
 import json
 import subprocess
