@@ -1,6 +1,6 @@
 """Baseline: name the service whose fault-indicating signal rose the most against its baseline window."""
 from rootcause import summary
-from rootcause.score import Cause, Report
+from rootcause.score import MAX_CAUSES, Cause, Report
 
 THRESHOLD = 1.0  # relative rise >= 1.0 against max(baseline, floor); fixed a priori, never tuned to results
 RANKED = ("error_ratio", "p95_ms", "mem_mb", "cpu_cores", "restarts")  # rps is load, not a fault signal
@@ -16,7 +16,7 @@ def diagnose(snap, threshold=THRESHOLD):
         if r["service"] not in seen:
             seen.add(r["service"])
             causes.append(Cause(r["service"], r["fault_type"]))
-        if len(causes) == 3:
+        if len(causes) == MAX_CAUSES:
             break
     evidence = tuple({"kind": "metric", "service": r["service"], "signal": r["signal"],
                       "claim": f"{r['baseline']:.3g} -> {r['value']:.3g}"} for r in rows[:3])

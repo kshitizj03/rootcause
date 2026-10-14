@@ -248,6 +248,14 @@ def test_resanitize_drops_fault_announcing_ad_log(tmp_path):
     assert [l["body"] for l in snapshot._read_jsonl_gz(tmp_path / "logs.jsonl.gz")] == ["served ad"]
 
 
+def test_resanitize_dry_run_counts_exact_duplicate_logs_apart_from_dropped_rows(tmp_path):
+    ad = lambda body: {"ts": "t", "service": "ad", "severity": "INFO", "severity_number": 9, "body": body, "trace_id": ""}
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [ad("served ad"), ad("served ad"), ad("problempattern on")])
+    counts = snapshot.resanitize(tmp_path, NAMES, dry_run=True)
+    assert counts["logs"] == (3, 1) and counts["duplicate_logs"] == 1 and len(counts["dropped"]["logs"]) == 1
+
+
 def test_resanitize_drops_load_generator_span_log_and_metrics_series_and_unknown_keys(tmp_path):
     lg_log = {"ts": "t", "service": "load-generator", "severity": "INFO", "severity_number": 9,
               "body": "User flooding homepage 10 times", "trace_id": ""}

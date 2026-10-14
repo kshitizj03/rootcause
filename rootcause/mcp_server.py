@@ -9,10 +9,10 @@ import mcp.types as types
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
-from rootcause import snapshot, tools_v1
+from rootcause import sanitize, snapshot, tools_v1
 
 
-FILES = ("meta.json", "metrics.json", "spans.jsonl.gz", "logs.jsonl.gz")
+FILES = ("meta.json", *sanitize.SNAPSHOT_TOOL_FILES)
 
 
 def build_server(snap, toolset=tools_v1):

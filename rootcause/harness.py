@@ -5,6 +5,8 @@ from pathlib import Path
 
 from rootcause import backends, config, snapshot
 
+MAX_CONSECUTIVE_FAILURES = 3  # a batch stops after this many scenarios fail in a row
+
 
 class RestoreError(RuntimeError):
     """Raised when restore fails. Carries the capture summary dict (or None) so the caller can still index the snapshot."""
@@ -15,7 +17,6 @@ class RestoreError(RuntimeError):
 
 class DirtyStateError(RuntimeError):
     """Raised when state file indicates a prior restore failed."""
-    pass
 
 
 def mark_restored(t, state_file=config.STATE_FILE):
@@ -114,8 +115,8 @@ def record_all(scenarios, names, injector, out_dir=config.SNAPSHOTS, **kwargs):
         except Exception as e:
             consecutive_failures += 1
             summary = {"scenario": sc.id, "valid": False, "error": f"{type(e).__name__}: {e}"}
-            if consecutive_failures >= 3:
-                stop = RuntimeError(f"Aborting after 3 consecutive failures: {e}")
+            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                stop = RuntimeError(f"Aborting after {MAX_CONSECUTIVE_FAILURES} consecutive failures: {e}")
         summaries.append(summary)
         write_index_row(out_dir, summary)
         print(f"    -> valid={summary['valid']} {summary.get('error', '')}", flush=True)

@@ -25,7 +25,7 @@ def fetch_series(prom_range, start, end, step):
         out[signal] = {}
         for r in prom_range(query, start, end, step):
             name = r["metric"].get(label)
-            if not name or name in config.HIDDEN_SERVICES or name not in config.KNOWN_TARGETS:
+            if not name or name not in config.KNOWN_TARGETS:  # hidden services are never known targets
                 continue
             out[signal][name] = [[float(t), float(v)] for t, v in r["values"] if math.isfinite(float(v))]
     return out

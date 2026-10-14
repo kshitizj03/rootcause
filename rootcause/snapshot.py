@@ -86,16 +86,19 @@ def resanitize(path, names, dry_run=False):
     so a failure before the swap leaves the originals untouched. metrics.json only loses series of hidden/unknown
     services (kept series untouched, rewritten only if something was dropped); meta/truth are never touched.
     Returns {"spans": (before, after), "logs": (before, after), "metrics": (series before, after),
-    "dropped": {"spans": [...], "logs": [...]}};
-    "dropped" is only filled for dry_run."""
+    "duplicate_logs": exact duplicate logs removed, "dropped": {"spans": [...], "logs": [...]}};
+    "dropped" (rows the sanitisers remove, duplicates excluded) is only filled for dry_run."""
     path, counts, dropped, kept = Path(path), {}, {}, {}
     if not dry_run:  # leftovers of a hard-killed run must never be promoted
         for stale in ("spans.jsonl.gz.tmp", "logs.jsonl.gz.tmp", "metrics.json.tmp"):
             (path / stale).unlink(missing_ok=True)
     for name, clean in (("spans", sanitize.sanitize_spans), ("logs", sanitize.sanitize_logs)):
         rows = _read_jsonl_gz(path / f"{name}.jsonl.gz")
-        kept[name] = _dedupe_logs(clean(rows, names)) if name == "logs" else clean(rows, names)
+        cleaned = clean(rows, names)
+        kept[name] = _dedupe_logs(cleaned) if name == "logs" else cleaned
         counts[name] = (len(rows), len(kept[name]))
+        if name == "logs":
+            counts["duplicate_logs"] = len(cleaned) - len(kept[name])
         # Dry run only: re-runs the filter per row to list what was dropped (rebuilds the pattern each row).
         dropped[name] = [r for r in rows if not clean([r], names)] if dry_run else []
     metrics = json.loads((path / "metrics.json").read_text(encoding="utf-8")) if (path / "metrics.json").exists() else {}
