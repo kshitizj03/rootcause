@@ -1,11 +1,8 @@
+from helpers import series
 from rootcause import evidence
 from rootcause.score import Report, make_report
 
 T0 = 900.0
-
-
-def series(base, fault):
-    return [[float(t), base] for t in range(0, 901, 15)] + [[float(t), fault] for t in range(915, 1215, 15)]
 
 
 SNAP = {"meta": {"alert": "a", "baseline_start": 0.0, "fault_start": T0, "end": 1200.0},

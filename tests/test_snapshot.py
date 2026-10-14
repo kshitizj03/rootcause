@@ -2,42 +2,11 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from helpers import FLAGS, flat_span, otlp_payload
+from helpers import FLAGS, SCENARIO, T_END, T_INJECT, fake_fetch, flat_log, flat_span, otlp_payload
 from rootcause import config, sanitize, snapshot
 from rootcause.scenarios import Scenario
 
 NAMES = sanitize.flag_names(FLAGS)
-T_INJECT, T_END = 100_000.0, 100_180.0
-SCENARIO = Scenario(id="payment-test", category="easy", alert="Some orders fail at checkout.",
-                    inject={"flags": {"paymentFailure": "50%"}},
-                    truth={"causes": [{"accept": ["payment"], "fault_type": "errors"}]},
-                    checks=[{"service": "payment", "signal": "error_ratio", "at_least": 0.2}])
-
-
-def fake_fetch(prom_value_after=0.5, t_inject=T_INJECT):
-    """Every series is 0 before t_inject and prom_value_after from then on."""
-    def prom_range(query, start, end, step):
-        vals = [[t, str(prom_value_after) if t >= t_inject else "0"] for t in range(int(start), int(end) + 1, step)]
-        return [{"metric": {"service_name": "payment", "container_name": "payment"}, "values": vals}]
-
-    def jaeger_raw(service, start, end, limit):
-        if service != "payment":
-            return {"result": {"resourceSpans": []}}
-        return otlp_payload("payment", [
-            {"span_id": "a", "name": "charge", "error": True, "message": "Invalid token",
-             "events": [("feature_flag.evaluation", {"feature_flag.key": "paymentFailure"})]},
-            {"span_id": "b", "name": "flag lookup", "attrs": {"url.full": "http://flagd:8013/x"}},
-        ])
-
-    def os_logs(query, start, end, size):
-        if '"payment"' not in query:
-            return []
-        return [{"@timestamp": "t", "resource": {"service.name": "payment"},
-                 "severity": {"text": "ERROR", "number": 17}, "body": "Payment request failed. Invalid token."},
-                {"@timestamp": "t", "resource": {"service.name": "payment"},
-                 "severity": {"text": "INFO", "number": 9}, "body": "FeatureFlag 'paymentFailure' is activated"}]
-
-    return SimpleNamespace(prom_range=prom_range, jaeger_raw=jaeger_raw, os_logs=os_logs)
 
 
 def test_capture_writes_sanitised_valid_snapshot(tmp_path):
@@ -241,27 +210,25 @@ def test_resanitize_keeps_and_rewrites_legacy_product_catalog_spans(tmp_path):
 
 
 def test_resanitize_drops_fault_announcing_ad_log(tmp_path):
-    ad = lambda body: {"ts": "t", "service": "ad", "severity": "INFO", "severity_number": 9, "body": body, "trace_id": ""}
     snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [flat_span(span_id="a")])
-    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [ad("High CPU-Load problempattern enabled"), ad("served ad")])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [flat_log("ad", "High CPU-Load problempattern enabled"),
+                                                          flat_log("ad", "served ad")])
     assert snapshot.resanitize(tmp_path, NAMES)["logs"] == (2, 1)
     assert [l["body"] for l in snapshot._read_jsonl_gz(tmp_path / "logs.jsonl.gz")] == ["served ad"]
 
 
 def test_resanitize_dry_run_counts_exact_duplicate_logs_apart_from_dropped_rows(tmp_path):
-    ad = lambda body: {"ts": "t", "service": "ad", "severity": "INFO", "severity_number": 9, "body": body, "trace_id": ""}
     snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [])
-    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [ad("served ad"), ad("served ad"), ad("problempattern on")])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [flat_log("ad", "served ad"), flat_log("ad", "served ad"),
+                                                          flat_log("ad", "problempattern on")])
     counts = snapshot.resanitize(tmp_path, NAMES, dry_run=True)
     assert counts["logs"] == (3, 1) and counts["duplicate_logs"] == 1 and len(counts["dropped"]["logs"]) == 1
 
 
 def test_resanitize_drops_load_generator_span_log_and_metrics_series_and_unknown_keys(tmp_path):
-    lg_log = {"ts": "t", "service": "load-generator", "severity": "INFO", "severity_number": 9,
-              "body": "User flooding homepage 10 times", "trace_id": ""}
     snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [flat_span(service="load-generator", name="user_flood_home", span_id="lg"),
                                                            flat_span(span_id="ok")])
-    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [lg_log])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [flat_log("load-generator", "User flooding homepage 10 times")])
     series = [[1.0, 2.0]]
     (tmp_path / "metrics.json").write_text(json.dumps(
         {"rps": {"payment": series, "load-generator": series, "grafana": series}, "mem_mb": {"kafka": series}}))
@@ -341,13 +308,9 @@ def test_capture_logs_keep_only_the_queried_service_and_drop_exact_duplicates(tm
 
 
 def test_resanitize_drops_exact_duplicate_logs_only(tmp_path):
-    a, b = _log_row("cart", "same", "t1"), _log_row("cart", "same", "t2")
+    a, b = flat_log("cart", "same", "t1"), flat_log("cart", "same", "t2")
     snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [])
     snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [a, dict(a), b, dict(b, severity="ERROR")])
     counts = snapshot.resanitize(tmp_path, NAMES)
     assert counts["logs"] == (4, 3)
     assert snapshot._read_jsonl_gz(tmp_path / "logs.jsonl.gz") == [a, b, dict(b, severity="ERROR")]
-
-
-def _log_row(service, body, ts):
-    return {"ts": ts, "service": service, "severity": "INFO", "severity_number": 9, "body": body, "trace_id": ""}

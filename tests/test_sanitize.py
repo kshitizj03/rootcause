@@ -1,8 +1,7 @@
-import gzip
 import json
 
-from helpers import FLAGS, flat_span
-from rootcause import sanitize
+from helpers import FLAGS, flat_log, flat_span
+from rootcause import sanitize, snapshot
 
 NAMES = sanitize.flag_names(FLAGS)
 
@@ -46,10 +45,8 @@ def test_find_leaks_catches_names_and_phrases_case_insensitively():
 
 def test_scan_snapshot_reads_plain_and_gz_files(tmp_path):
     (tmp_path / "metrics.json").write_text(json.dumps({"rps": {"payment": [[1, 2]]}}))
-    with gzip.open(tmp_path / "logs.jsonl.gz", "wt", encoding="utf-8") as f:
-        f.write(json.dumps({"body": "adHighCpu is on"}) + "\n")
-    with gzip.open(tmp_path / "spans.jsonl.gz", "wt", encoding="utf-8") as f:
-        f.write(json.dumps({"name": "clean"}) + "\n")
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [{"body": "adHighCpu is on"}])
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [{"name": "clean"}])
     assert sanitize.scan_snapshot(tmp_path, NAMES) == {"logs.jsonl.gz": ["adhighcpu"]}
 
 
@@ -222,10 +219,6 @@ def test_rewrite_is_case_sensitive_and_real_flag_names_still_drop_the_span():
     assert sanitize.sanitize_spans(spans, NAMES) == []
 
 
-def _log(service, body):
-    return {"ts": "t", "service": service, "severity": "INFO", "severity_number": 9, "body": body, "trace_id": ""}
-
-
 FAULT_ANNOUNCEMENTS = [
     ("ad", "High CPU-Load problempattern enabled"),
     ("ad", "at oteldemo.problempattern.CpuLoad.run(CpuLoad.java:42)"),
@@ -236,7 +229,7 @@ FAULT_ANNOUNCEMENTS = [
 
 
 def test_fault_announcing_phrases_are_dropped_and_flagged():
-    logs = [_log(s, b) for s, b in FAULT_ANNOUNCEMENTS]
+    logs = [flat_log(s, b) for s, b in FAULT_ANNOUNCEMENTS]
     assert sanitize.sanitize_logs(logs, NAMES) == []
     for _, body in FAULT_ANNOUNCEMENTS:
         assert sanitize.find_leaks(body, NAMES), body
@@ -245,13 +238,13 @@ def test_fault_announcing_phrases_are_dropped_and_flagged():
 def test_generic_overload_and_lock_wording_is_not_a_leak():
     ok = ["server overloaded, shedding load", "ERROR 1205: lock wait timeout exceeded",
           "high lock contention on table orders", "pool overload detected"]
-    logs = [_log("cart", b) for b in ok]
+    logs = [flat_log("cart", b) for b in ok]
     assert sanitize.sanitize_logs(logs, NAMES) == logs
     assert all(sanitize.find_leaks(b, NAMES) == [] for b in ok)
 
 
 def test_load_generator_logs_and_spans_are_dropped_as_a_hidden_service():
-    assert sanitize.sanitize_logs([_log("load-generator", "User flooding homepage 10 times")], NAMES) == []
+    assert sanitize.sanitize_logs([flat_log("load-generator", "User flooding homepage 10 times")], NAMES) == []
     spans = [flat_span(service="load-generator", name="user_flood_home", span_id="lg"),
              flat_span(service="frontend", name="GET /", span_id="fe")]
     assert [s["span_id"] for s in sanitize.sanitize_spans(spans, NAMES)] == ["fe"]
@@ -260,24 +253,22 @@ def test_load_generator_logs_and_spans_are_dropped_as_a_hidden_service():
 def test_phrases_are_narrow_demo_tokens_not_generic_wording():
     for ok in ("known problem patterns in this service", "lock contention transactions rolled back"):
         assert sanitize.find_leaks(ok, NAMES) == [], ok
-        assert sanitize.sanitize_logs([_log("cart", ok)], NAMES) != []
+        assert sanitize.sanitize_logs([flat_log("cart", ok)], NAMES) != []
 
 
 def test_scan_snapshot_flags_hidden_service_series_in_metrics(tmp_path):
     (tmp_path / "metrics.json").write_text(json.dumps(
         {"rps": {"payment": [[1, 2]], "load-generator": [[1, 9]]}}))
     for n in ("logs.jsonl.gz", "spans.jsonl.gz"):
-        with gzip.open(tmp_path / n, "wt", encoding="utf-8") as f:
-            f.write(json.dumps({"name": "clean"}) + "\n")
+        snapshot._write_jsonl_gz(tmp_path / n, [{"name": "clean"}])
     assert sanitize.scan_snapshot(tmp_path, NAMES) == {"metrics.json": ["hidden service: load-generator"]}
 
 
 def test_scan_snapshot_flags_hidden_service_spans_and_logs(tmp_path):
     (tmp_path / "metrics.json").write_text(json.dumps({}))
     for n, rows in (("spans.jsonl.gz", [flat_span(service="Load-Generator", name="x"), flat_span()]),
-                    ("logs.jsonl.gz", [_log("load-generator", "hello"), _log("cart", "ok")])):
-        with gzip.open(tmp_path / n, "wt", encoding="utf-8") as f:
-            f.write("".join(json.dumps(r) + "\n" for r in rows))
+                    ("logs.jsonl.gz", [flat_log("load-generator", "hello"), flat_log("cart", "ok")])):
+        snapshot._write_jsonl_gz(tmp_path / n, rows)
     assert sanitize.scan_snapshot(tmp_path, NAMES) == {"spans.jsonl.gz": ["hidden service: load-generator"],
                                                        "logs.jsonl.gz": ["hidden service: load-generator"]}
 
@@ -300,14 +291,14 @@ def test_access_log_flags_field_loses_fault_injection_tokens():
     cases = [("200", "DI", "200", "-"), ("0", "DI,DC", "0", "DC"), ("0", "DC,DI", "0", "DC"),
              ("503", "FI", "503", "-"), ("200", "-", "200", "-"), ("503", "UF", "503", "UF"),
              ("503", "DI,UAEX", "503", "UAEX"), ("503", "NFCF,FI,UMSDR", "503", "NFCF,UMSDR")]
-    logs = [_log("frontend-proxy", ACCESS.format(c, f)) for c, f, _, _ in cases]
+    logs = [flat_log("frontend-proxy", ACCESS.format(c, f)) for c, f, _, _ in cases]
     out = sanitize.sanitize_logs(logs, NAMES)
     assert [l["body"] for l in out] == [ACCESS.format(c, f) for _, _, c, f in cases]
 
 
 def test_bare_di_elsewhere_is_left_alone():
     body = 'user said "DI" and status 200 DI is a word; GET /DI HTTP/1.1'
-    assert sanitize.sanitize_logs([_log("cart", body)], NAMES)[0]["body"] == body
+    assert sanitize.sanitize_logs([flat_log("cart", body)], NAMES)[0]["body"] == body
     sp = flat_span(attrs={"other": "DI"})
     assert sanitize.sanitize_spans([sp], NAMES)[0]["attributes"] == {"other": "DI"}
 
@@ -316,25 +307,22 @@ def test_scan_snapshot_flags_leftover_fault_injection_flags(tmp_path):
     (tmp_path / "metrics.json").write_text(json.dumps({}))
     rows = {"spans.jsonl.gz": [flat_span(service="frontend-proxy", attrs={"response_flags": "DI,DC"}),
                                flat_span(service="frontend-proxy", attrs={"response_flags": "DI,UAEX"})],
-            "logs.jsonl.gz": [_log("frontend-proxy", ACCESS.format("200", "DI")),
-                              _log("frontend-proxy", ACCESS.format("503", "DI,UAEX"))]}
+            "logs.jsonl.gz": [flat_log("frontend-proxy", ACCESS.format("200", "DI")),
+                              flat_log("frontend-proxy", ACCESS.format("503", "DI,UAEX"))]}
     for n, r in rows.items():
-        with gzip.open(tmp_path / n, "wt", encoding="utf-8") as f:
-            f.write("".join(json.dumps(x) + "\n" for x in r))
+        snapshot._write_jsonl_gz(tmp_path / n, r)
     assert sanitize.scan_snapshot(tmp_path, NAMES) == {"spans.jsonl.gz": ["fault-injection flag"],
                                                        "logs.jsonl.gz": ["fault-injection flag"]}
     # sanitised rows are clean; a flagged record is rewritten, not dropped
     for n, fn in (("spans.jsonl.gz", sanitize.sanitize_spans), ("logs.jsonl.gz", sanitize.sanitize_logs)):
         clean = fn(rows[n], NAMES)
         assert len(clean) == 2
-        with gzip.open(tmp_path / n, "wt", encoding="utf-8") as f:
-            f.write("".join(json.dumps(x) + "\n" for x in clean))
+        snapshot._write_jsonl_gz(tmp_path / n, clean)
     assert sanitize.scan_snapshot(tmp_path, NAMES) == {}
 
 
 def test_scan_catches_di_combined_with_long_envoy_flags(tmp_path):
     (tmp_path / "metrics.json").write_text(json.dumps({}))
-    for n, r in (("spans.jsonl.gz", [flat_span()]), ("logs.jsonl.gz", [_log("frontend-proxy", ACCESS.format("503", "DI,UAEX"))])):
-        with gzip.open(tmp_path / n, "wt", encoding="utf-8") as f:
-            f.write("".join(json.dumps(x) + "\n" for x in r))
+    for n, r in (("spans.jsonl.gz", [flat_span()]), ("logs.jsonl.gz", [flat_log("frontend-proxy", ACCESS.format("503", "DI,UAEX"))])):
+        snapshot._write_jsonl_gz(tmp_path / n, r)
     assert sanitize.scan_snapshot(tmp_path, NAMES) == {"logs.jsonl.gz": ["fault-injection flag"]}

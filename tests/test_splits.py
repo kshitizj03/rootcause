@@ -1,7 +1,6 @@
-import json
-
 import pytest
 
+from helpers import write_record
 from rootcause import cli, config, evaluate, scenarios
 
 
@@ -14,17 +13,11 @@ def test_heldout_is_one_scenario_per_category_and_exists():
         assert max(i for i, cat in lib.items() if cat == c) in config.HELDOUT
 
 
-def write(d, sid, cat, correct):
-    d.mkdir(parents=True, exist_ok=True)
-    score = {"correct": correct, "top3": True, "fault_type_ok": True, "false_alarm": False, "abstained": False}
-    (d / f"{sid}__0.json").write_text(json.dumps({"scenario": sid, "category": cat, "run": 0, "score": score}))
-
-
 def test_summarise_filters_by_split(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "HELDOUT", ("b",))
     d = tmp_path / "s"
-    write(d, "a", "easy", 1.0)
-    write(d, "b", "easy", 0.0)
+    write_record(d, "a", "easy", 0, 1.0)
+    write_record(d, "b", "easy", 0, 0.0)
     rows = lambda split: {r["category"]: r["accuracy_mean"] for r in evaluate.summarise("s", tmp_path, split=split)}
     assert rows("all")["easy"] == 0.5 and rows(None)["easy"] == 0.5
     assert rows("tune")["easy"] == 1.0 and rows("heldout")["easy"] == 0.0

@@ -6,23 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from helpers import FLAGS
+from helpers import FLAGS, INFO, fake_run
 from rootcause.inject import Injector, flag_targeting_errors, flag_variants
-
-
-INFO = ["docker", "info", "--format", "{{.NCPU}}"]
-
-
-def fake_run(calls, fail=None, ncpu="16\n"):
-    """Runner fake: records commands, answers `docker info` with ncpu, optionally fails some commands."""
-    def run(cmd):
-        calls.append(cmd)
-        if cmd == INFO:
-            return ncpu
-        if fail:
-            fail(cmd)
-        return ""
-    return run
 
 
 @pytest.fixture

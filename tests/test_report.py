@@ -1,20 +1,16 @@
 import json
 
+from helpers import write_record
 from rootcause import config, report, scenarios
 
 
 def write(runs, solver, sid, cat, k, correct, conf=0.8, tokens=True, evidence=True):
-    d = runs / solver
-    d.mkdir(parents=True, exist_ok=True)
-    r = {"scenario": sid, "category": cat, "run": k,
-         "report": {"verdict": "incident" if cat != "control" else "no_incident", "confidence": conf},
-         "score": {"correct": correct, "top3": True, "fault_type_ok": None if cat == "control" else True,
-                   "false_alarm": False, "abstained": False}}
+    extra = {"report": {"verdict": "incident" if cat != "control" else "no_incident", "confidence": conf}}
     if evidence:
-        r["evidence_check"] = {"grounded": 1, "distinctive": 1, "total": 1}
+        extra["evidence_check"] = {"grounded": 1, "distinctive": 1, "total": 1}
     if tokens:
-        r.update(requests=5, prompt_tokens=1000, completion_tokens=50)
-    (d / f"{sid}__{k}.json").write_text(json.dumps(r))
+        extra.update(requests=5, prompt_tokens=1000, completion_tokens=50)
+    write_record(runs / solver, sid, cat, k, correct, **extra)
 
 
 def test_build_writes_markdown_and_figures_and_marks_missing_solvers(tmp_path, monkeypatch):

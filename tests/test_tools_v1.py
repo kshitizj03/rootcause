@@ -1,12 +1,9 @@
 import json
 
+from helpers import series
 from rootcause import tools_v0 as tools, tools_v1
 
 T0 = 900.0
-
-
-def series(base, fault):
-    return [[float(t), base] for t in range(0, 901, 15)] + [[float(t), fault] for t in range(915, 1215, 15)]
 
 
 def span(sid, parent, service, t, error=False, trace="t1"):

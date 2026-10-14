@@ -2,10 +2,9 @@ import json
 
 import pytest
 
-from helpers import FLAGS, Clock
+from helpers import FLAGS, SCENARIO, Clock, fake_fetch
 from rootcause import harness, sanitize, config, snapshot
 from rootcause.scenarios import Scenario
-from test_snapshot import SCENARIO, fake_fetch
 
 NAMES = sanitize.flag_names(FLAGS)
 

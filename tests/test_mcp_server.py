@@ -1,23 +1,17 @@
 import inspect
-import json
 import sys
 
 import anyio
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
+from helpers import series, write_snapshot
 from rootcause import config, mcp_server, snapshot, tools_v1
 
 
 def make_snapshot(d):
-    d.mkdir(parents=True)
-    pts = [[float(t), 0.0] for t in range(0, 901, 15)] + [[float(t), 0.3] for t in range(915, 1215, 15)]
-    (d / "meta.json").write_text(json.dumps({"alert": "x", "baseline_start": 0.0, "fault_start": 900.0, "end": 1200.0}))
-    (d / "metrics.json").write_text(json.dumps({"error_ratio": {"payment": pts}}))
-    snapshot._write_jsonl_gz(d / "spans.jsonl.gz", [])
-    snapshot._write_jsonl_gz(d / "logs.jsonl.gz", [])
-    (d / "truth.json").write_text(json.dumps({"causes": [{"accept": ["payment"], "fault_type": "errors"}]}))
-    return d
+    return write_snapshot(d, metrics={"error_ratio": {"payment": series(0.0, 0.3)}},
+                          truth={"causes": [{"accept": ["payment"], "fault_type": "errors"}]})
 
 
 async def session_calls(path, calls):

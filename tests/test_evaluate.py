@@ -2,28 +2,16 @@ import json
 
 import pytest
 
-from rootcause import config, evaluate, scenarios, snapshot
+from helpers import write_record, write_snapshot
+from rootcause import config, evaluate, scenarios
 from rootcause.score import Cause, Report, make_report
-
-from helpers import FIXTURES  # noqa: F401  (keeps tests/ on sys.path as elsewhere)
-
-
-def make_snapshot(root, name, causes):
-    d = root / name
-    d.mkdir(parents=True)
-    (d / "meta.json").write_text(json.dumps({"alert": "x", "baseline_start": 0, "fault_start": 900, "end": 1200}))
-    (d / "metrics.json").write_text("{}")
-    snapshot._write_jsonl_gz(d / "spans.jsonl.gz", [])
-    snapshot._write_jsonl_gz(d / "logs.jsonl.gz", [])
-    (d / "truth.json").write_text(json.dumps({"causes": causes}))
-    return d
 
 
 @pytest.fixture
 def lib(tmp_path, monkeypatch):
     snaps = tmp_path / "snapshots"
-    a = make_snapshot(snaps, "incident__a", [{"accept": ["payment"], "fault_type": "errors"}])
-    c = make_snapshot(snaps, "incident__c", [])
+    a = write_snapshot(snaps / "incident__a", truth={"causes": [{"accept": ["payment"], "fault_type": "errors"}]})
+    c = write_snapshot(snaps / "incident__c")
     (snaps / "index.jsonl").write_text("\n".join(json.dumps(r) for r in [
         {"scenario": "pay", "path": str(a), "valid": True},
         {"scenario": "ctl", "path": str(c), "valid": True},
@@ -84,14 +72,9 @@ def test_unexpected_solver_errors_propagate(lib):
 
 
 def test_summarise_means_and_spread_over_runs(tmp_path):
-    d = tmp_path / "x"
-    d.mkdir()
-    recs = [("p1", "easy", 0, 1.0), ("p2", "easy", 0, 0.0), ("p1", "easy", 1, 1.0), ("p2", "easy", 1, 1.0),
-            ("c1", "control", 0, 1.0), ("c1", "control", 1, 0.0)]
-    for sid, cat, k, correct in recs:
-        score = {"correct": correct, "top3": correct == 1.0, "fault_type_ok": None if cat == "control" else True,
-                 "false_alarm": cat == "control" and correct == 0.0, "abstained": False}
-        (d / f"{sid}__{k}.json").write_text(json.dumps({"scenario": sid, "category": cat, "run": k, "score": score}))
+    for r in [("p1", "easy", 0, 1.0), ("p2", "easy", 0, 0.0), ("p1", "easy", 1, 1.0), ("p2", "easy", 1, 1.0),
+              ("c1", "control", 0, 1.0), ("c1", "control", 1, 0.0)]:
+        write_record(tmp_path / "x", *r)
     rows = {r["category"]: r for r in evaluate.summarise("x", out_dir=tmp_path)}
     assert rows["easy"]["accuracy_mean"] == 0.75 and rows["easy"]["accuracy_std"] == 0.25
     assert rows["easy"]["scenarios"] == 2 and rows["easy"]["runs"] == 2
@@ -102,15 +85,9 @@ def test_summarise_means_and_spread_over_runs(tmp_path):
 
 # --- partial batches, record layout, console-safe table ---
 
-def write_recs(d, recs):
-    d.mkdir(exist_ok=True)
-    for sid, cat, k in recs:
-        score = {"correct": 1.0, "top3": True, "fault_type_ok": True, "false_alarm": False, "abstained": False}
-        (d / f"{sid}__{k}.json").write_text(json.dumps({"scenario": sid, "category": cat, "run": k, "score": score}))
-
-
 def test_summarise_exposes_uneven_records_per_scenario(tmp_path):
-    write_recs(tmp_path / "x", [("p1", "easy", 0), ("p1", "easy", 1), ("p1", "easy", 2), ("p2", "easy", 0)])
+    for sid, k in [("p1", 0), ("p1", 1), ("p1", 2), ("p2", 0)]:
+        write_record(tmp_path / "x", sid, "easy", k, 1.0)
     rows = {r["category"]: r for r in evaluate.summarise("x", out_dir=tmp_path)}
     assert (rows["easy"]["records_min"], rows["easy"]["records_max"]) == (1, 3)
     assert (rows["all incidents"]["records_min"], rows["all incidents"]["records_max"]) == (1, 3)
@@ -119,14 +96,15 @@ def test_summarise_exposes_uneven_records_per_scenario(tmp_path):
 
 
 def test_even_runs_show_a_single_number(tmp_path):
-    write_recs(tmp_path / "x", [("p1", "easy", 0), ("p1", "easy", 1), ("p2", "easy", 0), ("p2", "easy", 1)])
+    for sid, k in [("p1", 0), ("p1", 1), ("p2", 0), ("p2", 1)]:
+        write_record(tmp_path / "x", sid, "easy", k, 1.0)
     rows = evaluate.summarise("x", out_dir=tmp_path)
     assert (rows[0]["records_min"], rows[0]["records_max"]) == (2, 2)
     assert "| easy | 2 | 2 |" in evaluate.format_summary(rows)
 
 
 def test_table_is_ascii_for_the_windows_console(tmp_path):
-    write_recs(tmp_path / "x", [("p1", "easy", 0)])
+    write_record(tmp_path / "x", "p1", "easy", 0, 1.0)
     table = evaluate.format_summary(evaluate.summarise("x", out_dir=tmp_path))
     assert "+/-" in table and "±" not in table and table.isascii()
 
@@ -141,18 +119,10 @@ def test_solver_info_cannot_overwrite_record_fields(lib):
 
 # --- scenario-balanced table, run-major order, code version ---
 
-def write_scored(d, recs):
-    """recs: (scenario, category, run, correct). Other score fields follow from correct."""
-    d.mkdir(exist_ok=True)
-    for sid, cat, k, correct in recs:
-        score = {"correct": correct, "top3": correct == 1.0, "fault_type_ok": None if cat == "control" else correct == 1.0,
-                 "false_alarm": cat == "control" and correct == 0.0, "abstained": False}
-        (d / f"{sid}__{k}.json").write_text(json.dumps({"scenario": sid, "category": cat, "run": k, "score": score}))
-
-
 def test_uneven_records_give_scenario_balanced_rates_and_no_sd(tmp_path):
     # p1 solved 5 times, p2 failed once: balanced accuracy is (1 + 0) / 2, not 5/6
-    write_scored(tmp_path / "x", [("p1", "easy", k, 1.0) for k in range(5)] + [("p2", "easy", 0, 0.0)])
+    for r in [("p1", "easy", k, 1.0) for k in range(5)] + [("p2", "easy", 0, 0.0)]:
+        write_record(tmp_path / "x", *r)
     row = evaluate.summarise("x", out_dir=tmp_path)[0]
     assert row["accuracy_mean"] == 0.5 and row["top3"] == 0.5 and row["fault_type"] == 0.5
     assert row["accuracy_std"] is None  # only run 0 covers both scenarios
@@ -160,14 +130,16 @@ def test_uneven_records_give_scenario_balanced_rates_and_no_sd(tmp_path):
 
 
 def test_sd_uses_only_run_indices_covering_every_scenario(tmp_path):
-    write_scored(tmp_path / "x", [("p1", "easy", 0, 1.0), ("p2", "easy", 0, 1.0), ("p1", "easy", 1, 0.0),
-                                  ("p2", "easy", 1, 0.0), ("p1", "easy", 2, 1.0)])  # run 2 is incomplete
+    for r in [("p1", "easy", 0, 1.0), ("p2", "easy", 0, 1.0), ("p1", "easy", 1, 0.0),
+              ("p2", "easy", 1, 0.0), ("p1", "easy", 2, 1.0)]:  # run 2 is incomplete
+        write_record(tmp_path / "x", *r)
     row = evaluate.summarise("x", out_dir=tmp_path)[0]
     assert row["accuracy_std"] == 0.5
 
 
 def test_expected_scenarios_shown_when_they_differ(tmp_path):
-    write_scored(tmp_path / "x", [("p1", "easy", 0, 1.0), ("c1", "control", 0, 1.0)])
+    write_record(tmp_path / "x", "p1", "easy", 0, 1.0)
+    write_record(tmp_path / "x", "c1", "control", 0, 1.0)
     rows = evaluate.summarise("x", out_dir=tmp_path, expected={"easy": 2, "control": 1})
     by = {r["category"]: r for r in rows}
     assert by["easy"]["expected"] == 2 and by["control"]["expected"] == 1 and by["all incidents"]["expected"] == 2
@@ -176,7 +148,8 @@ def test_expected_scenarios_shown_when_they_differ(tmp_path):
 
 
 def test_format_dashes_for_meaningless_cells_and_footnotes_the_two_fault_metrics(tmp_path):
-    write_scored(tmp_path / "x", [("p1", "easy", 0, 1.0), ("c1", "control", 0, 0.0)])
+    write_record(tmp_path / "x", "p1", "easy", 0, 1.0)
+    write_record(tmp_path / "x", "c1", "control", 0, 0.0)
     lines = evaluate.format_summary(evaluate.summarise("x", out_dir=tmp_path)).splitlines()
     cells = {l.split("|")[1].strip(): [c.strip() for c in l.split("|")[2:-1]] for l in lines if l.startswith("| ") and "category" not in l}
     # columns: scenarios, runs, accuracy, top-3, fault type, false alarm, abstain
@@ -232,12 +205,10 @@ def test_code_version_is_unknown_without_git(monkeypatch):
 
 
 def test_errors_column_is_the_scenario_balanced_share_of_error_records(tmp_path):
-    d = tmp_path / "x"
-    d.mkdir()
     score = {"correct": 0.0, "top3": False, "fault_type_ok": False, "false_alarm": False, "abstained": True}
     # p1: 1 of 4 records errored (0.25); p2: 1 of 1 (1.0) -> balanced 0.625, not 2/5
     for sid, k, err in [("p1", 0, "BadRequestError: x"), ("p1", 1, None), ("p1", 2, None), ("p1", 3, None), ("p2", 0, "BadRequestError: y")]:
-        (d / f"{sid}__{k}.json").write_text(json.dumps({"scenario": sid, "category": "easy", "run": k, "score": score, "error": err}))
+        write_record(tmp_path / "x", sid, "easy", k, 0.0, score=score, error=err)
     row = evaluate.summarise("x", out_dir=tmp_path)[0]
     assert row["errors"] == 0.625
     assert evaluate.format_summary([row]).splitlines()[0].endswith("| errors |")
@@ -245,7 +216,7 @@ def test_errors_column_is_the_scenario_balanced_share_of_error_records(tmp_path)
 
 
 def test_errors_column_is_a_dash_when_the_solver_never_sets_error(tmp_path):
-    write_recs(tmp_path / "x", [("p1", "easy", 0)])
+    write_record(tmp_path / "x", "p1", "easy", 0, 1.0)
     row = evaluate.summarise("x", out_dir=tmp_path)[0]
     assert row["errors"] is None
     assert evaluate.format_summary([row]).splitlines()[2].endswith("| - |")
@@ -328,9 +299,6 @@ def test_usage_and_tokens_per_correct():
 
 def test_load_records_respects_split(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "HELDOUT", ("b",))
-    d = tmp_path / "x"
-    d.mkdir()
     for sid in ("a", "b"):
-        (d / f"{sid}__0.json").write_text(json.dumps({"scenario": sid, "category": "easy", "run": 0,
-                                                       "score": {"correct": 1.0}}))
+        write_record(tmp_path / "x", sid, "easy", 0, 1.0)
     assert [r["scenario"] for r in evaluate.load_records("x", tmp_path, split="tune")] == ["a"]

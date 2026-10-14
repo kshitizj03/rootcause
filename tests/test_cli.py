@@ -5,12 +5,9 @@ import subprocess
 import pytest
 
 from agent_fakes import RecordingAgent
-from helpers import FLAGS, flat_span
+from helpers import FLAGS, INFO, fake_run, flat_log, flat_span, write_snapshot
 from rootcause import cli, config, harness, inject, sanitize, scenarios, snapshot
 from rootcause import stack as stack_mod  # `stack` is a fixture below
-
-INFO = ["docker", "info", "--format", "{{.NCPU}}"]
-
 
 def sc(id, docker=None):
     return scenarios.Scenario(id=id, category="easy", alert="a", inject={"docker": docker} if docker else {},
@@ -40,17 +37,6 @@ def stack(tmp_path, monkeypatch, state):
     shutil.copy(FLAGS, flags_file)
     state.write_text(json.dumps({"dirty": True, "error": "boom"}))
     return flags_file
-
-
-def fake_run(calls, fail=None, ncpu="16\n"):
-    def run(cmd):
-        calls.append(cmd)
-        if cmd == INFO:
-            return ncpu
-        if fail:
-            fail(cmd)
-        return ""
-    return run
 
 
 def reset(flags_file, run):
@@ -354,18 +340,11 @@ def test_revalidate_without_index_exit_2(reval, snaps):
 # --- resanitize ---
 
 def _leaky_snapshot(snaps, name="incident__x"):
-    path = snaps / name
-    path.mkdir()
-    (path / "meta.json").write_text(json.dumps({"alert": "a", "baseline_start": 0, "fault_start": 10, "end": 20, "demo_commit": ""}))
-    (path / "truth.json").write_text(json.dumps({"scenario_id": "s1"}))
-    (path / "metrics.json").write_text(json.dumps({}))
-    snapshot._write_jsonl_gz(path / "spans.jsonl.gz", [
-        flat_span(span_id="a", service="frontend-proxy", name="router flagservice egress"), flat_span(span_id="b")])
-    snapshot._write_jsonl_gz(path / "logs.jsonl.gz", [
-        {"service": "frontend-proxy", "body": "POST /[redacted].v1.Service/ResolveAll via /flagservice/"},
-        {"service": "checkout", "body": "Warning: [redacted] '[redacted]' is activated, overloading queue now."},
-        {"service": "payment", "body": "Payment failure: card declined"}, {"service": "cart", "body": "ok"}])
-    return path
+    spans = [flat_span(span_id="a", service="frontend-proxy", name="router flagservice egress"), flat_span(span_id="b")]
+    logs = [flat_log("frontend-proxy", "POST /[redacted].v1.Service/ResolveAll via /flagservice/"),
+            flat_log("checkout", "Warning: [redacted] '[redacted]' is activated, overloading queue now."),
+            flat_log("payment", "Payment failure: card declined"), flat_log("cart", "ok")]
+    return write_snapshot(snaps / name, spans=spans, logs=logs)
 
 
 def _snap_bytes(path):

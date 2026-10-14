@@ -1,17 +1,6 @@
+from helpers import series, snap
 from rootcause import heuristic
 from rootcause.score import Cause
-
-META = {"baseline_start": 0.0, "fault_start": 900.0, "end": 1200.0}
-
-
-def series(base, fault):
-    # baseline covers t=0..900 (the sample at fault_start is pre-fault traffic); fault starts at 915
-    return [[float(t), base] for t in range(0, 901, 15)] + [[float(t), fault] for t in range(915, 1215, 15)]
-
-
-def snap(metrics):
-    return {"meta": META, "metrics": metrics, "spans": [], "logs": []}
-
 
 def test_names_the_service_whose_fault_signal_rose_most():
     r = heuristic.diagnose(snap({"error_ratio": {"payment": series(0.0, 0.3), "checkout": series(0.0, 0.05)},
