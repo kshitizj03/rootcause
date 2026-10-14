@@ -9,8 +9,6 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from rootcause import config, evaluate, scenarios  # noqa: E402
 
-SOLVER_ORDER = ["heuristic", "agent-v0", "agent-v1", "agent-v1-nopriors", "agent-v1-vague",
-                "agent-v0-nemotron", "agent-v1-nemotron", "agent-v1-nemotron-nopriors", "agent-v1-nemotron-vague"]
 # the figures show the heuristic and each model's v0 / v1; ablations are in the tables and paired comparisons only
 FIGURE_SOLVERS = ("heuristic", "agent-v0", "agent-v1", "agent-v0-nemotron", "agent-v1-nemotron")
 # categorical palette; one fixed colour per solver in both charts
@@ -53,17 +51,32 @@ def _acc(row):
     return f"{_fmt2(row['accuracy_mean'])} ± {_fmt2(row['accuracy_std'])} ({n} sc, {runs} run{'' if runs == '1' else 's'})"
 
 
-def _partial(data, solver, split):
-    """"1-2 runs per scenario, 32/100 runs" when some library scenario in the split has fewer runs than the most-run one."""
+def _shortfall(data, solver, split):
+    """(fewest, most runs per library scenario in the split, runs done, runs planned) when some scenario has fewer runs
+    than evaluate.planned_runs(solver); None for a complete batch or a solver with no runs in the split."""
     counts = {}
     for r in data["records"][solver]:
         if evaluate.in_split(r["scenario"], split):
             counts[r["scenario"]] = counts.get(r["scenario"], 0) + 1
     per = [counts.get(x.id, 0) for x in scenarios.load_all() if evaluate.in_split(x.id, split)]
-    if not per or min(per) == max(per):
+    planned = evaluate.planned_runs(solver)
+    if not sum(per) or min(per) >= planned:
         return None
-    lo, hi = min(per), max(per)
-    return f"{lo}-{hi} runs per scenario, {sum(per)}/{hi * len(per)} runs"
+    return min(per), max(per), sum(per), planned * len(per)
+
+
+def _partial(data, solver, split):
+    """"1-2 runs per scenario, 32/100 runs" (done / planned) for a partial batch, else None."""
+    if not (s := _shortfall(data, solver, split)):
+        return None
+    lo, hi, done, planned = s
+    return f"{lo if lo == hi else f'{lo}-{hi}'} runs per scenario, {done}/{planned} runs"
+
+
+def _label(data, solver):
+    """Figure legend label: "agent-v0 (partial, 32/100)" for a partial batch over all scenarios."""
+    s = _shortfall(data, solver, "all")
+    return f"{solver} (partial, {s[2]}/{s[3]})" if s else solver
 
 
 def _rows(data, split, solvers):
@@ -272,7 +285,7 @@ def _bars(data, solvers):
             sds = [rows[s][cats[j]]["accuracy_std"] for j in have]  # NaN where there is no sd: no error bar, not a zero-width one
             lo = [float("nan") if sd is None else min(sd, v) for v, sd in zip(vals, sds)]  # accuracy lives in [0, 1]
             hi = [float("nan") if sd is None else min(sd, 1 - v) for v, sd in zip(vals, sds)]
-            ax.bar(xs, vals, width, yerr=[lo, hi], color=COLOURS.get(s, "#8a8a85"), edgecolor=SURFACE, linewidth=1, label=s,
+            ax.bar(xs, vals, width, yerr=[lo, hi], color=COLOURS.get(s, "#8a8a85"), edgecolor=SURFACE, linewidth=1, label=_label(data, s),
                    ecolor=MUTED, capsize=2)
             for x, v, h in zip(xs, vals, hi):
                 ax.text(x, v + (0 if h != h else h) + 0.015, f"{v:.2f}", ha="center", va="bottom", rotation=90, fontsize=7, color=INK)
@@ -289,13 +302,13 @@ def _lines(data, solvers):
             if curve:
                 drawn = True
                 ax.plot([p["coverage"] for p in curve], [p["accuracy"] for p in curve], marker="o", markersize=6, linewidth=2,
-                        color=COLOURS.get(s, "#8a8a85"), label=s)
+                        color=COLOURS.get(s, "#8a8a85"), label=_label(data, s))
         ax.set_xlim(0, 1.05)
         return drawn
     return draw
 
 
-def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, solvers=SOLVER_ORDER):
+def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, solvers=evaluate.SOLVER_ORDER):
     """Write out_dir/report.md and out_dir/figures/*.png from the records under runs_dir; return the report path."""
     out_dir, solvers = Path(out_dir), list(solvers)
     (out_dir / "figures").mkdir(parents=True, exist_ok=True)

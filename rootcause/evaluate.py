@@ -12,6 +12,15 @@ from rootcause import config, evidence, scenarios, snapshot
 from rootcause.score import report_to_dict, score
 
 RUNS_DIR = config.DATA / "runs"
+SOLVER_ORDER = ["heuristic", "agent-v0", "agent-v1", "agent-v1-nopriors", "agent-v1-vague",
+                "agent-v0-nemotron", "agent-v1-nemotron", "agent-v1-nemotron-nopriors", "agent-v1-nemotron-vague"]
+# runs per scenario each solver's batch is meant to have; any solver not listed: 5
+PLANNED_RUNS = {"heuristic": 1, "agent-v1-vague": 3, "agent-v1-nopriors": 3, "laya-multilingual": 1, "laya-english": 1,
+                "hunch-1.7b": 1, "hunch-0.6b": 1}
+
+
+def planned_runs(solver):
+    return PLANNED_RUNS.get(solver, 5)
 
 
 def targets(ids=None):

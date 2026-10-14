@@ -8,7 +8,7 @@ import shutil
 from datetime import date
 from pathlib import Path
 
-from rootcause import config, evaluate, report, scenarios, snapshot, tools_v0
+from rootcause import config, evaluate, scenarios, snapshot, tools_v0
 
 MAX_OUTPUT = 3000
 TAIL_LISTS = {"samples"}  # search_logs returns the *last* N lines, so cutting keeps the newest
@@ -86,7 +86,7 @@ def _truth(s, rows):
     return [{"accept": c["accept"], "fault_type": c["fault_type"]} for c in truth.get("causes", [])]
 
 
-def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=report.SOLVER_ORDER):
+def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=evaluate.SOLVER_ORDER):
     """Write out_dir/data/index.json, out_dir/data/incidents/<id>.json and out_dir/figures/*.png; return out_dir."""
     out_dir = Path(out_dir)
     target, root = out_dir.resolve(), config.ROOT.resolve()

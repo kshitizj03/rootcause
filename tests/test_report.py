@@ -60,10 +60,11 @@ def test_report_content_cells_partial_batches_and_small_n(tmp_path, monkeypatch)
     assert "| easy | 0.50 ± - (2/2 sc, 1 run) | 0.75 ± - (2/2 sc, 1-2 runs) | not run |" in md
     assert "| control | 1.00 ± - (1/1 sc, 1 run) | 1.00 ± 0.00 (1/1 sc, 2 runs) | not run |" in md  # held-out table, n per cell
     assert "held-out categories have one scenario each; read the all-incidents row" in md.lower()
-    # partial-batch note under the all and tune tables, not for the complete heuristic batch or the held-out split
-    assert "agent-v1: partial batch (1-2 runs per scenario, 5/6 runs)" in md
-    assert "agent-v1: partial batch (1-2 runs per scenario, 3/4 runs)" in md
-    assert md.count("agent-v1: partial batch") == 3  # under the all and tune tables, and the paired comparisons
+    # partial-batch note against the planned runs (agent-v1: 5, heuristic: 1), not for the complete heuristic batch
+    assert "agent-v1: partial batch (1-2 runs per scenario, 5/15 runs)" in md
+    assert "agent-v1: partial batch (1-2 runs per scenario, 3/10 runs)" in md
+    assert "agent-v1: partial batch (2 runs per scenario, 2/5 runs)" in md
+    assert md.count("agent-v1: partial batch") == 4  # under the all, tune and held-out tables, and the paired comparisons
     assert "heuristic: partial" not in md
     # per-scenario cells show mean (n runs)
     assert "| a | easy | 1.00 (1 run) | 0.50 (2 runs) | not run |" in md
@@ -76,7 +77,7 @@ def test_report_content_cells_partial_batches_and_small_n(tmp_path, monkeypatch)
     assert "| agent-v1 | 1.00 | 1.00 |" in md
     # coverage: nearest curve point to 50% (threshold 0.9 -> 20% coverage), with the partial-batch caveat
     line = next(l for l in md.splitlines() if l.startswith("agent-v1: accuracy"))
-    assert "accuracy 1.00 at 20% coverage" in line and "partial batch (1-2 runs per scenario, 5/6 runs)" in line.lower()
+    assert "accuracy 1.00 at 20% coverage" in line and "partial batch (1-2 runs per scenario, 5/15 runs)" in line.lower()
 
 
 def test_evidence_provenance_and_wording(tmp_path, monkeypatch):
@@ -149,3 +150,14 @@ def test_step_limit_section_splits_fault_runs_by_whether_they_hit_the_limit(tmp_
     # 4 fault runs (the control is left out); 3 hit the 15-step limit; of those 2 said no incident, 1 was right
     assert "| agent-v1 | 4 | 3 (75%) | 2 of 3 | 0.33 | 1.00 |" in sec
     assert "heuristic" not in sec  # no model, no step limit
+
+
+def test_partial_batches_are_measured_against_planned_runs(monkeypatch):
+    monkeypatch.setattr(config, "HELDOUT", ())
+    monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario(f"s{i}", "easy", "x", {}, {}, []) for i in range(20)])
+    recs = [{"scenario": f"s{i}"} for i in range(20)] + [{"scenario": f"s{i}"} for i in range(12)]  # 32 runs: 1-2 each
+    data = {"records": {"agent-v0": recs, "heuristic": recs[:20], "agent-v1": []}}
+    assert report._partial(data, "agent-v0", "all") == "1-2 runs per scenario, 32/100 runs"
+    assert report._label(data, "agent-v0") == "agent-v0 (partial, 32/100)"
+    assert report._partial(data, "heuristic", "all") is None and report._label(data, "heuristic") == "heuristic"  # 1 planned
+    assert report._partial(data, "agent-v1", "all") is None  # no runs: "not run", not partial
