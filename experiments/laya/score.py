@@ -1,10 +1,12 @@
-"""Laya entry test, step 3 of 3 (project venv): turn Laya's answers into reports and score them like any solver.
+"""Laya and Hunch entry tests, step 3 of 3 (project venv): turn either model's answers into reports and score them
+like any solver.
 
 Records go to data/runs/<variant>/ through evaluate.run, so the scoring rules, truth handling and code tag are the
-same as every other solver's. A report ranks services by Laya's probability (top 3); `no_incident` wins only if it
-is the single most likely option. Laya cites no evidence, so its reports carry none.
+same as every other solver's. A report ranks services by the model's probability (top 3); `no_incident` wins only if
+it is the single most likely option. Neither model cites evidence, so their reports carry none.
 
-    .venv/Scripts/python.exe -m experiments.laya.score [predictions.json]   (default: Laya's; Hunch reuses this step)
+    .venv/Scripts/python.exe -m experiments.laya.score [predictions.json]   (default: Laya's; Hunch's are in
+    .cache/hunch/predictions.json)
 """
 import json
 import sys
@@ -30,7 +32,7 @@ def main():
         def solve(snap, by_key=by_key, name=name):
             p = by_key[str(snap["meta"]["fault_start"])]
             return report(p), {"solver": name, "truncated": p["truncated"], "input_tokens": p["tokens"],
-                               "laya_seconds": p["seconds"]}
+                               "model_seconds": p["seconds"]}
         out = evaluate.run(name, solve, runs=1)
         print(name, out)
         print(evaluate.format_summary(evaluate.summarise(name, expected=evaluate.expected_counts("all"))))
