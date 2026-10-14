@@ -167,18 +167,25 @@ def summarise(solver_name, out_dir=RUNS_DIR, expected=None, split=None):
     return rows
 
 
+def fmt2(x):
+    return "-" if x is None else f"{x:.2f}"
+
+
+def runs_range(lo, hi):
+    """Runs per scenario: "3", or "3-5" for a partial batch."""
+    return str(lo) if lo == hi else f"{lo}-{hi}"
+
+
 def format_summary(rows):
-    fmt = lambda x: "-" if x is None else f"{x:.2f}"
     out = ["| category | scenarios | runs | accuracy (mean +/- sd) | top-3 | fault type (cause+type) | false alarm | abstain | grounded | distinctive | errors |",
            "|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
-        lo, hi = r["records_min"], r["records_max"]  # runs per scenario: "3-5" flags a partial batch
-        runs = str(lo) if lo == hi else f"{lo}-{hi}"
+        runs = runs_range(r["records_min"], r["records_max"])
         n, exp = r["scenarios"], r.get("expected")
         scenarios_ = str(n) if exp in (None, n) else f"{n}/{exp}"
         control = r["category"] == "control"
-        out.append(f"| {r['category']} | {scenarios_} | {runs} | {fmt(r['accuracy_mean'])} +/- "
-                   f"{fmt(r['accuracy_std'])} | {'-' if control else fmt(r['top3'])} | {fmt(r['fault_type'])} | "
-                   f"{fmt(r['false_alarm']) if control else '-'} | {fmt(r['abstain'])} | {fmt(r['grounded'])} | {fmt(r['distinctive'])} | {fmt(r['errors'])} |")
+        out.append(f"| {r['category']} | {scenarios_} | {runs} | {fmt2(r['accuracy_mean'])} +/- "
+                   f"{fmt2(r['accuracy_std'])} | {'-' if control else fmt2(r['top3'])} | {fmt2(r['fault_type'])} | "
+                   f"{fmt2(r['false_alarm']) if control else '-'} | {fmt2(r['abstain'])} | {fmt2(r['grounded'])} | {fmt2(r['distinctive'])} | {fmt2(r['errors'])} |")
     out.append("two-fault: accuracy = fraction of causes found; top-3 = both causes found")
     return "\n".join(out)

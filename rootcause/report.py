@@ -8,12 +8,13 @@ matplotlib.use("Agg")  # no display needed; must precede pyplot
 import matplotlib.pyplot as plt  # noqa: E402
 
 from rootcause import config, evaluate, scenarios  # noqa: E402
+from rootcause.evaluate import fmt2, runs_range  # noqa: E402
 
 # the figures show the heuristic and each model's v0 / v1; ablations are in the tables and paired comparisons only
 FIGURE_SOLVERS = ("heuristic", "agent-v0", "agent-v1", "agent-v0-nemotron", "agent-v1-nemotron")
 # categorical palette; one fixed colour per solver in both charts
-COLOURS = {"heuristic": "#2a78d6", "agent-v0": "#eb6834", "agent-v1": "#1baf7a", "agent-v1-nopriors": "#eda100",
-           "agent-v1-vague": "#e87ba4", "agent-v0-nemotron": "#b9a6ea", "agent-v1-nemotron": "#7d5ccf"}
+COLOURS = {"heuristic": "#2a78d6", "agent-v0": "#eb6834", "agent-v1": "#1baf7a", "agent-v0-nemotron": "#b9a6ea",
+           "agent-v1-nemotron": "#7d5ccf"}
 SPLITS = ("all", "tune", "heldout")
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
 NOT_RUN = "not run"
@@ -21,20 +22,16 @@ DISCLOSURE = ("During agent-v1 development, v1 tool output was viewed on one hel
               "The one feature it suggested that no tuning snapshot exercised (an incomplete-services list) was removed "
               "before any v1 run; the other changes from that time (stopped service-map edges, the 'after = 0 can mean "
               "the service stopped reporting' caveat) are each exercised by the tuning snapshot payment-unreachable.")
-# (a, b): is a better than b? Each is shown only when both have records.
 MIN_PAIRED = 5  # fewer shared incidents than this: no interval
+# (a, b): is a better than b? Each is shown only when both have records.
 PAIRS = [("agent-v0", "heuristic"), ("agent-v1", "heuristic"), ("agent-v1", "agent-v0"),
          ("agent-v1-nopriors", "agent-v1"), ("agent-v1-vague", "agent-v1"), ("agent-v1-nemotron", "heuristic"),
          ("agent-v1-nemotron", "agent-v1"), ("agent-v1-nemotron", "agent-v0-nemotron"),
          ("agent-v1-nemotron-nopriors", "agent-v1-nemotron"), ("agent-v1-nemotron-vague", "agent-v1-nemotron")]
 FLASH_NOTE = ("A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run "
-              "takes about 10, so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparison is instead "
+              "takes about 12-15 requests (up to 17), so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparison is instead "
               "agent-v1-nemotron: agent v1 unchanged (prompt, tools, step limit) on `nvidia/nemotron-3-super-120b-a12b` "
               "through NVIDIA's free trial endpoint.")
-
-
-def _fmt2(x):
-    return "-" if x is None else f"{x:.2f}"
 
 
 def _table(header, rows):
@@ -45,10 +42,9 @@ def _acc(row):
     """mean ± sd (scenarios in the split / library, runs per scenario): small n and partial batches stay visible."""
     if row is None:
         return "-"
-    lo, hi = row["records_min"], row["records_max"]
-    runs = str(lo) if lo == hi else f"{lo}-{hi}"
+    runs = runs_range(row["records_min"], row["records_max"])
     n = f"{row['scenarios']}/{row['expected'] or row['scenarios']}"
-    return f"{_fmt2(row['accuracy_mean'])} ± {_fmt2(row['accuracy_std'])} ({n} sc, {runs} run{'' if runs == '1' else 's'})"
+    return f"{fmt2(row['accuracy_mean'])} ± {fmt2(row['accuracy_std'])} ({n} sc, {runs} run{'' if runs == '1' else 's'})"
 
 
 def _shortfall(data, solver, split):
@@ -70,7 +66,7 @@ def _partial(data, solver, split):
     if not (s := _shortfall(data, solver, split)):
         return None
     lo, hi, done, planned = s
-    return f"{lo if lo == hi else f'{lo}-{hi}'} runs per scenario, {done}/{planned} runs"
+    return f"{runs_range(lo, hi)} runs per scenario, {done}/{planned} runs"
 
 
 def _label(data, solver):
@@ -106,7 +102,7 @@ def _accuracy_tables(data, solvers):
 def _rate_section(data, solvers, title, note, columns, skip=lambda s: None):
     """columns: [(header, category row, key)] read from the all split; skip(solver) may return a replacement cell."""
     rows = _rows(data, "all", solvers)
-    body = [[s] + [NOT_RUN if not rows[s] else skip(s) or _fmt2(rows[s].get(cat, {}).get(key)) for _, cat, key in columns] for s in solvers]
+    body = [[s] + [NOT_RUN if not rows[s] else skip(s) or fmt2(rows[s].get(cat, {}).get(key)) for _, cat, key in columns] for s in solvers]
     return [title, note, _table(["solver"] + [h for h, _, _ in columns], body)]
 
 
@@ -121,7 +117,7 @@ def _cost(data, solvers):
         elif u is None:
             body.append([s, f"0 / {len(data['records'][s])}"] + ["-"] * 5)
         else:
-            body.append([s, f"{u['runs']} / {len(data['records'][s])}", _fmt2(u["requests_mean"]), str(u["requests_max"]), f"{u['prompt_tokens_mean']:.0f}",
+            body.append([s, f"{u['runs']} / {len(data['records'][s])}", fmt2(u["requests_mean"]), str(u["requests_max"]), f"{u['prompt_tokens_mean']:.0f}",
                          f"{u['completion_tokens_mean']:.0f}", "-" if u["tokens_per_correct"] is None else f"{u['tokens_per_correct']:.0f}"])
     return ["## Cost", "The heuristic makes no model calls, so it has no token usage.", _table(heads, body)]
 
@@ -184,10 +180,10 @@ def _step_limit_section(data, solvers):
             continue
         hit = [r for r in recs if r["turns"] >= MAX_STEPS]
         free = [r for r in recs if r["turns"] < MAX_STEPS]
-        acc = lambda rs: _fmt2(sum(r["score"]["correct"] for r in rs) / len(rs)) if rs else "-"
+        acc = lambda rs: fmt2(sum(r["score"]["correct"] for r in rs) / len(rs)) if rs else "-"
         rows.append([s, str(len(recs)), f"{len(hit)} ({len(hit) / len(recs):.0%})",
                      f"{sum(r['report']['verdict'] == 'no_incident' for r in hit)} of {len(hit)}", acc(hit), acc(free)])
-    return [f"## Step limit (all split, fault runs)",
+    return ["## Step limit (all split, fault runs)",
             f"An agent that is still calling tools after {MAX_STEPS} model turns is told to give its final answer. "
             "This splits each agent's fault runs by whether that happened: how many hit the limit, how many of those then "
             "answered \"no incident\", and the accuracy (mean over runs, not per scenario) with and without hitting it.",
@@ -197,7 +193,7 @@ def _step_limit_section(data, solvers):
 
 def _per_scenario(data, solvers):
     means = {s: _means(data["records"][s]) for s in solvers}
-    one = lambda s, sid: f"{_fmt2(means[s][sid][0])} ({means[s][sid][1]} run{'' if means[s][sid][1] == 1 else 's'})" if sid in means[s] else "-"
+    one = lambda s, sid: f"{fmt2(means[s][sid][0])} ({means[s][sid][1]} run{'' if means[s][sid][1] == 1 else 's'})" if sid in means[s] else "-"
     cell = lambda s, sid: NOT_RUN if not data["records"][s] else one(s, sid)
     body = [[x.id + ("*" if x.id in config.HELDOUT else ""), x.category] + [cell(s, x.id) for s in solvers] for x in scenarios.load_all()]
     return ["## Per-scenario accuracy", "`*` marks held-out scenarios; each cell is the mean over that scenario's runs, with the number of runs.", _table(["scenario", "category"] + solvers, body)]
@@ -215,8 +211,8 @@ def _coverage_section(data, solvers):
             out.append(f"{s}: every run abstained, so there is no curve.")
             continue
         p = min(curve, key=lambda p: abs(p["coverage"] - 0.5))
-        out.append(f"{s}: accuracy {_fmt2(p['accuracy'])} at {p['coverage']:.0%} coverage "
-                   f"(the curve point nearest 50%, confidence >= {_fmt2(p['threshold'])})."
+        out.append(f"{s}: accuracy {fmt2(p['accuracy'])} at {p['coverage']:.0%} coverage "
+                   f"(the curve point nearest 50%, confidence >= {fmt2(p['threshold'])})."
                    + (f" Partial batch ({note}): treat with caution." if (note := _partial(data, s, "all")) else ""))
     return out
 
