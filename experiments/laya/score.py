@@ -4,9 +4,11 @@ Records go to data/runs/<variant>/ through evaluate.run, so the scoring rules, t
 same as every other solver's. A report ranks services by Laya's probability (top 3); `no_incident` wins only if it
 is the single most likely option. Laya cites no evidence, so its reports carry none.
 
-    .venv/Scripts/python.exe -m experiments.laya.score
+    .venv/Scripts/python.exe -m experiments.laya.score [predictions.json]   (default: Laya's; Hunch reuses this step)
 """
 import json
+import sys
+from pathlib import Path
 
 from rootcause import config, evaluate
 from rootcause.score import Cause, Report
@@ -23,7 +25,7 @@ def report(p):
 
 
 def main():
-    preds = json.loads(PRED.read_text(encoding="utf-8"))
+    preds = json.loads((Path(sys.argv[1]) if len(sys.argv) > 1 else PRED).read_text(encoding="utf-8"))
     for name, by_key in preds.items():
         def solve(snap, by_key=by_key, name=name):
             p = by_key[str(snap["meta"]["fault_start"])]
