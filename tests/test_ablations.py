@@ -63,7 +63,7 @@ def test_nemotron_variants_match_their_gemini_counterparts_except_the_model(monk
     monkeypatch.setattr(agent, "make_nvidia_client", lambda: "nvidia-client")
     snap = {"meta": {"alert": "Orders fail at checkout."}, "metrics": {}, "spans": [], "logs": []}
     same = lambda kw: {k: v for k, v in kw.items() if k not in ("llm", "models", "name")}
-    for gemini, nemotron in (("agent", "agent-v0-nemotron"), ("agent-v1-nopriors", "agent-v1-nemotron-nopriors"),
+    for gemini, nemotron in (("agent-v0", "agent-v0-nemotron"), ("agent-v1-nopriors", "agent-v1-nemotron-nopriors"),
                              ("agent-v1-vague", "agent-v1-nemotron-vague")):
         FakeAgent.seen.clear()
         for name in (gemini, nemotron):

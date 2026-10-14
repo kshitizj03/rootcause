@@ -19,7 +19,7 @@ def _heuristic_solver():
     return "heuristic", heuristic.solve, ()
 
 
-def _agent_solver():
+def _agent_v0_solver():
     from rootcause import agent  # imported lazily: only the agent needs the Gemini client
     # one model per batch (and patient retries, since 503 overloads are common): a per-day quota stops the run (resume tomorrow) instead of silently mixing models in the table
     return agent.NAME, agent.Agent(models=agent.MODELS[:1], attempts=5).solve, (agent.QuotaExhausted,)
@@ -48,35 +48,35 @@ def _agent_v1_vague_solver():
     return "agent-v1-vague", solve, (agent.QuotaExhausted,)
 
 
-def _nemotron():
+def _nemotron_kwargs():
     from rootcause import agent  # another model family on NVIDIA's free endpoint (NVIDIA_API_KEY in .env)
     return {"llm": agent.make_nvidia_client(), "models": [agent.NEMOTRON]}
 
 
 def _agent_v0_nemotron_solver():
     from rootcause import agent  # agent v0 exactly (naive tools, v0 prompt), on Nemotron
-    return "agent-v0-nemotron", agent.Agent(**_nemotron(), attempts=5, name="agent-v0-nemotron").solve, (agent.QuotaExhausted,)
+    return "agent-v0-nemotron", agent.Agent(**_nemotron_kwargs(), attempts=5, name="agent-v0-nemotron").solve, (agent.QuotaExhausted,)
 
 
 def _agent_v1_nemotron_solver():
     from rootcause import agent  # agent-v1 exactly, on Nemotron
-    return "agent-v1-nemotron", _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron", **_nemotron()).solve, (agent.QuotaExhausted,)
+    return "agent-v1-nemotron", _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron", **_nemotron_kwargs()).solve, (agent.QuotaExhausted,)
 
 
 def _agent_v1_nemotron_nopriors_solver():
     from rootcause import agent
-    a = _v1_agent(agent.SYSTEM_V1_NOPRIORS, "agent-v1-nemotron-nopriors", **_nemotron())
+    a = _v1_agent(agent.SYSTEM_V1_NOPRIORS, "agent-v1-nemotron-nopriors", **_nemotron_kwargs())
     return "agent-v1-nemotron-nopriors", a.solve, (agent.QuotaExhausted,)
 
 
 def _agent_v1_nemotron_vague_solver():
     from rootcause import agent
-    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron-vague", **_nemotron())
+    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron-vague", **_nemotron_kwargs())
     solve = lambda snap: a.solve({**snap, "meta": {**snap["meta"], "alert": agent.VAGUE_ALERT}})
     return "agent-v1-nemotron-vague", solve, (agent.QuotaExhausted,)
 
 
-SOLVERS = {"heuristic": _heuristic_solver, "agent": _agent_solver,
+SOLVERS = {"heuristic": _heuristic_solver, "agent-v0": _agent_v0_solver,
            "agent-v1": _agent_v1_solver, "agent-v1-nopriors": _agent_v1_nopriors_solver,
            "agent-v1-vague": _agent_v1_vague_solver, "agent-v1-nemotron": _agent_v1_nemotron_solver,
            "agent-v0-nemotron": _agent_v0_nemotron_solver, "agent-v1-nemotron-nopriors": _agent_v1_nemotron_nopriors_solver,
@@ -85,7 +85,7 @@ SOLVERS = {"heuristic": _heuristic_solver, "agent": _agent_solver,
 
 class _Subparser(argparse.ArgumentParser):
     """Python 3.11's argparse gives a trailing `nargs="*"` positional [] when an option comes between it and the
-    previous positional (`eval agent --runs 5 some-id`); intermixed parsing lets options and positionals interleave."""
+    previous positional (`eval agent-v0 --runs 5 some-id`); intermixed parsing lets options and positionals interleave."""
     _intermixed = False
 
     def parse_known_args(self, args=None, namespace=None):

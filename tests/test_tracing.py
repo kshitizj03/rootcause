@@ -69,8 +69,8 @@ def test_failed_attempt_span_is_error_with_exception_type_only():
 
 def test_eval_trace_flag_defaults_to_off():
     from rootcause import cli
-    assert cli.build_parser().parse_args(["eval", "agent"]).trace == "off"
-    assert cli.build_parser().parse_args(["eval", "agent", "--trace", "file"]).trace == "file"
+    assert cli.build_parser().parse_args(["eval", "agent-v0"]).trace == "off"
+    assert cli.build_parser().parse_args(["eval", "agent-v0", "--trace", "file"]).trace == "file"
 
 
 def test_chat_spans_are_client_spans_and_unknown_tools_are_not_named():

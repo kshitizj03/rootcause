@@ -443,8 +443,8 @@ def test_eval_and_summary_commands_parse():
     p = cli.build_parser()
     a = p.parse_args(["eval", "heuristic"])
     assert (a.cmd, a.solver, a.runs, a.ids) == ("eval", "heuristic", 1, [])
-    a = p.parse_args(["eval", "agent", "--runs", "5", "payment-failure-50"])
-    assert (a.solver, a.runs, a.ids) == ("agent", 5, ["payment-failure-50"])
+    a = p.parse_args(["eval", "agent-v0", "--runs", "5", "payment-failure-50"])
+    assert (a.solver, a.runs, a.ids) == ("agent-v0", 5, ["payment-failure-50"])
     assert p.parse_args(["summary", "heuristic"]).solver == "heuristic"
 
 
@@ -481,7 +481,7 @@ def _stub_eval(monkeypatch, run):
 
 def test_eval_quota_stop_exits_4_and_says_how_to_resume(monkeypatch, capsys):
     _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 2, "stopped": "QuotaExhausted: daily"})
-    assert cli.main(["eval", "agent"]) == 4
+    assert cli.main(["eval", "agent-v0"]) == 4
     out = capsys.readouterr().out
     assert "stopped: QuotaExhausted: daily" in out and "re-run the same command after the quota resets to resume" in out
 
@@ -492,7 +492,7 @@ def test_eval_gemini_api_error_exits_5_without_the_reset_hint(monkeypatch, capsy
     def boom(*a, **k):
         raise openai.OpenAIError("no choices")
     _stub_eval(monkeypatch, boom)
-    assert cli.main(["eval", "agent"]) == 5
+    assert cli.main(["eval", "agent-v0"]) == 5
     err = capsys.readouterr().err
     assert "Gemini API error: no choices" in err and "reset-flags" not in err
 
@@ -507,7 +507,7 @@ def test_stack_runtime_errors_still_exit_3_with_the_hint(monkeypatch, capsys):
     assert "reset-flags" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("solver", ["heuristic", "agent"])
+@pytest.mark.parametrize("solver", ["heuristic", "agent-v0"])
 def test_summary_with_no_records_says_so(monkeypatch, capsys, solver):
     from rootcause import evaluate
     monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: [])
@@ -531,7 +531,7 @@ def test_eval_agent_pins_the_batch_to_one_model(monkeypatch):
 
     _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 0, "stopped": None})
     monkeypatch.setattr(agent, "Agent", FakeAgent)
-    assert cli.main(["eval", "agent"]) == 0
+    assert cli.main(["eval", "agent-v0"]) == 0
     assert built == {"models": agent.MODELS[:1], "attempts": 5}  # a per-day quota must stop the batch, not switch models mid-table
 
 
