@@ -1,7 +1,0 @@
-{
-  "env": {
-    "PIP_CACHE_DIR": "D:/rootcause/.cache/pip",
-    "XDG_CACHE_HOME": "D:/rootcause/.cache",
-    "npm_config_cache": "D:/rootcause/.cache/npm"
-  }
-}
