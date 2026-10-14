@@ -1,6 +1,6 @@
 # Laya entry test: does a small decision model beat the heuristic?
 
-**No.** Zero-shot, Laya picks the right service on 31% of the 16 fault incidents. The heuristic it had to beat scores 59%, so by the rule fixed in the spec (§ "Planned extension") the Laya-then-agent experiment is **not built**.
+**No.** Zero-shot, Laya picks the right service on 31% of the 16 fault incidents. The heuristic it had to beat scores 59%, so by the rule fixed before the test (beat the heuristic or stop) the Laya-then-agent experiment is **not built**.
 
 ## What was tested
 
@@ -10,7 +10,7 @@ Laya got the same thing the heuristic ranks:
 - **Input:** each snapshot's change table: every service's error ratio, p95 latency, peak memory, CPU, restarts and request rate, before vs after the alert, largest relative change first. It did not get the alert text, because the heuristic doesn't read it either.
 - **Question 1:** "Which service is the root cause, if any?" Every service in the snapshot is an option, plus `no_incident`.
 - **Question 2:** "What kind of fault is it?" The options are errors, latency or resource.
-- **Report and scoring:** the report ranks the services by Laya's probability and uses the top one as the answer. `no_incident` wins only when it is the single most likely option. Scoring follows the same rules as every other solver (spec §8b), through `evaluate.run`.
+- **Report and scoring:** the report ranks the services by Laya's probability and uses the top one as the answer. `no_incident` wins only when it is the single most likely option. Scoring follows the same rules as every other solver (`rootcause/score.py`), through `evaluate.run`.
 
 Two variants were declared before any result was seen. Each ran once, since Laya is deterministic.
 
@@ -49,7 +49,7 @@ Laya's own benchmarks predict this: the base checkpoint scores 0.36 zero-shot on
 
 ```bash
 .venv/Scripts/python.exe -m experiments.laya.prepare                                   # inputs, no ground truth
-HF_HOME=D:/rootcause/.cache/hf .cache/venv-laya/Scripts/python.exe -I experiments/laya/predict.py
+HF_HOME=.cache/hf .cache/venv-laya/Scripts/python.exe -I experiments/laya/predict.py
 .venv/Scripts/python.exe -m experiments.laya.score                                     # records in data/runs/laya-*
 ```
 

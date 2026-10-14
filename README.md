@@ -39,7 +39,7 @@ Before a recording counts, metric checks confirm the fault really showed up. [`s
 - **Agent v0:** a Gemini tool loop with naive tools (raw metric series, trace and log search).
 - **Agent v1:** the same loop with change-aware tools (`top_changes`, `service_health`, `service_map`) and structured, checkable evidence.
 
-**4. Scoring.** The rules were written before any run, in spec §8b:
+**4. Scoring.** The rules were written before any run (`rootcause/score.py`):
 - top-ranked cause in the accepted set;
 - partial credit on two-fault scenarios;
 - `no_incident` is the only right answer on a control;
@@ -122,7 +122,6 @@ In a client config, use absolute paths, with the venv's python as `command` and 
 | `rootcause/evidence.py`, `mcp_server.py` | evidence checker and MCP server |
 | `rootcause/report.py`, `tracing.py` | results report and figures; optional OpenTelemetry GenAI spans of agent runs |
 | `rootcause/site.py`, `site/` | data builder and static front end of the replay site |
-| `docs/superpowers/specs/`, `plans/` | design spec and the week-by-week implementation plans |
 
 ## Honest limits
 

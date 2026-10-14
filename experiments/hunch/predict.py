@@ -2,7 +2,7 @@
 
 Step 1 (inputs) and step 3 (scoring) are the Laya scripts:
     .venv/Scripts/python.exe -m experiments.laya.prepare
-    HF_HOME=D:/rootcause/.cache/hf .cache/venv-hunch/Scripts/python.exe -I experiments/hunch/predict.py
+    HF_HOME=.cache/hf .cache/venv-hunch/Scripts/python.exe -I experiments/hunch/predict.py
     .venv/Scripts/python.exe -m experiments.laya.score .cache/hunch/predictions.json
 
 Two variants, fixed before any result was seen: hunch-1.7b (primary) and hunch-0.6b, both on the full change table,

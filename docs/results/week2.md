@@ -1,6 +1,6 @@
 # Week 2 results: heuristic baseline vs agent v0
 
-20 recorded incident snapshots: 16 faults and 4 no-fault controls (`scenarios/NOTES.md`). They are scored with the fixed rules in spec section 8b, which were written before any scoring run. The heuristic is deterministic, so it ran once. Agent v0 runs 5 times per snapshot on `gemini-3.5-flash-lite` (free tier, temperature 0). One model is pinned per batch, so results never mix models.
+20 recorded incident snapshots: 16 faults and 4 no-fault controls (`scenarios/NOTES.md`). They are scored with the fixed rules in `rootcause/score.py`, which were written before any scoring run. The heuristic is deterministic, so it ran once. Agent v0 runs 5 times per snapshot on `gemini-3.5-flash-lite` (free tier, temperature 0). One model is pinned per batch, so results never mix models.
 
 > **Status:** the heuristic is complete. The agent v0 batch is in progress, and its section below is filled in from the finished records.
 

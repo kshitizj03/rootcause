@@ -1,4 +1,4 @@
-"""Check that a report's cited evidence exists in the snapshot it was made from (spec section 9).
+"""Check that a report's cited evidence exists in the snapshot it was made from.
 
 Two measures per cited item (neither proves the claim it is attached to):
 - grounded: the citation exists in the snapshot within the incident window (t >= fault_start).

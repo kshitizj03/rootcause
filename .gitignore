@@ -6,6 +6,5 @@ data/
 runs/
 __pycache__/
 .pytest_cache/
-.claude/
 site/data/
 site/figures/

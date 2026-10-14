@@ -5,7 +5,7 @@ Two variants, both fixed before any result was seen:
   laya-english       the top 20 rows, the English checkpoint (512-token context)
 Zero-shot: no fine-tuning, no temperature fitting, nothing learned from these incidents.
 
-    set HF_HOME=D:/rootcause/.cache/hf
+    HF_HOME=.cache/hf  (any local cache path)
     .cache/venv-laya/Scripts/python.exe -I experiments/laya/predict.py
 """
 import json

@@ -1,4 +1,4 @@
-"""Diagnosis reports (validated) and the fixed scoring rules (spec section 8b)."""
+"""Diagnosis reports (validated) and the scoring rules, fixed before the first scoring run."""
 import json
 import re
 from dataclasses import asdict, dataclass
