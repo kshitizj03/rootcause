@@ -52,9 +52,10 @@ def test_nemotron_solver_is_agent_v1_with_only_the_model_swapped(monkeypatch):
         assert record_name == name and stop_on == (agent.QuotaExhausted,)
         solve(snap)
     (kw_v1, _), (kw_n, alert_n) = FakeAgent.seen
-    same = lambda kw: {k: v for k, v in kw.items() if k not in ("llm", "models", "name")}
+    same = lambda kw: {k: v for k, v in kw.items() if k not in ("llm", "models", "name", "provider")}
     assert same(kw_n) == same(kw_v1) and kw_n["system"] == agent.SYSTEM_V1 and kw_n["toolset"] is tools_v1
     assert kw_n["llm"] == "nvidia-client" and kw_n["models"] == [agent.NEMOTRON] and kw_n["name"] == "agent-v1-nemotron"
+    assert kw_n["provider"] == "nvidia"
     assert alert_n == "Orders fail at checkout."
 
 
@@ -62,7 +63,7 @@ def test_nemotron_variants_match_their_gemini_counterparts_except_the_model(monk
     monkeypatch.setattr(agent, "Agent", FakeAgent)
     monkeypatch.setattr(agent, "make_nvidia_client", lambda: "nvidia-client")
     snap = {"meta": {"alert": "Orders fail at checkout."}, "metrics": {}, "spans": [], "logs": []}
-    same = lambda kw: {k: v for k, v in kw.items() if k not in ("llm", "models", "name")}
+    same = lambda kw: {k: v for k, v in kw.items() if k not in ("llm", "models", "name", "provider")}
     for gemini, nemotron in (("agent-v0", "agent-v0-nemotron"), ("agent-v1-nopriors", "agent-v1-nemotron-nopriors"),
                              ("agent-v1-vague", "agent-v1-nemotron-vague")):
         FakeAgent.seen.clear()

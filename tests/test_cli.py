@@ -494,7 +494,7 @@ def test_eval_gemini_api_error_exits_5_without_the_reset_hint(monkeypatch, capsy
     _stub_eval(monkeypatch, boom)
     assert cli.main(["eval", "agent-v0"]) == 5
     err = capsys.readouterr().err
-    assert "Gemini API error: no choices" in err and "reset-flags" not in err
+    assert "model API error: no choices" in err and "reset-flags" not in err
 
 
 def test_stack_runtime_errors_still_exit_3_with_the_hint(monkeypatch, capsys):

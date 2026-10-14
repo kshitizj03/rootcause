@@ -111,12 +111,14 @@ def _per_day(err):
 
 class Agent:
     def __init__(self, llm=None, models=MODELS, max_steps=MAX_STEPS, min_interval=MIN_INTERVAL_S,
-                 sleep=time.sleep, clock=time.monotonic, toolset=tools_v0, system=SYSTEM, name=NAME, attempts=ATTEMPTS, tracer=None):
+                 sleep=time.sleep, clock=time.monotonic, toolset=tools_v0, system=SYSTEM, name=NAME, attempts=ATTEMPTS, tracer=None,
+                 provider="gcp.gemini"):
         """toolset: any object/module with SCHEMAS and call(snap, name, raw_args); system/name label an agent variant.
-        tracer: OpenTelemetry tracer for self-tracing (a no-op unless a provider is installed)."""
+        tracer: OpenTelemetry tracer for self-tracing (a no-op unless a provider is installed).
+        provider: the model provider named on chat spans (gen_ai.provider.name), e.g. "nvidia" with make_nvidia_client."""
         self.tracer = tracer or trace.get_tracer("rootcause.agent")
         self.llm, self.models, self.max_steps = llm, list(models), max_steps
-        self.toolset, self.system, self.name = toolset, system, name
+        self.toolset, self.system, self.name, self.provider = toolset, system, name, provider
         self.min_interval, self.sleep, self.clock = min_interval, sleep, clock
         self.exhausted, self._last, self.attempts = set(), None, attempts
 
@@ -158,7 +160,7 @@ class Agent:
             for attempt in range(self.attempts):
                 self._throttle(info)
                 try:
-                    with self._span(f"chat {model}", {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "gcp.gemini",
+                    with self._span(f"chat {model}", {"gen_ai.operation.name": "chat", "gen_ai.provider.name": self.provider,
                                                       "gen_ai.request.model": model}, kind=SpanKind.CLIENT) as span:
                         r = self.llm.chat.completions.create(model=model, **kw)
                         if not r.choices:  # not a usable answer: no usage counted, retry like a server error

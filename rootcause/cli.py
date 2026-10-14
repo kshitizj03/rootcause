@@ -50,7 +50,7 @@ def _agent_v1_vague_solver():
 
 def _nemotron_kwargs():
     from rootcause import agent  # another model family on NVIDIA's free endpoint (NVIDIA_API_KEY in .env)
-    return {"llm": agent.make_nvidia_client(), "models": [agent.NEMOTRON]}
+    return {"llm": agent.make_nvidia_client(), "models": [agent.NEMOTRON], "provider": "nvidia"}
 
 
 def _agent_v0_nemotron_solver():
@@ -298,7 +298,7 @@ def main(argv=None):
     try:
         return _dispatch(args)
     except OpenAIError as e:  # API failure after retries/fallback; the stack is fine, so no reset hint
-        print(f"Gemini API error: {e} -- completed runs are kept; re-run the same command to resume", file=sys.stderr)
+        print(f"model API error: {e} -- completed runs are kept; re-run the same command to resume", file=sys.stderr)
         return 5
     except RuntimeError as e:  # includes harness.DirtyStateError / RestoreError
         print(f"error: {e} -- run `python -m rootcause reset-flags` to reset the stack", file=sys.stderr)

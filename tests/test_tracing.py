@@ -8,12 +8,12 @@ from rootcause import agent, tracing
 from tests_agent_fakes import FINAL, SNAP, Msg, make_llm, tool_call  # shared fakes module
 
 
-def traced_agent(script):
+def traced_agent(script, **kw):
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     a = agent.Agent(llm=make_llm(script), min_interval=0, sleep=lambda s: None, clock=lambda: 0.0,
-                    tracer=provider.get_tracer("test"))
+                    tracer=provider.get_tracer("test"), **kw)
     return a, exporter
 
 
@@ -27,6 +27,9 @@ def test_spans_follow_genai_conventions_without_content():
     assert root.attributes["gen_ai.operation.name"] == "invoke_agent" and root.attributes["rootcause.verdict"] == "incident"
     assert len(chats) == 2 and chats[0].attributes["gen_ai.usage.input_tokens"] == 100
     assert chats[0].attributes["gen_ai.provider.name"] == "gcp.gemini"
+    b, exporter = traced_agent([Msg(content=FINAL)], provider="nvidia")
+    b.solve(SNAP)
+    assert [s.attributes["gen_ai.provider.name"] for s in exporter.get_finished_spans() if s.name.startswith("chat ")] == ["nvidia"]
     assert tool.attributes["gen_ai.tool.name"] == "list_services"
     assert all(s.parent.span_id == root.context.span_id for s in chats + [tool])
     dumped = json.dumps([dict(s.attributes) for s in exporter.get_finished_spans()])
