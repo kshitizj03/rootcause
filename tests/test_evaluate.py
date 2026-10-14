@@ -255,14 +255,14 @@ def test_grounded_is_none_without_evidence_and_shown_in_the_table(lib):
     assert "| grounded | distinctive | errors |" in table[0] and table[2].endswith("| - | - | - |")
 
 
-def rec(conf, correct, verdict="incident", p=1000, c=50, req=5):
+def usage_record(conf, correct, verdict="incident", p=1000, c=50, req=5):
     return {"scenario": "s", "category": "easy", "run": 0, "requests": req, "prompt_tokens": p,
             "completion_tokens": c, "report": {"verdict": verdict, "confidence": conf},
             "score": {"correct": correct}}
 
 
 def test_coverage_curve_thresholds_descend_and_skip_abstentions():
-    recs = [rec(0.9, 1.0), rec(0.9, 0.0), rec(0.5, 1.0), rec(0.2, 0.0, verdict="insufficient_evidence")]
+    recs = [usage_record(0.9, 1.0), usage_record(0.9, 0.0), usage_record(0.5, 1.0), usage_record(0.2, 0.0, verdict="insufficient_evidence")]
     pts = evaluate.coverage_curve(recs)
     assert [p["threshold"] for p in pts] == [0.9, 0.5]
     assert pts[0] == {"threshold": 0.9, "coverage": 0.5, "accuracy": 0.5}
@@ -271,27 +271,27 @@ def test_coverage_curve_thresholds_descend_and_skip_abstentions():
 
 def test_coverage_curve_edge_cases():
     assert evaluate.coverage_curve([]) == []
-    assert evaluate.coverage_curve([rec(0.4, 0.0, verdict="insufficient_evidence")]) == []
-    assert evaluate.coverage_curve([rec(0.95, 1.0), rec(0.95, 1.0)]) == [{"threshold": 0.95, "coverage": 1.0, "accuracy": 1.0}]
+    assert evaluate.coverage_curve([usage_record(0.4, 0.0, verdict="insufficient_evidence")]) == []
+    assert evaluate.coverage_curve([usage_record(0.95, 1.0), usage_record(0.95, 1.0)]) == [{"threshold": 0.95, "coverage": 1.0, "accuracy": 1.0}]
 
 
 def test_coverage_curve_counts_controls_and_is_selective_accuracy():
-    control = {**rec(0.8, 1.0), "category": "control", "report": {"verdict": "no_incident", "confidence": 0.8}}
-    assert evaluate.coverage_curve([control, rec(0.8, 0.0)]) == [{"threshold": 0.8, "coverage": 1.0, "accuracy": 0.5}]
+    control = {**usage_record(0.8, 1.0), "category": "control", "report": {"verdict": "no_incident", "confidence": 0.8}}
+    assert evaluate.coverage_curve([control, usage_record(0.8, 0.0)]) == [{"threshold": 0.8, "coverage": 1.0, "accuracy": 0.5}]
     # an abstention lowers the table's accuracy (counted wrong) but not the curve's lowest-threshold point
-    recs = [rec(0.9, 1.0), rec(0.2, 0.0, verdict="insufficient_evidence")]
+    recs = [usage_record(0.9, 1.0), usage_record(0.2, 0.0, verdict="insufficient_evidence")]
     assert evaluate.coverage_curve(recs) == [{"threshold": 0.9, "coverage": 0.5, "accuracy": 1.0}]
     assert sum(r["score"]["correct"] for r in recs) / len(recs) == 0.5
 
 
 def test_usage_with_no_correct_run_and_with_mixed_records():
-    assert evaluate.usage([rec(0.9, 0.0), rec(0.9, 0.0)])["tokens_per_correct"] is None
-    u = evaluate.usage([rec(0.9, 1.0, p=1000, c=50, req=4), {"score": {"correct": 1.0}}])  # a record without usage is skipped
+    assert evaluate.usage([usage_record(0.9, 0.0), usage_record(0.9, 0.0)])["tokens_per_correct"] is None
+    u = evaluate.usage([usage_record(0.9, 1.0, p=1000, c=50, req=4), {"score": {"correct": 1.0}}])  # a record without usage is skipped
     assert u["runs"] == 1 and u["tokens_per_correct"] == 1050.0
 
 
 def test_usage_and_tokens_per_correct():
-    u = evaluate.usage([rec(0.9, 1.0, p=1000, c=50, req=4), rec(0.9, 0.0, p=3000, c=150, req=8)])
+    u = evaluate.usage([usage_record(0.9, 1.0, p=1000, c=50, req=4), usage_record(0.9, 0.0, p=3000, c=150, req=8)])
     assert u == {"runs": 2, "requests_mean": 6.0, "requests_max": 8, "prompt_tokens_mean": 2000.0,
                  "completion_tokens_mean": 100.0, "tokens_per_correct": 4200.0}
     assert evaluate.usage([{"score": {"correct": 1.0}}]) is None  # heuristic records carry no usage

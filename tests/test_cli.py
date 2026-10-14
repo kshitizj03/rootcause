@@ -1,3 +1,4 @@
+import argparse
 import json
 import shutil
 import subprocess
@@ -9,16 +10,16 @@ from helpers import FLAGS, INFO, fake_run, flat_log, flat_span, write_snapshot
 from rootcause import cli, config, harness, inject, sanitize, scenarios, snapshot
 from rootcause import stack as stack_mod  # `stack` is a fixture below
 
-def sc(id, docker=None):
+def scenario(id, docker=None):
     return scenarios.Scenario(id=id, category="easy", alert="a", inject={"docker": docker} if docker else {},
                               truth={}, checks=[])
 
 
-FIXED = [sc("s1", [{"action": "pause", "container": "valkey-cart"}]),
-         sc("s2", [{"action": "cpus", "container": "currency", "value": 0.05}]),
-         sc("s3", [{"action": "cpus", "container": "currency", "value": 0.1},
+FIXED = [scenario("s1", [{"action": "pause", "container": "valkey-cart"}]),
+         scenario("s2", [{"action": "cpus", "container": "currency", "value": 0.05}]),
+         scenario("s3", [{"action": "cpus", "container": "currency", "value": 0.1},
                    {"action": "pause", "container": "kafka"}]),
-         sc("s4")]
+         scenario("s4")]
 
 
 @pytest.fixture
@@ -53,8 +54,13 @@ def test_parser_accepts_all_commands():
     assert p.parse_args(["record", "payment-failure-50", "control-1"]).ids == ["payment-failure-50", "control-1"]
     assert p.parse_args(["record", "--all"]).all is True
     assert p.parse_args(["leak-check"]).paths == []
-    for cmd in ("up", "down", "status", "list", "reset-flags"):
-        assert p.parse_args([cmd]).cmd == cmd
+    required = {"eval": ["heuristic"], "summary": ["heuristic"], "mcp": ["snapshots/incident__x"]}
+    commands = ("up", "down", "status", "list", "reset-flags", "record", "leak-check", "revalidate", "resanitize",
+                "eval", "summary", "report", "site", "mcp")
+    for cmd in commands:
+        assert p.parse_args([cmd, *required.get(cmd, [])]).cmd == cmd
+    sub = next(a for a in p._actions if isinstance(a, argparse._SubParsersAction))
+    assert set(sub.choices) == set(commands)  # no command is left out of this test
 
 
 def test_list_prints_scenarios(capsys):

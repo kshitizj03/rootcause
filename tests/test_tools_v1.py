@@ -25,7 +25,7 @@ def out(name, args=None):
     return json.loads(tools_v1.call(SNAP, name, args or {}))
 
 
-def test_v0_call_unchanged_and_v1_includes_v0_tools():
+def test_v1_registry_extends_v0_and_v0_lacks_v1_tools():
     assert set(tools.TOOLS) <= set(tools_v1.TOOLS)
     assert {"top_changes", "service_health", "service_map"} <= set(tools_v1.TOOLS)
     assert {s["function"]["name"] for s in tools_v1.SCHEMAS} == set(tools_v1.TOOLS)

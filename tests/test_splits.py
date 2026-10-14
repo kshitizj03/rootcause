@@ -29,7 +29,7 @@ def test_summary_command_reports_empty_split(monkeypatch, capsys):
     assert "no runs recorded for heuristic (heldout)" in capsys.readouterr().out
 
 
-def test_in_split(monkeypatch):
+def test_in_split_routes_ids_and_rejects_unknown_split(monkeypatch):
     monkeypatch.setattr(config, "HELDOUT", ("b",))
     assert [evaluate.in_split(i, s) for s in (None, "all") for i in "ab"] == [True] * 4
     assert [evaluate.in_split(i, "tune") for i in "ab"] == [True, False]

@@ -10,7 +10,7 @@ def _scn(sid, category, causes):
 
 def _rec(solver, sid, run, correct, **extra):
     rec = {"solver": solver, "scenario": sid, "category": "easy" if sid == "a" else "control", "run": run,
-           "code": "abc123", "messages": "SECRET", "path": "D:/x",
+           "code": "abc123", "messages": "SECRET", "path": "snapshots/incident__x",
            "report": {"verdict": "incident", "causes": [{"service": "ad", "fault_type": "errors"}],
                       "evidence": ["e0", "e1"], "confidence": 0.9},
            "score": {"correct": correct, "top3": True, "fault_type_ok": True, "false_alarm": False, "abstained": False}}
@@ -60,7 +60,7 @@ def _setup(tmp_path, monkeypatch):
     return runs
 
 
-def test_build(tmp_path, monkeypatch):
+def test_build_writes_index_and_incidents_without_private_fields(tmp_path, monkeypatch):
     runs = _setup(tmp_path, monkeypatch)
     out = site.build(tmp_path / "out", runs, ["heuristic", "agent-v1", "agent-v0"])
     index = json.loads((out / "data" / "index.json").read_text(encoding="utf-8"))
@@ -132,7 +132,7 @@ def test_long_json_outputs_are_shortened_by_cutting_lists_so_they_still_parse():
     assert step["truncated"] is True and isinstance(out, dict)  # still structured, so the page renders a table
     assert out["trace_id"] == "abc" and out["spans"] == spans[:len(out["spans"])] and 0 < len(out["spans"]) < 200
     assert out["_trimmed"] == {"spans": 200} and len(json.dumps(out)) <= site.MAX_OUTPUT
-    # one list item that alone is too long cannot be cut further: plain-text truncation, as before
+    # one list item that alone is too long cannot be cut further: falls back to plain-text truncation
     big = site._step({"tool": "search_logs", "args": "{}", "output": json.dumps({"samples": ["x" * 5000]})})
     assert big["truncated"] is True and isinstance(big["output"], str) and len(big["output"]) == site.MAX_OUTPUT
     # log samples are the last N lines, so the newest ones are kept

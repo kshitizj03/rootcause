@@ -123,17 +123,17 @@ def test_span_charge_card_and_payment_failure_unchanged():
     assert out[0]["message"] == "payment failure"
 
 
-def test_redact_unicode_soft_hyphen_unchanged_and_json_safe():
+def test_soft_hyphen_body_is_kept_and_json_safe():
     # Body with soft hyphen U+00AD followed by HighCpu: the flag "adHighCpu" is NOT present
     # (U+00AD is a single character, not the letters "ad")
-    logs = [{"service": "x", "body": "­HighCpu"}]
+    logs = [{"service": "x", "body": "\u00adHighCpu"}]
     out = sanitize.sanitize_logs(logs, NAMES)
     assert len(out) == 1
-    assert out[0]["body"] == "­HighCpu", "Soft hyphen body unchanged"
+    assert out[0]["body"] == "\u00adHighCpu", "Soft hyphen body unchanged"
     assert json.dumps(out)  # Must be serializable
 
 
-def test_redact_form_feed_with_flagd_unchanged():
+def test_form_feed_before_lagd_is_not_flagd():
     # Form-feed character \f followed by "lagd": doesn't contain "flagd"
     logs = [{"service": "x", "body": "\flagd"}]
     out = sanitize.sanitize_logs(logs, NAMES)

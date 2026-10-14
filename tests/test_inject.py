@@ -17,7 +17,7 @@ def flags_file(tmp_path):
     return f
 
 
-def test_flag_variants():
+def test_flag_variants_lists_each_flags_variant_names():
     v = flag_variants(FLAGS)
     assert "50%" in v["paymentFailure"] and "on" in v["recommendationCacheFailure"]
 
@@ -173,6 +173,7 @@ def test_partial_docker_failure_during_apply_undoes_prior_action_only():
         # Now restore should undo just the first action
         inj.restore()
         assert ["docker", "unpause", "valkey-cart"] in calls
+        assert not any(c[1] == "update" and c[3] == "16" for c in calls)  # the failed cpus action has nothing to undo
         # File should be pristine (no flags were changed)
         assert flags_file.read_text(encoding="utf-8") == pristine
 

@@ -85,7 +85,7 @@ def test_wildcard_empty_source_fails_with_reason():
     assert res[0]["reason"] == "no data"
 
 
-def test_restarts_no_inwindow_points_returns_none():
+def test_restarts_check_without_fault_window_points_fails_with_no_data():
     metrics = {"uptime_s": {"app": [[0, 100], [10, 110], [20, 5]]}}
     res = signals.evaluate([{"service": "app", "signal": "restarts", "at_most": 0}], metrics, BASE, FAULT)
     assert res[0]["passed"] is False and res[0]["reason"] == "no data"

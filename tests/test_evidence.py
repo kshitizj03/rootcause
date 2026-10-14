@@ -46,24 +46,24 @@ def test_empty_evidence():
     assert evidence.check(Report("no_incident"), SNAP) == {"items": [], "grounded": 0, "distinctive": 0, "total": 0}
 
 
-def mk(*items):
+def no_incident_report(*items):
     return make_report({"verdict": "no_incident", "evidence": list(items)})
 
 
 def test_normalisation_survives_odd_shapes():
-    assert [e["kind"] for e in mk({"kind": ["x"]}, {"kind": {}}, {"kind": None}).evidence] == ["text"] * 3
+    assert [e["kind"] for e in no_incident_report({"kind": ["x"]}, {"kind": {}}, {"kind": None}).evidence] == ["text"] * 3
     assert make_report({"verdict": "no_incident", "evidence": 5}).evidence == ({"kind": "text", "text": "5"},)
     r = make_report({"verdict": "no_incident",
                      "evidence": {"kind": "metric", "service": "a", "signal": "rps", "claim": "c"}})
     assert r.evidence == ({"kind": "metric", "service": "a", "signal": "rps", "claim": "c"},)
-    assert mk({"kind": " Metric ", "service": "a", "signal": "rps"}).evidence[0]["kind"] == "metric"
-    assert mk({"kind": "trace", "trace_id": "t", "service": 5}).evidence[0]["kind"] == "text"
-    assert mk({"kind": "trace", "trace_id": "t"}).evidence[0]["service"] is None
+    assert no_incident_report({"kind": " Metric ", "service": "a", "signal": "rps"}).evidence[0]["kind"] == "metric"
+    assert no_incident_report({"kind": "trace", "trace_id": "t", "service": 5}).evidence[0]["kind"] == "text"
+    assert no_incident_report({"kind": "trace", "trace_id": "t"}).evidence[0]["service"] is None
 
 
 def test_evidence_is_capped_in_count_and_text_length():
-    assert len(mk(*["x"] * 50).evidence) == 20
-    e = mk({"kind": "log", "service": "a", "quote": "q" * 900}, {"kind": "metric", "service": "a", "signal": "rps",
+    assert len(no_incident_report(*["x"] * 50).evidence) == 20
+    e = no_incident_report({"kind": "log", "service": "a", "quote": "q" * 900}, {"kind": "metric", "service": "a", "signal": "rps",
                                                                   "claim": "c" * 900}).evidence
     assert len(e[0]["quote"]) == 500 and len(e[1]["claim"]) == 500
 
@@ -120,7 +120,7 @@ DSNAP = {**SNAP,
                    _span("cartonly", 910, 500.0, service="cart"), _span("pre", 100, 5.0, error=True)]}
 
 
-def flags(*items):
+def grounded_distinctive(*items):
     c = evidence.check(report(*items), DSNAP)
     return [(i["grounded"], i["distinctive"]) for i in c["items"]], c
 
@@ -128,7 +128,7 @@ def flags(*items):
 def test_distinctive_separates_existing_from_anomalous():
     log = lambda q: {"kind": "log", "service": "payment", "quote": q}
     tr = lambda t, s="payment": {"kind": "trace", "trace_id": t, "service": s, "claim": "c"}
-    got, c = flags(log("common word here"), log("a brand new thing"), log("only in a bad line"),
+    got, c = grounded_distinctive(log("common word here"), log("a brand new thing"), log("only in a bad line"),
                    log("hello from cart"), tr("fast"), tr("slow"), tr("err"), tr("pre"), tr("cartonly", "cart"),
                    {"kind": "metric", "service": "payment", "signal": "error_ratio", "claim": "c"}, "text")
     assert got == [(True, False), (True, True), (False, False), (True, True), (True, False), (True, True),
@@ -138,7 +138,7 @@ def test_distinctive_separates_existing_from_anomalous():
 
 def test_slow_rule_only_applies_with_pre_alert_spans_of_that_service():
     # cart has no pre-alert spans, so a slow cart span is grounded but only an error would make it distinctive
-    got, _ = flags({"kind": "trace", "trace_id": "cartonly", "service": "cart", "claim": "c"})
+    got, _ = grounded_distinctive({"kind": "trace", "trace_id": "cartonly", "service": "cart", "claim": "c"})
     assert got == [(True, False)]
 
 
@@ -149,7 +149,7 @@ def test_p95_is_nearest_rank():
 
 
 def test_slow_means_above_the_pre_alert_p95():
-    # pre-alert payment spans: 10, 12, 20 (+ a 5 ms error span) -> p95 = 20; the old 2x-median rule needed > 22
+    # pre-alert payment spans: 10, 12, 20 (+ a 5 ms error span) -> p95 = 20
     snap = {**DSNAP, "spans": DSNAP["spans"] + [_span("p95", 910, 21.0)]}
     c = evidence.check(report({"kind": "trace", "trace_id": "p95", "service": "payment", "claim": "c"}), snap)
     assert c["items"][0]["grounded"] and c["items"][0]["distinctive"]

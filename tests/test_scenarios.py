@@ -1,3 +1,5 @@
+import pytest
+
 from helpers import FLAGS
 from rootcause import config, scenarios
 from rootcause.inject import flag_targeting_errors, flag_variants
@@ -30,6 +32,7 @@ def test_alert_must_not_name_the_root_cause_or_a_flag():
     assert any("names root cause payment" in e for e in errs)
     errs = scenarios.validate(make(alert="paymentFailure happened"), VARIANTS)
     assert any("mentions flag" in e for e in errs)
+    assert scenarios.validate(make(alert="mispayment issue"), VARIANTS) == []  # word boundary: not the payment cause
 
 
 def test_bad_flag_variant_category_signal_and_target_are_reported():
@@ -45,43 +48,23 @@ def test_controls_have_no_causes_and_incidents_need_checks():
     assert any("no signal checks" in e for e in scenarios.validate(make(checks=[]), VARIANTS))
 
 
-def test_rejection_rules():
-    """Negative tests for all rejection rules."""
-    # cpus action without value
-    errs = scenarios.validate(make(inject={"docker": [{"action": "cpus", "container": "currency"}]}), VARIANTS)
-    assert any("value" in e for e in errs), f"Expected value error, got: {errs}"
+REJECTED = [
+    ({"inject": {"docker": [{"action": "cpus", "container": "currency"}]}}, "value"),
+    ({"inject": {"docker": [{"action": "reboot", "container": "currency"}]}}, "unknown docker action"),
+    ({"inject": {"docker": [{"action": "pause", "container": "nosuchcontainer"}]}}, "unknown container"),
+    ({"truth": {"causes": []}}, "controls"),  # an incident needs causes
+    ({"truth": {"causes": [{"accept": ["payment"], "fault_type": "bugs"}]}}, "unknown fault_type"),
+    ({"truth": {"causes": [{"accept": ["nosuchservice"], "fault_type": "errors"}]}}, "unknown truth service"),
+    ({"checks": [{"service": "payment", "signal": "error_ratio"}]}, "threshold"),
+    ({"alert": "PAYMENT is down"}, "names root cause"),  # case-insensitive
+]
 
-    # unknown docker action
-    errs = scenarios.validate(make(inject={"docker": [{"action": "reboot", "container": "currency"}]}), VARIANTS)
-    assert any("unknown docker action" in e for e in errs), f"Expected unknown action, got: {errs}"
 
-    # unknown container
-    errs = scenarios.validate(make(inject={"docker": [{"action": "pause", "container": "nosuchcontainer"}]}), VARIANTS)
-    assert any("unknown container" in e for e in errs), f"Expected unknown container, got: {errs}"
-
-    # non-control with empty causes (should have causes)
-    errs = scenarios.validate(make(truth={"causes": []}), VARIANTS)
-    assert any("controls" in e for e in errs), f"Expected controls error, got: {errs}"
-
-    # bad fault_type
-    errs = scenarios.validate(make(truth={"causes": [{"accept": ["payment"], "fault_type": "bugs"}]}), VARIANTS)
-    assert any("unknown fault_type" in e for e in errs), f"Expected fault_type error, got: {errs}"
-
-    # unknown truth service
-    errs = scenarios.validate(make(truth={"causes": [{"accept": ["nosuchservice"], "fault_type": "errors"}]}), VARIANTS)
-    assert any("unknown truth service" in e for e in errs), f"Expected truth service error, got: {errs}"
-
-    # check missing any threshold
-    errs = scenarios.validate(make(checks=[{"service": "payment", "signal": "error_ratio"}]), VARIANTS)
-    assert any("threshold" in e for e in errs), f"Expected threshold error, got: {errs}"
-
-    # mixed-case alert naming cause
-    errs = scenarios.validate(make(alert="PAYMENT is down"), VARIANTS)
-    assert any("names root cause" in e for e in errs), f"Expected root cause naming error, got: {errs}"
-
-    # word boundary: mispayment should NOT match payment cause
-    errs = scenarios.validate(make(alert="mispayment issue", truth={"causes": [{"accept": ["payment"], "fault_type": "errors"}]}), VARIANTS)
-    assert not errs, f"Expected no errors for word boundary, got: {errs}"
+@pytest.mark.parametrize("case, needle", REJECTED, ids=[n for _, n in REJECTED])
+def test_validate_rejects(case, needle):
+    """Negative tests for docker, truth, check and alert rules."""
+    errs = scenarios.validate(make(**case), VARIANTS)
+    assert any(needle in e for e in errs), f"expected {needle!r}, got: {errs}"
 
 
 def test_alert_leak_checks_spaced_and_plural_forms():
@@ -110,13 +93,14 @@ def test_validate_stat_must_be_mean_or_max():
 
 
 def test_category_counts():
-    """Verify exactly the expected number of scenarios per category."""
+    """Exactly the expected categories, with exactly the expected number of scenarios in each."""
     loaded = scenarios.load_all()
     by_cat = {}
     for s in loaded:
         by_cat.setdefault(s.category, []).append(s.id)
 
     expected = {"easy": 3, "hard-cross-service": 3, "hard-silent": 6, "hard-noisy": 2, "hard-two-faults": 2, "control": 4}
+    assert set(by_cat) == set(expected)
     for cat, count in expected.items():
         assert len(by_cat.get(cat, [])) == count, f"Category {cat}: expected {count}, got {len(by_cat.get(cat, []))}"
 
