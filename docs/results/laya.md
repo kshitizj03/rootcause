@@ -47,10 +47,19 @@ Laya's own benchmarks predict this: the base checkpoint scores 0.36 zero-shot on
 
 ## Reproduce
 
+Laya runs in its own venv:
+
+```bash
+python -m venv .cache/venv-laya
+.cache/venv-laya/Scripts/python -m pip install laya==0.4.6 torch==2.14.1 transformers==5.19.0   # (bin/python on macOS/Linux)
+```
+
+For the GPU, install torch with CUDA from the PyTorch index (`--index-url https://download.pytorch.org/whl/cu130` for the cu130 build used here); the default torch wheel on Windows is CPU-only. Then:
+
 ```bash
 .venv/Scripts/python.exe -m experiments.laya.prepare                                   # inputs, no ground truth
 HF_HOME=.cache/hf .cache/venv-laya/Scripts/python.exe -I experiments/laya/predict.py
 .venv/Scripts/python.exe -m experiments.laya.score                                     # records in data/runs/laya-*
 ```
 
-The Laya venv holds `laya` 0.4.6, torch 2.14.1+cu130 and transformers 5.19.0. The checkpoints are about 1.5 GB in `.cache/hf`.
+The first step reads the recorded snapshots in `data/`, which are not in this repository (see Data in the README). The runs here used torch 2.14.1+cu130. The checkpoints are about 1.5 GB in `.cache/hf`.
