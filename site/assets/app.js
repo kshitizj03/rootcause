@@ -18,8 +18,8 @@ const SOLVERS = {
   "agent-v1-vague": ["V1 with vague alerts", "ablation of agent v1"],
   "agent-v0-nemotron": ["V0 on Nemotron", "naive tools, another model"],
   "agent-v1-nemotron": ["V1 on Nemotron", "agent v1, another model"],
-  "agent-v1-nemotron-nopriors": ["Nemotron without priors", "ablation of v1 on Nemotron"],
-  "agent-v1-nemotron-vague": ["Nemotron with vague alerts", "ablation of v1 on Nemotron"],
+  "agent-v1-nemotron-nopriors": ["V1 on Nemotron (no priors)", "ablation: two prompt sentences removed"],
+  "agent-v1-nemotron-vague": ["V1 on Nemotron (vague alerts)", "ablation: one generic alert"],
 };
 
 const solverName = (s) => (SOLVERS[s] || [s])[0];
@@ -104,17 +104,23 @@ function legend() {
 
 /** "Accuracy on the 16 fault incidents: heuristic 59% and agent v0 41%." plus a note for each partial batch: one with
  * fewer than its planned runs on some incident, or with incidents missing. */
-function answer(data, overall, planned) {
+function answer(data, overall) {
   const shown = data.solvers.filter((s) => overall[s]);
   if (!shown.length) return null;
   const n = overall[shown[0]].expected ?? overall[shown[0]].scenarios;
-  const parts = shown.map((s) => `${solverName(s).toLowerCase()} ${pct(overall[s].accuracy_mean)}`);
+  const planned = data.planned_runs || {};   // absent in an older index.json: then only missing incidents count as partial
+  const lowerFirst = (s) => s[0].toLowerCase() + s.slice(1);   // "V1 on Nemotron" -> "v1 on Nemotron"
+  const parts = shown.map((s) => `${lowerFirst(solverName(s))} ${pct(overall[s].accuracy_mean)}`);
   const list = new Intl.ListFormat("en", { type: "conjunction" }).format(parts);
-  const partial = shown.filter((s) => overall[s].records_min < planned[s] || overall[s].scenarios < n)
-    .map((s) => { const o = overall[s];
-      const reach = o.scenarios < n ? `${o.scenarios} of ${n} incidents, ` : "";
-      const runs = o.records_min === o.records_max ? `${o.records_min}` : `${o.records_min}–${o.records_max}`;
-      return `${solverName(s)} is a partial batch so far (${reach}${runs} of ${plural(planned[s], "planned run")} per incident).`; });
+  const counts = (s) => data.incidents.map((i) => (i.results[s] || []).length);   // controls included
+  const short = (s) => planned[s] && Math.min(...counts(s)) < planned[s];
+  const partial = shown.filter((s) => short(s) || overall[s].scenarios < n).map((s) => {
+    const lo = Math.min(...counts(s)), hi = Math.max(...counts(s));
+    const clauses = [];
+    if (overall[s].scenarios < n) clauses.push(`${overall[s].scenarios} of ${n} incidents`);
+    if (short(s)) clauses.push(`${lo === hi ? lo : `${lo}–${hi}`} of ${plural(planned[s], "planned run")} per incident`);
+    return `${solverName(s)} is a partial batch so far (${clauses.join(", ")}).`;
+  });
   return h("p", { class: "answer" }, `Accuracy on the ${n} fault incidents: ${list}. `, partial.join(" "));
 }
 
@@ -175,7 +181,7 @@ async function renderIndex() {
     head, groups, foot);
 
   root.replaceChildren(
-    answer(data, overall, slots) || "",
+    answer(data, overall) || "",
     legend(),
     h("div", { class: "table-scroll", tabindex: "0", role: "region", "aria-label": "Scoreboard" }, table));
   document.getElementById("generated").replaceChildren(
@@ -438,7 +444,7 @@ async function renderIncident() {
       h("h1", {}, data.id),
       h("p", { class: "incident-meta" },
         category ? `${category[0]}: ${category[1]}.` : `${categoryName(data.category)}.`,
-        data.heldout ? h("span", { class: "heldout" }, "Held out: never used to tune the agent’s prompts or tools.") : null),
+        data.heldout ? h("span", { class: "heldout" }, "Held out from tuning (one exception is disclosed in the report).") : null),
       h("figure", { class: "alert-quote" },
         h("blockquote", {}, h("p", {}, data.alert)),
         h("figcaption", {}, "The alert every solver was given."))),

@@ -2,15 +2,15 @@
 
 An LLM agent that investigates microservice incidents. Given a symptom ("customers report orders failing at checkout"), it queries OpenTelemetry metrics, traces and logs through tools and names the service and fault type behind it, citing evidence that is checked against the telemetry.
 
-RootCause is mainly a **benchmark**: is an LLM agent actually better than a simple rule, and where? Every answer is scored against ground truth on 20 recorded incidents. The scoring rules were fixed before the first run, there are no-fault controls, each agent batch is planned for 5 runs per incident (3 for the Gemini ablations), and a held-out split is never used for tuning.
+RootCause is mainly a **benchmark**: is an LLM agent actually better than a simple rule, and where? Every answer is scored against ground truth on 20 recorded incidents. The scoring rules were fixed before the first run, there are no-fault controls, each agent batch is planned for 5 runs per incident (3 for the Gemini ablations), and a held-out split is kept out of tuning (one exception, disclosed under Provenance in the report).
 
-> **Status, as of 2026-10-15.** Everything is built; some agent batches are still running.
+> **Status, as of 2026-10-15.** Everything is built; not every agent batch is finished yet.
 > - **Complete:** the heuristic; agent v1 on Nemotron (100 runs); agent v0 on Nemotron; the no-priors ablation on Nemotron.
 > - **Running:** the vague-alert ablation on Nemotron.
 > - **Partial:** agent v0 on Gemini (32/100 runs) and agent v1 on Gemini (64/100 runs), paused while the Nemotron batches ran.
 > - **Queued:** the Gemini ablations.
 >
-> The numbers are in [`docs/results/report.md`](docs/results/report.md), which marks partial batches as partial; it reports failures as plainly as wins. A small decision model, Laya, scored below the heuristic zero-shot, so no Laya-then-agent cascade was built ([`docs/results/laya.md`](docs/results/laya.md)).
+> The numbers are in [`docs/results/report.md`](docs/results/report.md), which marks partial batches as partial. Two small decision models, Laya and Hunch, both scored below the heuristic zero-shot, so no small-model-then-agent cascade was built ([`laya.md`](docs/results/laya.md), [`hunch.md`](docs/results/hunch.md)).
 
 ## How it works
 
@@ -38,13 +38,15 @@ RootCause is mainly a **benchmark**: is an LLM agent actually better than a simp
 
 Before a recording counts, metric checks confirm the fault really showed up. [`scenarios/NOTES.md`](scenarios/NOTES.md) records every outcome, including the scenarios that were dropped and why.
 
-**2. Leak-proofing.** Faults are injected through the demo's feature flags, and the demo's own telemetry repeatedly names them: flag evaluation events, the flag service's traces, flag names in log lines, an attribute whose value is `true` only during one fault, Envoy's `DI` ("delay injected") marker, timing quirks in metadata, and alert wording. Each channel was found and closed, and all of them are listed in `scenarios/NOTES.md`. An automated leak scan checks every snapshot's metrics, spans and logs, where the first five live. The metadata timing quirk and the alert wording were fixed by migrating the snapshots and rewriting the alerts, not by the scan. The snapshots an agent sees contain no scenario names, no flag vocabulary and no ground truth.
+**2. Leak-proofing.** Faults are injected through the demo's feature flags, and the demo's own telemetry repeatedly names them: flag evaluation events, the flag service's traces, flag names in log lines, an attribute whose value is `true` only during one fault, Envoy's `DI` ("delay injected") marker, timing quirks in metadata, and alert wording. Each channel was found and closed, and all of them are listed in `scenarios/NOTES.md`.
+
+The automated leak scan checks every snapshot's metrics, spans and logs, which covers the first five channels. The timing quirk and the alert wording were fixed by migrating the snapshots and rewriting the alerts. The snapshots an agent sees contain no scenario names, no flag vocabulary and no ground truth.
 
 **3. Solvers.**
 - **Heuristic:** ranks every service's error ratio, p95 latency, peak memory, CPU and restarts by how much each rose compared with a 15-minute baseline. It names the top one. Its threshold was fixed in advance.
 - **Agent v0:** a model tool loop with naive tools (raw metric series, trace and log search).
 - **Agent v1:** the same loop with change-aware tools (`top_changes`, `service_health`, `service_map`) and structured, checkable evidence.
-- **Ablations of agent v1,** each changing one thing: *no priors* drops the two generic sentences from the prompt ("the service the alert mentions is often NOT the cause", "it is possible that nothing is actually wrong"), and *vague alert* gives every incident the same alert, "Users report that something is wrong with the shop." Both are implemented; they run on Nemotron now and on Gemini later.
+- **Ablations of agent v1,** each changing one thing: *no priors* drops the two generic sentences from the prompt ("the service the alert mentions is often NOT the cause", "it is possible that nothing is actually wrong"), and *vague alert* gives every incident the same alert, "Users report that something is wrong with the shop." Both are implemented: on Nemotron, no-priors is complete and vague-alert is running; the Gemini runs are queued.
 
 The agents run on two model families, both at temperature 0: Gemini 3.5 Flash-Lite (free tier) and Nemotron 3 Super (`nvidia/nemotron-3-super-120b-a12b`, NVIDIA's free trial endpoint). One model is pinned per batch, so results never mix models.
 
@@ -54,7 +56,7 @@ The agents run on two model families, both at temperature 0: Gemini 3.5 Flash-Li
 - `no_incident` is the only right answer on a control;
 - abstaining counts as wrong.
 
-Two outputs show the measures, as a mean ± spread across runs:
+Two outputs show the measures, as means across runs (accuracy also with its spread across runs):
 - `python -m rootcause summary <solver>` prints, per category, accuracy, top-3, fault type (cause and type both right), false alarms, abstentions and the evidence measures;
 - [`docs/results/report.md`](docs/results/report.md) has accuracy per category, false alarms, abstentions, evidence, cost, the paired comparisons and the step-limit table.
 
@@ -144,10 +146,10 @@ In a client config, use absolute paths, with the venv's python as `command` and 
 | `tests/` | offline test suite (no Docker, no API key, no recorded data) |
 | `experiments/laya/`, `experiments/hunch/` | decision-model entry tests: can a small model beat the heuristic? |
 | `infra/` | Compose override that pins the observability backends to fixed host ports |
-| `docs/results/` | results: `report.md` and its figures, the Laya entry test, the interim heuristic-vs-agent-v0 write-up |
+| `docs/results/` | results: `report.md` and its figures, the Laya and Hunch entry tests, the interim heuristic-vs-agent-v0 write-up |
 
 ## Honest limits
 
-- **Twenty incidents from one demo app on one laptop.** This is a careful small benchmark, not a general claim.
-- **Every solver gets the exact fault onset** (t=0 is the injection time), and several alerts hint at the culprit's functional area. The vague-alert ablation measures how much that helps; it runs on Nemotron now and on Gemini later.
+- **Twenty incidents from one demo app on one laptop.** This is a small benchmark, not a general claim.
+- **Every solver gets the exact fault onset** (t=0 is the injection time), and several alerts hint at the culprit's functional area. The vague-alert ablation is meant to measure how much that helps (running on Nemotron, queued on Gemini).
 - **Two free models only:** Gemini 3.5 Flash-Lite (free tier) and Nemotron 3 Super (NVIDIA's free trial endpoint), both at temperature 0. The spread across runs measures API nondeterminism, not sampling, and two models say little about how others would do.

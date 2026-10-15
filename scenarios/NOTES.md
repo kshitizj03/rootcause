@@ -64,7 +64,7 @@ The recordings were kept. Only the check changed, and it was re-scored with `pyt
 
 ## Leak channels found and closed
 
-Each was found by an independent grep or a fault-vs-control differential audit of the real snapshots. All 20 snapshots were cleaned with `python -m rootcause resanitize`, which is atomic and was checked first with a dry run. A backup was kept locally.
+Each was found by grepping, or by a fault-vs-control differential audit of the real snapshots. All 20 snapshots were cleaned with `python -m rootcause resanitize`, which is atomic and was checked first with a dry run. A backup was kept locally.
 
 - **`demo.feature_flag.recommendation_cache` = True only during the cache-leak fault.** The old sanitiser redacted the key but kept the boolean value, which is a direct answer. Flag-named attribute keys are now stripped, value and all.
 - The frontend-proxy's `/flagservice/` route (span "router flagservice egress" plus access logs) is now dropped.
