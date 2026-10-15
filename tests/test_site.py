@@ -158,12 +158,17 @@ def test_outputs_the_tool_cut_for_the_agent_are_repaired_at_the_last_whole_item(
 
 def test_index_lists_solvers_with_records_beyond_the_built_in_ones(tmp_path, monkeypatch):
     runs = _setup(tmp_path, monkeypatch)
-    for solver in ("my-agent", "agent-v1@gemma-4-26b-a4b-it"):
+    for solver in ("my-agent", "agent-v1@gemma-4-26b-a4b-it", "laya-english", "hunch-0.6b", "_discarded"):
         (runs / solver).mkdir()
         (runs / solver / "a__0.json").write_text(json.dumps(_rec(solver, "a", 0, 1.0)), encoding="utf-8")
     out = site.build(tmp_path / "out", runs)
     index = json.loads((out / "data" / "index.json").read_text(encoding="utf-8"))
+    # the experiments and the set-aside "_" folder are on neither the scoreboard nor the incident pages
     assert index["solvers"] == ["heuristic", "agent-v1", "agent-v1@gemma-4-26b-a4b-it", "my-agent"]
+    assert set(index["summary"]) == set(index["planned_runs"]) == set(index["incidents"][0]["results"]) == set(index["solvers"])
+    assert set(json.loads((out / "data" / "incidents" / "a.json").read_text(encoding="utf-8"))["runs"]) == set(index["solvers"])
+    explicit = site.build(tmp_path / "out2", runs, solvers=["heuristic", "laya-english"])
+    assert json.loads((explicit / "data" / "index.json").read_text(encoding="utf-8"))["solvers"] == ["heuristic"]
     assert index["planned_runs"]["my-agent"] == 5 and index["incidents"][0]["results"]["my-agent"] == [1.0]
     inc = json.loads((out / "data" / "incidents" / "a.json").read_text(encoding="utf-8"))
     assert inc["runs"]["agent-v1@gemma-4-26b-a4b-it"][0]["verdict"] == "incident"

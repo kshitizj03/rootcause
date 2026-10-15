@@ -302,3 +302,10 @@ def test_load_records_respects_split(tmp_path, monkeypatch):
     for sid in ("a", "b"):
         write_record(tmp_path / "x", sid, "easy", 0, 1.0)
     assert [r["scenario"] for r in evaluate.load_records("x", tmp_path, split="tune")] == ["a"]
+
+
+def test_folders_starting_with_an_underscore_are_never_solvers(tmp_path):
+    for d in ("_discarded", "mine"):
+        write_record(tmp_path / d, "a", "easy", 0, 1.0)
+    assert evaluate.recorded_solvers(tmp_path) == ["mine"]
+    assert evaluate.listed_solvers(tmp_path) == evaluate.SOLVER_ORDER + ["mine"]

@@ -2,6 +2,7 @@
 
 The solver only ever receives snapshot.load(path); truth.json is read after solve() returns."""
 import json
+import math
 import statistics
 import subprocess
 import time
@@ -18,16 +19,20 @@ SOLVER_ORDER = ["heuristic", "agent-v0", "agent-v1", "agent-v1-nopriors", "agent
 # runs per scenario each solver's batch is meant to have; any solver not listed: 5
 PLANNED_RUNS = {"heuristic": 1, "agent-v1-vague": 3, "agent-v1-nopriors": 3, "laya-multilingual": 1, "laya-english": 1,
                 "hunch-1.7b": 1, "hunch-0.6b": 1}
+# decision-model tests, not agents: in the report's tables, never on the site
+EXPERIMENT_SOLVERS = ("laya-multilingual", "laya-english", "hunch-1.7b", "hunch-0.6b")
 
 
 def planned_runs(solver):
-    return PLANNED_RUNS.get(solver, 5)
+    """A solver on another model (base@model) is planned like its base solver."""
+    return PLANNED_RUNS.get(solver, PLANNED_RUNS.get(solver.split("@")[0], 5))
 
 
 def recorded_solvers(runs_dir=None):
-    """Names of the directories under runs_dir (default RUNS_DIR) that hold run records, sorted."""
+    """Names of the directories under runs_dir (default RUNS_DIR) that hold run records, sorted. A directory whose name
+    starts with "_" (e.g. _discarded) is set aside, not a solver."""
     d = Path(RUNS_DIR if runs_dir is None else runs_dir)
-    return sorted(p.name for p in d.glob("*") if p.is_dir() and any(p.glob("*.json")))
+    return sorted(p.name for p in d.glob("*") if p.is_dir() and not p.name.startswith("_") and any(p.glob("*.json")))
 
 
 def listed_solvers(runs_dir=None):
@@ -135,17 +140,24 @@ def load_records(solver_name, out_dir=RUNS_DIR, split=None):
     return [r for r in recs if in_split(r["scenario"], split)]
 
 
+def confidence(r):
+    """The record's stated confidence as a float, or None when it is missing or not a finite number."""
+    c = (r.get("report") or {}).get("confidence")
+    return float(c) if isinstance(c, (int, float)) and not isinstance(c, bool) and math.isfinite(c) else None
+
+
 def coverage_curve(records):
     """Selective accuracy: of the answered records at or above a confidence threshold, the fraction correct
     (record-level, not scenario-balanced; controls count like any other record).
     Abstentions (insufficient_evidence) are never covered and never in the denominator, so the lowest-threshold point
-    can exceed the summary tables' accuracy, which counts an abstention as wrong. coverage = covered / all records."""
+    can exceed the summary tables' accuracy, which counts an abstention as wrong. coverage = covered / all records.
+    A record without a numeric confidence is never covered either."""
     if not records:
         return []
-    answered = [r for r in records if r["report"]["verdict"] != "insufficient_evidence"]
+    answered = [r for r in records if r["report"]["verdict"] != "insufficient_evidence" and confidence(r) is not None]
     points = []
-    for t in sorted({r["report"]["confidence"] for r in answered}, reverse=True):
-        covered = [r for r in answered if r["report"]["confidence"] >= t]
+    for t in sorted({confidence(r) for r in answered}, reverse=True):
+        covered = [r for r in answered if confidence(r) >= t]
         points.append({"threshold": t, "coverage": len(covered) / len(records),
                        "accuracy": sum(r["score"]["correct"] for r in covered) / len(covered)})
     return points

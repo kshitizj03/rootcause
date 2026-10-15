@@ -88,8 +88,10 @@ def _truth(s, rows):
 
 def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=None):
     """Write out_dir/data/index.json, out_dir/data/incidents/<id>.json and out_dir/figures/*.png; return out_dir.
-    solvers: default evaluate.listed_solvers (the built-in ones, then any other with records)."""
-    solvers = evaluate.listed_solvers(runs_dir) if solvers is None else solvers
+    solvers: default evaluate.listed_solvers (the built-in ones, then any other with records). evaluate.EXPERIMENT_SOLVERS
+    are always left out: they are not agents, so they are not on the scoreboard or the incident pages."""
+    solvers = [s for s in (evaluate.listed_solvers(runs_dir) if solvers is None else solvers)
+               if s not in evaluate.EXPERIMENT_SOLVERS]
     out_dir = Path(out_dir)
     target, root = out_dir.resolve(), config.ROOT.resolve()
     protected = (config.DATA.resolve(), (root / "docs" / "results" / "figures").resolve())  # run records, source figures
