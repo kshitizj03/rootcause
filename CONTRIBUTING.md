@@ -11,6 +11,8 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt 
 .venv/Scripts/python -m pip install -e .                                            # optional: the `rootcause` command
 ```
 
+If you install the package, install it editable (`pip install -e .`, or `pip install -e ".[dev]"` to add pytest): it reads `scenarios/` and `data/` from the repository, so a regular install would not find them.
+
 Keys go in `.env` in the repository root (`GEMINI_API_KEY`, `NVIDIA_API_KEY`). It is git-ignored, and so are `data/`, `vendor/` and the generated `site/data/` and `site/figures/`. Never commit any of them.
 
 ## Running the tests

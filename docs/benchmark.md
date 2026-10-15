@@ -24,7 +24,7 @@ Each recorded incident is a directory `data/snapshots/incident__<UTC time of the
 | `alert` | the user-visible symptom, one sentence (for example "Sponsored banners intermittently fail to show on the storefront.") |
 | `fault_start` | Unix time in seconds of the injection: t = 0 (on a control, nothing is injected at t = 0) |
 | `baseline_start` | `fault_start - 900`: the 15 fault-free minutes before t = 0 |
-| `end` | `fault_start + 300`: the end of the 5-minute fault window |
+| `end` | `fault_start` + the scenario's `settle_s` (300 s for all current scenarios): the end of the fault window |
 | `demo_commit` | the OpenTelemetry Demo commit the incident was recorded on |
 
 ### metrics.json
@@ -56,7 +56,7 @@ One span per line:
 - `error` is true when the span's status is an error, and `message` is the status message.
 - `parent_id` is `""` on a root span. `attributes` is a flat key/value dict.
 
-For each traced service, up to 50 traces were fetched for each of two windows: the 5 minutes before t = 0, and t = 0 to `end`. Whole traces come back, so they include other services' spans, and some spans start outside those windows (up to about 60 s past `end`, and a few much earlier). Spans are de-duplicated by `span_id`.
+For each traced service, up to 50 traces were fetched for each of two windows: the 5 minutes before t = 0, and t = 0 to `end`. Whole traces come back, so they include other services' spans, and some spans start outside those windows: some up to about 60 s past `end`, and some start well before it (up to hours earlier). Spans are de-duplicated by `span_id`.
 
 ### logs.jsonl.gz
 
@@ -145,7 +145,7 @@ Every record also gets an evidence check (`rootcause/evidence.py`). Neither meas
 - **Grounded:** the cited item exists.
   - A metric item needs a series with both a before and an after window.
   - A trace item needs the trace to have spans at t >= 0 (and, when a service is given, spans of that service).
-  - A log item needs a line of that service at t >= 0 containing the quote, ignoring case and whitespace. The quote must be at least 8 characters.
+  - A log item needs a line of that service at t >= 0 containing the quote, ignoring case, with runs of whitespace treated as one space. The quote must be at least 8 characters.
 - **Distinctive:** the item is grounded and also points at something anomalous.
   - A metric must have changed by at least 0.5 in the change score that `top_changes` shows.
   - A trace must hold an error span, or a span slower than its service's pre-alert p95.
@@ -176,7 +176,9 @@ python -m rootcause summary agent-v1@nvidia-nemotron-3-super-120b-a12b --split h
 - **What changes.** `--model`, `--base-url` and `--key-env` replace only the solver's model and its client. The prompt, tools, step limit, retries, temperature (0) and alert handling stay as they are.
 - **Solvers.** The options work with `agent-v0`, `agent-v1`, the agent-v1 ablations and the `*-nemotron*` solvers. The example above runs agent v1 exactly as `agent-v1-nemotron` does, under another record name. The heuristic makes no model calls, so the options are an error there.
 - **Key.** `--key-env` names an environment variable that holds the key (`.env` in the repository root is read too). A missing variable is an error that names it; its value is never printed.
-- **Where records go.** Records go to `data/runs/<solver>@<model>/`, where every character of the model name outside `A-Za-z0-9._-` becomes `-`. So they never mix with the built-in batches, and a re-run of the same command resumes.
+- **Where records go.** Records go to `data/runs/<solver>@<model>/`. The model name is lower-cased, every character outside `a-z0-9._-` becomes `-`, and a trailing `.` or `-` is dropped (Windows drops a trailing `.` from directory names). So they never mix with the built-in batches, and a re-run of the same command resumes. Each record's `provider` is the endpoint's host name; the URL itself is never stored, since it can carry a key in its query.
+- **Plain http.** `--base-url` must be `http://` or `https://`; the case of the scheme does not matter. Plain `http://` to a host other than `localhost`, `127.0.0.1` or `::1` prints a warning: the API key is sent unencrypted.
+- **Planned runs.** `<solver>@<model>` is planned like its base solver: 5 runs, or 3 for `agent-v1-vague` and `agent-v1-nopriors`.
 - **Throttling and retries.** Requests are spaced at least 4.5 s apart, for any provider. A 429 whose message says the limit is per day ends the batch cleanly (exit 4; re-run the same command later to resume). Any other 429, a 5xx, a timeout or a connection error is tried up to 5 times in all, with waits of 15, 30, 60 and 120 s. If that does not help, the command exits 5 and keeps the completed runs.
 
 ## Running your own agent: `eval-custom`
@@ -189,7 +191,7 @@ def solve(snap):            # snap = {"meta": ..., "metrics": ..., "spans": ...,
     return {"verdict": "no_incident", "causes": [], "evidence": [], "confidence": 0.5}, {}
 ```
 
-[`examples/my_agent.py`](../examples/my_agent.py) is a 20-line baseline: it names the service whose error ratio rose most. Run it from the repository root:
+[`examples/my_agent.py`](../examples/my_agent.py) is a short baseline: it names the service whose error ratio rose most. Run it from the repository root:
 
 ```bash
 python -m rootcause eval-custom examples.my_agent:solve --name my-agent --runs 5
@@ -197,15 +199,17 @@ python -m rootcause summary my-agent
 ```
 
 - **TARGET** is `module:function`, imported with the current directory on the path.
-- **The report** may be a `score.Report` or a dict as above. A dict is validated as described under "The report a solver returns".
+- **The snapshot** your function gets is a copy: changing it does not change what the evidence check reads.
+- **The report** may be a `score.Report` or a dict as above. Both forms are validated as described under "The report a solver returns": a `Report` is turned into a dict and goes through `score.make_report` too, so, for example, a `Report` with 19 causes keeps its first 3 and a confidence of 7.0 becomes 1.0.
 - **`info`** is any JSON-serialisable dict, stored in each record. The report and the site read a few keys from it when present:
   - `requests`, `prompt_tokens` and `completion_tokens` (all three) for the cost table;
   - `turns` for the step-limit table;
   - `error` for the errors column;
   - `transcript`, a list of `{"tool", "args", "output"}`, for the replay.
-- **`--name`** must match `[a-z0-9][a-z0-9._@-]*`. It must not be a built-in solver name, or start with one followed by `@`.
-- **Where records go.** Records go to `data/runs/<name>/` through the same `evaluate.run` as the built-in solvers, with the same scoring, evidence check, truth isolation and code version tag.
-- **Resuming.** A re-run resumes. An exception raised by your function stops the batch, and the runs completed so far are kept.
+- **`--name`** must match `[a-z0-9](?:[a-z0-9._@-]*[a-z0-9])?`: lower case, and no trailing `.` or `-`. It must not be a built-in solver name, a built-in solver name followed by `@`, or the name of one of the decision-model experiments (`laya-multilingual`, `laya-english`, `hunch-1.7b`, `hunch-0.6b`). A name whose directory already holds records from another TARGET is refused too, so two solvers never share one name.
+- **Where records go.** Records go to `data/runs/<name>/` through the same `evaluate.run` as the built-in solvers, with the same scoring, evidence check and truth isolation. Each record also gets `solver` (the name) and `target` (TARGET).
+- **`code`** in every record is RootCause's own git commit (short sha, with `-dirty` when tracked files had uncommitted changes), not a version of your solver.
+- **Resuming.** A re-run resumes. An exception raised by your function stops the batch with exit code 1 and the message `your solver raised <Type>: <message>`; the runs completed so far are kept. (An `openai.OpenAIError` keeps the model-API exit code, 5.)
 
 ## Reading the results
 
@@ -226,8 +230,9 @@ python -m rootcause summary my-agent
 
 On a two-fault row, accuracy is the fraction of causes found, and top-3 means both were found.
 
-`python -m rootcause report` writes `docs/results/report.md` and `python -m rootcause site` builds the replay site. Both include every solver with records: the built-in ones first, in a fixed order, then any other (yours, or `<solver>@<model>`) sorted by name.
+`python -m rootcause report` writes `docs/results/report.md` and `python -m rootcause site` builds the replay site. Both include every solver with records: the built-in ones first, in a fixed order, then any other (yours, or `<solver>@<model>`) sorted by name. A directory under `data/runs/` whose name starts with `_` (for example `_discarded`) is never a solver. The Laya and Hunch decision-model tests (`laya-*`, `hunch-*`) are experiments, not agents: they are in the report's tables but not on the site.
 
-- The report marks a batch with fewer than 5 runs on some incident as partial. 5 is the planned number for any solver not built in.
+- The report marks a batch with fewer than its planned runs on some incident as partial. 5 is the planned number for any solver not built in.
+- The run-to-run agreement and calibration sections cover every solver with a stated confidence and more than one run on some incident.
 - The paired comparisons and the figures cover the built-in solvers only.
 - The accuracy-vs-coverage notes cover solver names that start with `agent`.

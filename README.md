@@ -98,11 +98,11 @@ Requirements: Windows, macOS or Linux, Python 3.11, Docker (about 4 GB RAM for t
 
 ```bash
 python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt   # (bin/python on macOS/Linux)
-.venv/Scripts/python -m pip install -e .                                            # optional: adds the `rootcause` command
+.venv/Scripts/python -m pip install -e .                                            # optional: adds the `rootcause` command (must be editable, -e)
 .venv/Scripts/python -m pytest -q                                                   # offline test suite
 ```
 
-After `pip install -e .`, every `python -m rootcause <command>` below can also be run as `rootcause <command>` (with the venv active). Either way, `data/`, `scenarios/` and `docs/results/` are the ones in this checkout, whatever the current directory.
+After `pip install -e .`, every `python -m rootcause <command>` below can also be run as `rootcause <command>` (with the venv active). The install must be editable (`-e`): the package reads `scenarios/` and `data/` from this repository, so a regular `pip install .` would not find them. Either way, `data/`, `scenarios/` and `docs/results/` are the ones in this checkout, whatever the current directory.
 
 **Data.** The recorded snapshots (16 MB) and run records (15 MB) are not in this repository. The commands that read `data/` (`eval`, `eval-custom`, `summary`, `report`, `site` and `mcp`) need incidents recorded first with `python -m rootcause record` (below).
 

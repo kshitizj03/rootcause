@@ -8,18 +8,20 @@ version = "0.1.0"
 description = "An honest benchmark of an LLM incident-diagnosis agent on recorded microservice incidents"
 readme = "README.md"
 requires-python = ">=3.11"
-# the same list as requirements.txt, which CI installs
+# requirements.txt, which CI installs, has these plus pytest
 dependencies = [
     "requests>=2.31",
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
     "openai>=1.50",
-    "pytest>=8.0",
     "mcp>=2.3",
     "matplotlib>=3.8",
     "opentelemetry-sdk>=1.45",
     "opentelemetry-exporter-otlp-proto-http>=1.45",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
 
 [project.scripts]
 rootcause = "rootcause.cli:main"
