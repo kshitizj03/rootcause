@@ -76,11 +76,18 @@ def _agent_v1_nemotron_vague_solver():
     return "agent-v1-nemotron-vague", _vague(a.solve), (agent.QuotaExhausted,)
 
 
+def _agent_v1_nemotron_steps30_solver():
+    from rootcause import agent  # agent v1 on Nemotron with twice the step limit: is the limit what costs accuracy?
+    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron-steps30", **_nemotron_kwargs(), max_steps=2 * agent.MAX_STEPS)
+    return "agent-v1-nemotron-steps30", a.solve, (agent.QuotaExhausted,)
+
+
 SOLVERS = {"heuristic": _heuristic_solver, "agent-v0": _agent_v0_solver,
            "agent-v1": _agent_v1_solver, "agent-v1-nopriors": _agent_v1_nopriors_solver,
            "agent-v1-vague": _agent_v1_vague_solver, "agent-v1-nemotron": _agent_v1_nemotron_solver,
            "agent-v0-nemotron": _agent_v0_nemotron_solver, "agent-v1-nemotron-nopriors": _agent_v1_nemotron_nopriors_solver,
-           "agent-v1-nemotron-vague": _agent_v1_nemotron_vague_solver}  # CLI name -> factory of (record name, solve, stop_on)
+           "agent-v1-nemotron-vague": _agent_v1_nemotron_vague_solver,
+           "agent-v1-nemotron-steps30": _agent_v1_nemotron_steps30_solver}  # CLI name -> factory of (record name, solve, stop_on)
 
 
 class _Subparser(argparse.ArgumentParser):

@@ -72,3 +72,19 @@ def test_nemotron_variants_match_their_gemini_counterparts_except_the_model(monk
         (kw_g, alert_g), (kw_n, alert_n) = seen()
         assert same(kw_n) == same(kw_g) and alert_n == alert_g, nemotron
         assert kw_n["llm"] == "nvidia-client" and kw_n["models"] == [agent.NEMOTRON] and kw_n["name"] == nemotron
+
+
+def test_step_budget_ablation_is_nemotron_v1_with_only_max_steps_doubled(monkeypatch):
+    monkeypatch.setattr(agent, "Agent", RecordingAgent)
+    monkeypatch.setattr(agent, "make_nvidia_client", lambda: "nvidia-client")
+    snap = {"meta": {"alert": "Orders fail at checkout."}, "metrics": {}, "spans": [], "logs": []}
+    RecordingAgent.instances.clear()
+    for name in ("agent-v1-nemotron", "agent-v1-nemotron-steps30"):
+        record_name, solve, stop_on = cli.SOLVERS[name]()
+        assert record_name == name and stop_on == (agent.QuotaExhausted,)
+        solve(snap)
+    (kw_v1, alert_v1), (kw_s, alert_s) = seen()
+    same = lambda kw: {k: v for k, v in kw.items() if k not in ("max_steps", "name")}
+    assert same(kw_s) == same(kw_v1) and alert_s == alert_v1
+    assert kw_s["max_steps"] == 2 * agent.MAX_STEPS == 30 and kw_s["name"] == "agent-v1-nemotron-steps30"
+    assert "max_steps" not in kw_v1  # the main batch runs at the default limit

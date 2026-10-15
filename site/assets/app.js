@@ -20,6 +20,7 @@ const SOLVERS = {
   "agent-v1-nemotron": ["V1 on Nemotron", "agent v1, another model"],
   "agent-v1-nemotron-nopriors": ["V1 on Nemotron (no priors)", "ablation: two prompt sentences removed"],
   "agent-v1-nemotron-vague": ["V1 on Nemotron (vague alerts)", "ablation: one generic alert"],
+  "agent-v1-nemotron-steps30": ["V1 on Nemotron (30 steps)", "ablation: twice the step limit"],
 };
 
 const solverName = (s) => (SOLVERS[s] || [s])[0];
