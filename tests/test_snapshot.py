@@ -112,9 +112,7 @@ def test_hidden_services_never_queried(tmp_path):
     snapshot.capture(control_scenario, T_INJECT, T_END, NAMES, fetch=recording_fetch(), out_dir=tmp_path)
 
     assert calls["jaeger_raw"] and calls["os_logs"]
-    assert "flagd" not in calls["jaeger_raw"]
-    assert "flagd-ui" not in calls["jaeger_raw"]
-    assert "load-generator" not in calls["jaeger_raw"]
+    assert not any("flagd" in s or s == "load-generator" for s in calls["jaeger_raw"])  # any flagd-* service too
     for query in calls["os_logs"]:
         assert "flagd" not in query and "flagd-ui" not in query
         assert "load-generator" not in query
