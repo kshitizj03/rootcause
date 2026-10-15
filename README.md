@@ -104,7 +104,7 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt 
 
 After `pip install -e .`, every `python -m rootcause <command>` below can also be run as `rootcause <command>` (with the venv active). Either way, `data/`, `scenarios/` and `docs/results/` are the ones in this checkout, whatever the current directory.
 
-**Data.** The recorded snapshots (16 MB) and run records (15 MB) are not in this repository. The commands that read `data/` (`eval`, `summary`, `report`, `site` and `mcp`) need incidents recorded first with `python -m rootcause record` (below).
+**Data.** The recorded snapshots (16 MB) and run records (15 MB) are not in this repository. The commands that read `data/` (`eval`, `eval-custom`, `summary`, `report`, `site` and `mcp`) need incidents recorded first with `python -m rootcause record` (below).
 
 **Score the solvers on the recorded snapshots.** Put the keys in `.env`: `GEMINI_API_KEY=...` for the Gemini solvers, and `NVIDIA_API_KEY=...` for the `*-nemotron` solvers.
 
@@ -131,6 +131,19 @@ python -m rootcause mcp data/snapshots/incident__<stamp>
 
 In a client config, use absolute paths, with the venv's python as `command` and `["-m", "rootcause.mcp_server", "<abs snapshot dir>"]` as `args`. Set `cwd` to the repository root. Don't point an interactive session at a held-out snapshot (`config.HELDOUT`), because that contaminates the held-out split.
 
+## Benchmark your own model or agent
+
+Both commands need recorded incidents (see **Data** above): the snapshots are not in this repository yet.
+
+```bash
+# a built-in agent on any OpenAI-compatible endpoint with tool calling; records go to data/runs/agent-v1@<model>/
+python -m rootcause eval agent-v1 --model <model> --base-url <endpoint URL> --key-env <VAR holding the key> --runs 5
+# your own solver: a function that takes a snapshot and returns (report, info)
+python -m rootcause eval-custom examples.my_agent:solve --name my-agent --runs 5
+```
+
+Both are scored by the same rules as the built-in solvers, and `summary`, `report` and `site` pick their records up. [`docs/benchmark.md`](docs/benchmark.md) describes what a snapshot holds, what a solver may read, the report schema, the scoring rules, the splits and the rules for honest use. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers adding scenarios and built-in solvers.
+
 ## Repository layout
 
 | Path | What |
@@ -147,6 +160,7 @@ In a client config, use absolute paths, with the venv's python as `command` and 
 | `rootcause/report.py`, `tracing.py` | results report and figures; optional OpenTelemetry GenAI spans of agent runs |
 | `rootcause/site.py`, `site/` | data builder and static front end of the replay site |
 | `tests/` | offline test suite (no Docker, no API key, no recorded data) |
+| `examples/my_agent.py`, `docs/benchmark.md` | a small custom solver for `eval-custom`, and how to benchmark your own model or agent |
 | `experiments/laya/`, `experiments/hunch/` | decision-model entry tests: can a small model beat the heuristic? |
 | `infra/` | Compose override that pins the observability backends to fixed host ports |
 | `docs/results/` | results: `report.md` and its figures, `agents.md` (what helps the agent), the Laya and Hunch entry tests, the interim heuristic-vs-agent-v0 write-up |

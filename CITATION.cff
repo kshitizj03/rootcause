@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "If you use this benchmark, please cite it as below."
+title: "RootCause: an honest benchmark of an LLM incident-diagnosis agent"
+authors:
+  - family-names: Jain
+    given-names: Kshitiz
+repository-code: "https://github.com/kshitizj03/rootcause"
+version: 0.1.0
