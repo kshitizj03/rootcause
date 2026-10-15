@@ -533,8 +533,27 @@ def test_eval_and_summary_resolve_solvers_through_the_solvers_table(monkeypatch)
     monkeypatch.setattr(evaluate, "run", lambda name, s, runs, ids, stop_on=(): seen.update(run=(name, s, stop_on)) or {"completed": 0, "stopped": None})
     monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: seen.setdefault("summ", []).append(name) or [])
     monkeypatch.setattr(evaluate, "targets", lambda ids=None: [])
-    assert cli.main(["eval", "heuristic"]) == 0 and cli.main(["summary", "heuristic"]) == 0
-    assert seen["run"] == ("renamed", solve, ("stop",)) and seen["summ"] == ["renamed", "renamed"]
+    assert cli.main(["eval", "heuristic"]) == 0
+    assert seen["run"] == ("renamed", solve, ("stop",)) and seen["summ"] == ["renamed"]
+
+
+def test_summary_reads_records_by_name_without_building_a_model_client(monkeypatch):
+    from rootcause import evaluate
+    seen = []
+
+    def no_factory(*a):
+        raise AssertionError("summary must not build a solver")
+    monkeypatch.setattr(cli, "SOLVERS", {k: no_factory for k in cli.SOLVERS})
+    monkeypatch.setattr(evaluate, "summarise", lambda name, expected=None, split=None: seen.append(name) or [])
+    assert cli.main(["summary", "agent-v1-nemotron"]) == 0 and seen == ["agent-v1-nemotron"]
+
+
+def test_every_built_in_solver_records_under_its_own_name(monkeypatch):
+    from agent_fakes import RecordingAgent
+    from rootcause import agent
+    monkeypatch.setattr(agent, "Agent", RecordingAgent)
+    monkeypatch.setattr(agent, "make_nvidia_client", lambda: "nvidia-client")
+    assert all(factory()[0] == name for name, factory in cli.SOLVERS.items())  # so summary may use the name directly
 
 
 def test_summary_passes_the_library_scenario_counts_per_category(monkeypatch):

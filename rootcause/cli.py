@@ -1,5 +1,6 @@
 """Command line: demo stack, scenario recording and checks, evaluation, report/site generation, MCP server."""
 import argparse
+import copy
 import importlib
 import json
 import os
@@ -14,7 +15,7 @@ from pathlib import Path
 from openai import OpenAI, OpenAIError  # OpenAIError: the model clients' base error
 
 from rootcause import config, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot, stack
-from rootcause.score import Report, make_report
+from rootcause.score import Report, make_report, report_to_dict
 
 
 def _heuristic_solver():
@@ -22,8 +23,9 @@ def _heuristic_solver():
 
 
 def slug(model):
-    """A model name as a directory-safe suffix: nvidia/nemotron-3-super-120b-a12b -> nvidia-nemotron-3-super-120b-a12b."""
-    return re.sub(r"[^A-Za-z0-9._-]", "-", model)
+    """A model name as a directory-safe suffix: nvidia/nemotron-3-super-120b-a12b -> nvidia-nemotron-3-super-120b-a12b.
+    Lower-cased (record names are), without a trailing "." or "-" (Windows drops a trailing "." from directory names)."""
+    return re.sub(r"[^a-z0-9._-]", "-", model.lower()).rstrip(".-")
 
 
 def _pick(base, model, default):
@@ -334,9 +336,15 @@ def _model_override(args):
         raise _Usage(f"{', '.join(given)}: the heuristic makes no model calls; these options apply to the agent solvers only")
     if len(given) < 3:
         raise _Usage("--model, --base-url and --key-env must be given together")
-    provider = urllib.parse.urlparse(args.base_url).hostname
-    if not provider or not args.base_url.startswith(("http://", "https://")):
+    try:
+        url = urllib.parse.urlparse(args.base_url)
+        provider = url.hostname
+    except ValueError:
+        provider = None
+    if not provider or url.scheme.lower() not in ("http", "https"):
         raise _Usage(f"--base-url must be an http(s) URL, got {args.base_url!r}")
+    if url.scheme.lower() == "http" and provider not in ("localhost", "127.0.0.1", "::1"):
+        print(f"warning: --base-url is plain http to {provider}: the API key will be sent unencrypted", file=sys.stderr)
     from dotenv import load_dotenv
     load_dotenv(config.ROOT / ".env")  # where the built-in solvers' keys live too
     key = os.environ.get(args.key_env)
@@ -358,8 +366,20 @@ def _eval_traced(args):
     if unknown := _unknown_ids(args.ids):
         print(f"unknown or unrecorded scenario ids: {unknown}")
         return 2
-    name, solve, stop_on = SOLVERS[args.solver](model) if model else SOLVERS[args.solver]()
+    if model:
+        name, solve, stop_on = SOLVERS[args.solver](model)
+        solve = _tagged(solve, provider=model["provider"])  # the endpoint's host only: a URL can carry keys in its query
+    else:
+        name, solve, stop_on = SOLVERS[args.solver]()
     return _run_batch(name, solve, args, stop_on)
+
+
+def _tagged(solve, **tags):
+    """The same solver, with tags added to every record's info (they win over the solver's own keys)."""
+    def tagged(snap):
+        report, info = solve(snap)
+        return report, {**info, **tags}
+    return tagged
 
 
 def _run_batch(name, solve, args, stop_on=()):
@@ -372,7 +392,7 @@ def _run_batch(name, solve, args, stop_on=()):
     return 0
 
 
-NAME_RE = re.compile(r"[a-z0-9][a-z0-9._@-]*")
+NAME_RE = re.compile(r"[a-z0-9](?:[a-z0-9._@-]*[a-z0-9])?")  # no trailing "." or "-": Windows drops a trailing "."
 
 
 def _load_target(target):
@@ -391,32 +411,49 @@ def _load_target(target):
     return fn
 
 
+class SolverError(Exception):
+    """A custom solver raised, or returned something other than (report, info): printed, exit 1."""
+
+
 def custom_solver(fn):
     """Wrap fn(snapshot) -> (report, info) so its report goes through the same validation as the agent's answers: a
-    score.Report is kept, anything else must be a valid report dict, and an invalid one scores as insufficient_evidence
-    with the error kept in parse_error."""
+    score.Report or a dict, either way through make_report, and an invalid one scores as insufficient_evidence with the
+    error kept in parse_error. fn gets a copy of the snapshot, so it cannot change what the evidence check reads."""
     def solve(snap):
-        report, info = fn(snap)
-        info = dict(info or {})
-        if not isinstance(report, Report):
-            try:
-                report = make_report(report)
-            except ValueError as e:
-                info["parse_error"] = str(e)
-                report = Report("insufficient_evidence")
+        try:
+            out = fn(copy.deepcopy(snap))
+        except OpenAIError:  # an API failure keeps its own exit code and resume hint
+            raise
+        except Exception as e:
+            raise SolverError(f"your solver raised {type(e).__name__}: {e}") from e
+        try:
+            report, info = out
+            info = dict(info or {})
+        except (TypeError, ValueError) as e:
+            raise SolverError(f"your solver must return (report, info), got {type(out).__name__}") from e
+        try:
+            report = make_report(report_to_dict(report) if isinstance(report, Report) else report)
+        except (ValueError, TypeError, AttributeError) as e:
+            info["parse_error"] = str(e)
+            report = Report("insufficient_evidence")
         return report, info
     return solve
 
 
 def _eval_custom(args):
-    if not NAME_RE.fullmatch(args.name) or args.name.split("@")[0] in SOLVERS:
-        raise _Usage(f"--name must match {NAME_RE.pattern} and must not be (or start with) a built-in solver name, "
-                     f"got {args.name!r}")
+    if (not NAME_RE.fullmatch(args.name) or args.name.split("@")[0] in SOLVERS
+            or args.name in evaluate.PLANNED_RUNS):
+        raise _Usage(f"--name must match {NAME_RE.pattern}, and must not be a built-in solver or experiment name or a "
+                     f"built-in solver's name followed by @, got {args.name!r}")
+    old = next(iter(sorted((Path(evaluate.RUNS_DIR) / args.name).glob("*.json"))), None)
+    if old and (prev := json.loads(old.read_text(encoding="utf-8")).get("target")) != args.target:
+        raise _Usage(f"data/runs/{args.name}/ holds records of {prev or 'another solver'}, not {args.target}: "
+                     f"choose another --name")
     fn = _load_target(args.target)
     if unknown := _unknown_ids(args.ids):
         print(f"unknown or unrecorded scenario ids: {unknown}")
         return 2
-    return _run_batch(args.name, custom_solver(fn), args)
+    return _run_batch(args.name, _tagged(custom_solver(fn), solver=args.name, target=args.target), args)
 
 
 def _print_summary(name, solver, split="all"):
@@ -431,6 +468,9 @@ def main(argv=None):
     except _Usage as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    except SolverError as e:  # the user's own code failed: no stack reset or API retry would help
+        print(f"error: {e} -- completed runs are kept", file=sys.stderr)
+        return 1
     except OpenAIError as e:  # API failure after retries/fallback; the stack is fine, so no reset hint
         print(f"model API error: {e} -- completed runs are kept; re-run the same command to resume", file=sys.stderr)
         return 5
@@ -471,9 +511,8 @@ def _dispatch(args):
     elif args.cmd == "eval-custom":
         return _eval_custom(args)
     elif args.cmd == "summary":
-        if args.solver in SOLVERS:
-            _print_summary(SOLVERS[args.solver]()[0], args.solver, args.split)
-        elif args.solver in evaluate.recorded_solvers():
+        # a built-in solver's records are under its own name: no factory call, so no model client and no API key
+        if args.solver in SOLVERS or args.solver in evaluate.recorded_solvers():
             _print_summary(args.solver, args.solver, args.split)
         else:
             raise _Usage(f"no solver and no records called {args.solver!r}; built-in solvers: {', '.join(SOLVERS)}")
