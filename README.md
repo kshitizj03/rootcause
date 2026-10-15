@@ -72,9 +72,9 @@ A static site replays every recorded run, failures included:
 
 ![Scoreboard: one mark per run for each incident and solver](docs/images/scoreboard.png)
 
-![Replay of a held-out incident the agent got wrong: it named the symptom service first](docs/images/replay.png)
+![Replay of a held-out incident agent v1 on Nemotron got wrong: it ranked the symptom service, cart, above the paused valkey-cart](docs/images/replay.png)
 
-*(Screenshots from an earlier build, with only the heuristic and the partial agent v0 batch.)*
+*(Screenshots from 2026-10-15: the Gemini batches are still partial; empty tiles are runs not done yet.)*
 
 ```bash
 python -m rootcause report && python -m rootcause site   # regenerate figures and site/data from data/runs (see Data below)

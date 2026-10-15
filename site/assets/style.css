@@ -386,3 +386,13 @@ tfoot .total .acc { font-size: 1.75rem; }
   .pick { flex: 1 1 8rem; }
   .pick select { width: 100%; min-width: 0; }
 }
+
+/* many solvers: smaller tiles and narrower columns so the whole scoreboard fits the page */
+.scoreboard.dense th.incident { min-width: 12rem; width: 30%; }
+.scoreboard.dense .truth { min-width: 7rem; }
+.scoreboard.dense th.solver, .scoreboard.dense td.runs, .scoreboard.dense td.num { min-width: 6.25rem; }
+.scoreboard.dense th.solver { font-size: 1rem; }
+.scoreboard.dense .strip { gap: 2px; }
+.scoreboard.dense .tile { width: 1.15rem; height: 1.15rem; font-size: 0.75rem; }
+/* the scoreboard page is wider than the reading pages; its prose keeps its own measure */
+body[data-page="index"] main, body[data-page="index"] .masthead, body[data-page="index"] .colophon { max-width: 92rem; }

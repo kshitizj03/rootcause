@@ -175,7 +175,7 @@ async function renderIndex() {
     h("td", {}),
     solvers.map((s) => accuracyCell(overall[s])))) : null;
 
-  const table = h("table", { class: "scoreboard" },
+  const table = h("table", { class: solvers.length > 4 ? "scoreboard dense" : "scoreboard" },
     h("caption", { class: "visually-hidden" },
       "Scoreboard: one mark per recorded run, for each incident and solver, with accuracy by category"),
     head, groups, foot);
