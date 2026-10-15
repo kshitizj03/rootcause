@@ -1,7 +1,7 @@
 // RootCause replay site: one ES module for every page. <body data-page="..."> picks the renderer (see the bottom).
 // Shared helpers come first; each page's renderer follows.
 
-export const CATEGORIES = {
+const CATEGORIES = {
   easy: ["Easy", "one loud fault"],
   "hard-cross-service": ["Cross-service", "the symptom shows up in a different service from the cause"],
   "hard-silent": ["Silent", "latency or resource faults with no errors"],
@@ -10,7 +10,7 @@ export const CATEGORIES = {
   control: ["Control", "nothing is broken; the right answer is “no incident”"],
 };
 
-export const SOLVERS = {
+const SOLVERS = {
   heuristic: ["Heuristic", "the simple rule"],
   "agent-v0": ["Agent v0", "naive tools"],
   "agent-v1": ["Agent v1", "change-aware tools"],
@@ -22,13 +22,13 @@ export const SOLVERS = {
   "agent-v1-nemotron-vague": ["Nemotron with vague alerts", "ablation of v1 on Nemotron"],
 };
 
-export const solverName = (s) => (SOLVERS[s] || [s])[0];
-export const categoryName = (c) => (CATEGORIES[c] || [c])[0];
-export const pct = (x) => `${Math.round(x * 100)}%`;
-export const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const solverName = (s) => (SOLVERS[s] || [s])[0];
+const categoryName = (c) => (CATEGORIES[c] || [c])[0];
+const pct = (x) => `${Math.round(x * 100)}%`;
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /** h("a", {href, class}, ...children): build an element; strings become text nodes, so data is never parsed as HTML. */
-export function h(tag, attrs = {}, ...kids) {
+function h(tag, attrs = {}, ...kids) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (v !== null && v !== undefined && v !== false) node.setAttribute(k, v === true ? "" : v);
@@ -38,7 +38,7 @@ export function h(tag, attrs = {}, ...kids) {
 }
 
 /** Fetch JSON relative to the page; null when it is missing. Malformed JSON throws, so the page says to rebuild it. */
-export async function loadJSON(path) {
+async function loadJSON(path) {
   let res;
   try {
     res = await fetch(path);
@@ -49,7 +49,7 @@ export async function loadJSON(path) {
 }
 
 /** A run's score as a mark: 1 is correct, 0 wrong, anything between partly correct (two-fault, one cause of two). */
-export function mark(correct) {
+function mark(correct) {
   if (correct >= 1) return { cls: "hit", glyph: "✓", word: "correct" };
   if (correct > 0) return { cls: "part", glyph: "½", word: "partly correct" };
   return { cls: "miss", glyph: "✗", word: "wrong" };
@@ -102,18 +102,19 @@ function legend() {
     item("part", "½", "partly correct (one of two causes)"), item("empty", "", "not run yet"));
 }
 
-/** "Accuracy on the 16 fault incidents: heuristic 59% and agent v0 41%." plus a note for each partial batch. */
-function answer(data, overall) {
+/** "Accuracy on the 16 fault incidents: heuristic 59% and agent v0 41%." plus a note for each partial batch: one with
+ * fewer than its planned runs on some incident, or with incidents missing. */
+function answer(data, overall, planned) {
   const shown = data.solvers.filter((s) => overall[s]);
   if (!shown.length) return null;
   const n = overall[shown[0]].expected ?? overall[shown[0]].scenarios;
   const parts = shown.map((s) => `${solverName(s).toLowerCase()} ${pct(overall[s].accuracy_mean)}`);
   const list = new Intl.ListFormat("en", { type: "conjunction" }).format(parts);
-  const partial = shown.filter((s) => overall[s].records_min !== overall[s].records_max || overall[s].scenarios < n)
+  const partial = shown.filter((s) => overall[s].records_min < planned[s] || overall[s].scenarios < n)
     .map((s) => { const o = overall[s];
       const reach = o.scenarios < n ? `${o.scenarios} of ${n} incidents, ` : "";
-      const runs = o.records_min === o.records_max ? plural(o.records_min, "run") : `${o.records_min}–${o.records_max} runs`;
-      return `${solverName(s)} is a partial batch so far (${reach}${runs} per incident).`; });
+      const runs = o.records_min === o.records_max ? `${o.records_min}` : `${o.records_min}–${o.records_max}`;
+      return `${solverName(s)} is a partial batch so far (${reach}${runs} of ${plural(planned[s], "planned run")} per incident).`; });
   return h("p", { class: "answer" }, `Accuracy on the ${n} fault incidents: ${list}. `, partial.join(" "));
 }
 
@@ -126,8 +127,9 @@ async function renderIndex() {
     return;
   }
   const solvers = data.solvers;
+  // run-strip slots: the planned runs per incident (site.py), or more if more were recorded
   const slots = Object.fromEntries(solvers.map((s) =>
-    [s, Math.max(0, ...data.incidents.map((i) => (i.results[s] || []).length))]));
+    [s, Math.max(data.planned_runs?.[s] ?? 0, ...data.incidents.map((i) => (i.results[s] || []).length))]));
   const summary = Object.fromEntries(solvers.map((s) =>
     [s, Object.fromEntries((data.summary[s] || []).map((r) => [r.category, r]))]));
   const width = solvers.length + 2;
@@ -173,7 +175,7 @@ async function renderIndex() {
     head, groups, foot);
 
   root.replaceChildren(
-    answer(data, overall) || "",
+    answer(data, overall, slots) || "",
     legend(),
     h("div", { class: "table-scroll", tabindex: "0", role: "region", "aria-label": "Scoreboard" }, table));
   document.getElementById("generated").replaceChildren(
@@ -225,7 +227,7 @@ function changesTable(rows, label, text) {
 }
 
 /** get_metric as a sparkline: the alert (t=0) is a vertical rule and everything after it is tinted. */
-const WINDOW_END_S = 300;  // every snapshot ends 5 minutes after the alert (config.SETTLE_S)
+let windowEndS = 300;  // seconds from the alert to the snapshot's end: the incident JSON's window_end_s (config.SETTLE_S)
 
 function sparkline(o, args = {}) {
   const pts = (o.points || []).filter((p) => Number.isFinite(p?.[0]) && Number.isFinite(p?.[1]));
@@ -234,7 +236,7 @@ function sparkline(o, args = {}) {
   const ts = pts.map((p) => p[0]), vs = pts.map((p) => p[1]);
   const last = Math.max(...ts), lo = Math.min(...vs), hi = Math.max(...vs);
   // the axis runs to the end of what was asked for, so a series that stops early (a paused service) visibly stops
-  const asked = Number.isFinite(args.until) ? Math.min(args.until, WINDOW_END_S) : WINDOW_END_S;
+  const asked = Number.isFinite(args.until) ? Math.min(args.until, windowEndS) : windowEndS;
   const t0 = Math.min(...ts), t1 = Math.max(last, asked);
   const stopped = t1 - last >= 120 ? `No points after ${minutes(last)}.` : null;
   const x = (t) => ((t - t0) / (t1 - t0 || 1)) * W;
@@ -412,6 +414,7 @@ async function renderIncident() {
     return;
   }
   document.title = `${data.id}: RootCause replay`;
+  windowEndS = data.window_end_s ?? 300;
 
   const runs = data.runs || {};
   const known = Object.keys(SOLVERS);

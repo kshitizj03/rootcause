@@ -107,10 +107,11 @@ def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=eval
         runs = {n: v for n, v in runs.items() if v}
         meta = {"id": s.id, "category": s.category, "heldout": s.id in config.HELDOUT, "alert": s.alert,
                 "truth": _truth(s, rows)}
-        _dump(out_dir / "data" / "incidents" / f"{s.id}.json", {**meta, "runs": runs})
+        _dump(out_dir / "data" / "incidents" / f"{s.id}.json", {**meta, "runs": runs, "window_end_s": config.SETTLE_S})
         incidents.append({**meta, "results": {n: [r["score"]["correct"] for r in v] for n, v in runs.items()}})
     expected = evaluate.expected_counts("all")
     index = {"generated": date.today().isoformat(), "solvers": list(records), "incidents": incidents,
+             "planned_runs": {n: evaluate.planned_runs(n) for n in records},
              "categories": [c for c in evaluate.ORDER if c in {s.category for s in lib}],
              "summary": {n: evaluate.summarise(n, runs_dir, expected=expected, split="all") for n in records}}
     _dump(out_dir / "data" / "index.json", index)
