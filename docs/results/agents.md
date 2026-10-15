@@ -9,6 +9,7 @@
 - **The change-aware tools do not change accuracy; they change where it comes from.** On Nemotron, v1's tools score the same as v0's naive tools (-0.02). They gain on silent faults, two-fault incidents and controls, and they lose on cross-service incidents. They also make the evidence checkable.
 - **Reading the alert helps.** Replacing each incident's alert with one generic sentence lowers accuracy by 0.12 (interval -0.25 to -0.01) and doubles false alarms.
 - **The two "prior" sentences in the prompt do nothing measurable** (-0.01, interval -0.07 to +0.06).
+- **One run is not enough, and stated confidence overstates accuracy.** At temperature 0, all five runs of Nemotron v1 give the same top answer on only 8 of 20 incidents. Every agent states more confidence than it earns, Gemini the most (0.91 stated vs 0.54 right).
 
 ## The numbers
 
@@ -83,6 +84,23 @@ The vague-alert ablation gives every incident the same alert: "Users report that
 ### 4. The prompt's two priors do not matter
 
 v1's prompt contains two sentences: "the service the alert mentions is often NOT the cause" and "it is possible that nothing is actually wrong". Removing them changes nothing measurable on Nemotron: -0.01 on fault incidents, the same 0.50 on controls, and 4 wins and 4 losses.
+
+### 5. Runs are not repeatable, and confidence is inflated
+
+Temperature 0 does not make a hosted model deterministic:
+
+| solver | incidents where all runs agree | pairwise agreement | mean confidence | accuracy | calibration error (ECE) |
+|---|---|---|---|---|---|
+| Gemini v1 (partial) | 12 of 20 | 0.79 | 0.91 | 0.54 | 0.37 |
+| Nemotron v0 | 6 of 20 | 0.54 | 0.82 | 0.61 | 0.20 |
+| Nemotron v1 | 8 of 20 | 0.66 | 0.87 | 0.64 | 0.23 |
+| Nemotron v1, vague alert | 9 of 20 | 0.58 | 0.85 | 0.49 | 0.36 |
+
+(Accuracy and confidence here are over every run, controls included. ECE is over 5 equal-width confidence bins.)
+
+- **A single run would be misleading.** On 12 of 20 incidents, Nemotron v1's five runs disagree on the top answer. This is why every batch is planned at 5 runs and the report averages per incident before comparing.
+- **Gemini is more repeatable but more wrong.** Its runs agree more often (0.79). The agreement includes its repeated "no incident" answers (see finding 1).
+- **Every agent is overconfident.** Stated confidence is 0.2-0.4 above accuracy. The vague alert makes this worse: accuracy drops but confidence barely moves. Confidence alone is not a usable signal for when to trust an answer; the coverage curve in `report.md` shows the same.
 
 ## Caveats
 

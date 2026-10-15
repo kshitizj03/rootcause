@@ -58,7 +58,7 @@ The agents run on two model families, both at temperature 0: Gemini 3.5 Flash-Li
 
 Two outputs show the measures, as means across runs (accuracy also with its spread across runs):
 - `python -m rootcause summary <solver>` prints, per category, accuracy, top-3, fault type (cause and type both right), false alarms, abstentions and the evidence measures;
-- [`docs/results/report.md`](docs/results/report.md) has accuracy per category, false alarms, abstentions, evidence, cost, the paired comparisons and the step-limit table.
+- [`docs/results/report.md`](docs/results/report.md) has accuracy per category, false alarms, abstentions, evidence, cost, the paired comparisons, the step-limit table, run-to-run agreement and calibration.
 
 The two evidence measures are:
 - **grounded:** the cited metric, trace or log line exists in the incident window;
