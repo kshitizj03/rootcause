@@ -225,3 +225,18 @@ def test_agreement_and_calibration_sections_cover_agents_with_repeated_runs(tmp_
     assert "overconfident) for agent-v0, and not for agent-v1." in cal
     assert "Runs without a numeric confidence are skipped: agent-v1: 1." in cal
     assert "heuristic" not in agree + cal
+
+
+def test_failure_modes_classify_each_wrong_fault_run():
+    accept = {"a": {"payment"}, "b": {"valkey-cart"}, "c": {"ad"}, "d": {"x", "y"}}
+    top = {"a": "checkout", "b": "cart", "c": "ad"}
+    rec = lambda sid, verdict, causes, correct, cat="easy": {"scenario": sid, "category": cat, "score": {"correct": correct},
+                                                             "report": {"verdict": verdict, "causes": [{"service": s} for s in causes]}}
+    records = [rec("a", "no_incident", [], 0.0), rec("a", "incident", ["checkout"], 0.0),            # no incident; symptom
+               rec("b", "incident", ["cart", "valkey-cart"], 0.0), rec("b", "insufficient_evidence", [], 0.0),  # ranked 2nd; abstained
+               rec("c", "incident", ["email"], 0.0), rec("d", "incident", ["x"], 0.5),                 # other service; one of two
+               rec("c", "incident", ["ad"], 1.0), rec("a", "no_incident", [], 1.0, "control")]       # right, control: not counted
+    c = report.failure_modes(records, accept, top)
+    assert c == {"said no incident": 1, "named the top-changed service": 1, "true cause ranked 2nd or 3rd": 1,
+                 "abstained": 1, "another wrong service": 1, "found one of two causes": 1}
+    assert report.failure_modes(records, accept, {})["another wrong service"] == 2  # without snapshots: no symptom call

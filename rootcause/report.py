@@ -174,6 +174,66 @@ def _paired_section(data, solvers):
             *(f"{s}: partial batch ({note})" for s, note in partial.items())]
 
 
+FAILURE_MODES = ("said no incident", "named the top-changed service", "true cause ranked 2nd or 3rd",
+                 "found one of two causes", "another wrong service", "abstained")
+
+
+def failure_modes(records, accept, top):
+    """Count each wrong fault-incident run by how it went wrong. accept: {scenario: accepted service names};
+    top: {scenario: the service with the largest rise in its change table} (empty without snapshots)."""
+    counts = dict.fromkeys(FAILURE_MODES, 0)
+    for r in records:
+        if r["category"] == "control" or r["score"]["correct"] >= 1:
+            continue
+        rep, ok = r["report"], accept.get(r["scenario"], set())
+        named = [c["service"] for c in rep.get("causes") or []]
+        if rep["verdict"] == "no_incident":
+            mode = "said no incident"
+        elif rep["verdict"] != "incident":
+            mode = "abstained"
+        elif r["score"]["correct"] > 0:
+            mode = "found one of two causes"
+        elif ok & set(named[1:]):  # it named the cause, just not first: say that before anything else
+            mode = "true cause ranked 2nd or 3rd"
+        elif named and named[0] == top.get(r["scenario"]):
+            mode = "named the top-changed service"
+        else:
+            mode = "another wrong service"
+        counts[mode] += 1
+    return {m: n for m, n in counts.items() if n}
+
+
+def _top_changed():
+    """{scenario: service with the largest rise (not request rate)} from the recorded snapshots; {} without them."""
+    from rootcause import snapshot, summary
+    try:
+        lib = scenarios.load_all()
+        rows = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl", [s.id for s in lib])
+        out = {}
+        for sid, row in rows.items():
+            ups = [c for c in summary.changes(snapshot.load(row["path"])) if c["direction"] == "up" and c["signal"] != "rps"]
+            if ups:
+                out[sid] = ups[0]["service"]
+        return out
+    except OSError:
+        return {}
+
+
+def _failure_section(data, solvers):
+    accept = {s.id: {a for c in s.truth.get("causes", []) for a in c["accept"]} for s in scenarios.load_all()}
+    top, rows = _top_changed(), []
+    for s in solvers:
+        modes = failure_modes(data["records"][s], accept, top)
+        if data["records"][s]:
+            rows.append([s, str(sum(modes.values()))] + [str(modes.get(m, 0)) for m in FAILURE_MODES])
+    return ["## Failure modes (all split, wrong fault-incident runs)",
+            "How each wrong run on a fault incident went wrong. The top-changed service is the one with the largest rise "
+            "in the incident's change table, usually where the symptom shows; naming it is the heuristic's whole method and "
+            "its typical mistake." + ("" if top else " (Recorded snapshots not found, so that column is folded into "
+                                                     "'another wrong service'.)"),
+            _table(["solver", "wrong runs", *FAILURE_MODES], rows) if rows else "No runs yet."]
+
+
 def _step_limit_section(data, solvers):
     from rootcause.agent import MAX_STEPS  # lazily: the report needs no model client otherwise
     rows = []
@@ -418,7 +478,7 @@ def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, 
                               "(neither proves that the incident caused it).",
                               [("grounded", "all incidents", "grounded"), ("distinctive", "all incidents", "distinctive")],
                               skip=_evidence_skip(data)),
-                _paired_section(data, solvers), _step_limit_section(data, solvers), _agreement_section(data, solvers),
+                _paired_section(data, solvers), _failure_section(data, solvers), _step_limit_section(data, solvers), _agreement_section(data, solvers),
                 _calibration_section(data, solvers), _cost(data, solvers), _per_scenario(data, solvers), _coverage_section(data, solvers), _provenance(data, solvers), _not_run(data, solvers)]
     path = out_dir / "report.md"
     path.write_text("\n\n".join("\n\n".join(s) for s in sections) + "\n", encoding="utf-8")

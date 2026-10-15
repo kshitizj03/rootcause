@@ -77,6 +77,30 @@ On Nemotron the overall score is the same with v0's naive tools (raw metric seri
 
 With 3 cross-service incidents, the 0.67 against 0.33 is 10 against 5 correct runs out of 15. That is the direction of an effect, not a measured size.
 
+### Where the wrong answers come from
+
+The report's failure-mode table sorts every wrong run on a fault incident:
+
+| solver | wrong runs | said no incident | true cause ranked 2nd or 3rd | named the top-changed service | found one of two causes | other |
+|---|---|---|---|---|---|---|
+| Gemini v1 (partial) | 47 | **33** | 2 | 8 | 4 | 0 |
+| Nemotron v0 | 29 | 0 | 2 | 5 | 9 | 13 |
+| Nemotron v1 | 29 | 2 | **10** | 8 | 6 | 3 |
+
+- **Gemini's errors are mostly "no incident"** (33 of 47).
+- **Nemotron v1 is usually close:**
+  - in 10 of its 29 wrong runs, the true cause is in its answer, just not first;
+  - in 8 more, it named the service with the largest rise in the change table, which is where the symptom shows and also the heuristic's whole method.
+- **The naive tools fail differently:**
+  - Nemotron v0 names an unrelated service or abstains more often (13), and rarely ranks the true cause second (2);
+  - v1's change ranking moves its mistakes toward the top-changed service.
+
+A rule that blames a stopped or erroring dependency of the top-changed service looks like the obvious fix. On the two cross-service incidents in the tuning split it does not hold up:
+- on payment-unreachable, two dependencies stop at once (payment and email), and the traces cannot tell them apart;
+- on kafka-queue-problems, the call map has no Kafka edge.
+
+With two examples it would be fitting a rule to the test, so it was not built.
+
 ### 3. The alert carries real information
 
 The vague-alert ablation gives every incident the same alert: "Users report that something is wrong with the shop." Against Nemotron v1, accuracy on fault incidents falls from 0.68 to 0.56. Correct control runs fall from 0.50 to 0.25, so false alarms double from 35% to 70%. Part of any agent's edge over the heuristic, which never reads the alert, is reading it. Several alerts name the functional area of the cause; `scenarios/NOTES.md` lists them.
