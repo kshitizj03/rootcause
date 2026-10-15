@@ -23,7 +23,9 @@ const SOLVERS = {
   "agent-v1-nemotron-steps30": ["V1 on Nemotron (30 steps)", "ablation: twice the step limit"],
 };
 
+// a solver missing from SOLVERS (your own agent, or a built-in one on another model) shows its record name
 const solverName = (s) => (SOLVERS[s] || [s])[0];
+const solverSub = (s) => (SOLVERS[s] || [s, "custom"])[1];
 const categoryName = (c) => (CATEGORIES[c] || [c])[0];
 const pct = (x) => `${Math.round(x * 100)}%`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -145,7 +147,7 @@ async function renderIndex() {
     h("th", { scope: "col", class: "incident" }, "Incident"),
     h("th", { scope: "col" }, "True cause"),
     solvers.map((s) => h("th", { scope: "col", class: "solver" },
-      solverName(s), SOLVERS[s] ? h("span", { class: "sub" }, SOLVERS[s][1]) : null))));
+      solverName(s), h("span", { class: "sub" }, solverSub(s))))));
 
   const categories = [...data.categories, ...new Set(data.incidents.map((i) => i.category))]
     .filter((c, i, all) => all.indexOf(c) === i);

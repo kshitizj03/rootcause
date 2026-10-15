@@ -86,8 +86,10 @@ def _truth(s, rows):
     return [{"accept": c["accept"], "fault_type": c["fault_type"]} for c in truth.get("causes", [])]
 
 
-def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=evaluate.SOLVER_ORDER):
-    """Write out_dir/data/index.json, out_dir/data/incidents/<id>.json and out_dir/figures/*.png; return out_dir."""
+def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=None):
+    """Write out_dir/data/index.json, out_dir/data/incidents/<id>.json and out_dir/figures/*.png; return out_dir.
+    solvers: default evaluate.listed_solvers (the built-in ones, then any other with records)."""
+    solvers = evaluate.listed_solvers(runs_dir) if solvers is None else solvers
     out_dir = Path(out_dir)
     target, root = out_dir.resolve(), config.ROOT.resolve()
     protected = (config.DATA.resolve(), (root / "docs" / "results" / "figures").resolve())  # run records, source figures

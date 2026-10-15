@@ -154,3 +154,16 @@ def test_outputs_the_tool_cut_for_the_agent_are_repaired_at_the_last_whole_item(
     # garbage that only looks cut stays text
     junk = site._step({"tool": "get_trace", "args": "{}", "output": "{x" * 3000 + tools.TRUNCATED})
     assert isinstance(junk["output"], str)
+
+
+def test_index_lists_solvers_with_records_beyond_the_built_in_ones(tmp_path, monkeypatch):
+    runs = _setup(tmp_path, monkeypatch)
+    for solver in ("my-agent", "agent-v1@gemma-4-26b-a4b-it"):
+        (runs / solver).mkdir()
+        (runs / solver / "a__0.json").write_text(json.dumps(_rec(solver, "a", 0, 1.0)), encoding="utf-8")
+    out = site.build(tmp_path / "out", runs)
+    index = json.loads((out / "data" / "index.json").read_text(encoding="utf-8"))
+    assert index["solvers"] == ["heuristic", "agent-v1", "agent-v1@gemma-4-26b-a4b-it", "my-agent"]
+    assert index["planned_runs"]["my-agent"] == 5 and index["incidents"][0]["results"]["my-agent"] == [1.0]
+    inc = json.loads((out / "data" / "incidents" / "a.json").read_text(encoding="utf-8"))
+    assert inc["runs"]["agent-v1@gemma-4-26b-a4b-it"][0]["verdict"] == "incident"

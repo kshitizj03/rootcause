@@ -305,9 +305,10 @@ def _lines(data, solvers):
     return draw
 
 
-def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, solvers=evaluate.SOLVER_ORDER):
-    """Write out_dir/report.md and out_dir/figures/*.png from the records under runs_dir; return the report path."""
-    out_dir, solvers = Path(out_dir), list(solvers)
+def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, solvers=None):
+    """Write out_dir/report.md and out_dir/figures/*.png from the records under runs_dir; return the report path.
+    solvers: default evaluate.listed_solvers (the built-in ones, then any other with records)."""
+    out_dir, solvers = Path(out_dir), list(evaluate.listed_solvers(runs_dir) if solvers is None else solvers)
     (out_dir / "figures").mkdir(parents=True, exist_ok=True)
     data = {"records": {s: evaluate.load_records(s, runs_dir) for s in solvers},
             "summaries": {sp: {s: evaluate.summarise(s, runs_dir, evaluate.expected_counts(sp), sp) for s in solvers} for sp in SPLITS}}

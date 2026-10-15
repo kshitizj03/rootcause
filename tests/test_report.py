@@ -157,3 +157,16 @@ def test_partial_batches_are_measured_against_planned_runs(monkeypatch):
     assert report._label(data, "agent-v0") == "agent-v0 (partial, 32/100)"
     assert report._partial(data, "heuristic", "all") is None and report._label(data, "heuristic") == "heuristic"  # 1 planned
     assert report._partial(data, "agent-v1", "all") is None  # no runs: "not run", not partial
+
+
+def test_build_lists_the_built_in_solvers_then_every_other_solver_with_records(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "HELDOUT", ())
+    monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario("a", "easy", "x", {}, {}, [])])
+    runs = tmp_path / "runs"
+    for solver in ("heuristic", "my-agent", "agent-v1@gemma-4-26b-a4b-it"):
+        write(runs, solver, "a", "easy", 0, 1.0)
+    (runs / "empty").mkdir()  # a directory without records is not a solver
+    md = report.build(out_dir=tmp_path / "out", runs_dir=runs).read_text(encoding="utf-8")
+    per_scenario = md.split("## Per-scenario accuracy")[1].split("\n\n")[2].splitlines()[0]
+    assert per_scenario.endswith("| agent-v1-nemotron-steps30 | agent-v1@gemma-4-26b-a4b-it | my-agent |")
+    assert "| a | easy | 1.00 (1 run) |" in md and "| my-agent | 1.00 | 1.00 |" in md and "empty" not in md
