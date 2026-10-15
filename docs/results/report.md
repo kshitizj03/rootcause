@@ -99,6 +99,7 @@ Each solver's mean score per incident, compared on the incidents both have run. 
 | agent-v0 vs heuristic | 16/16 | 3 / 6 / 7 | -0.19 | -0.50 to +0.12 |
 | agent-v1 vs heuristic | 16/16 | 3 / 7 / 6 | -0.20 | -0.42 to -0.00 |
 | agent-v1 vs agent-v0 | 16/16 | 4 / 7 / 5 | -0.01 | -0.23 to +0.21 |
+| agent-v0-nemotron vs heuristic | 16/16 | 6 / 4 / 6 | +0.10 | -0.15 to +0.35 |
 | agent-v1-nemotron vs heuristic | 16/16 | 5 / 8 / 3 | +0.08 | -0.05 to +0.23 |
 | agent-v1-nemotron vs agent-v1 | 16/16 | 10 / 4 / 2 | +0.28 | +0.12 to +0.45 |
 | agent-v1-nemotron vs agent-v0-nemotron | 16/16 | 6 / 4 / 6 | -0.02 | -0.14 to +0.11 |

@@ -10,7 +10,7 @@ RootCause is mainly a **benchmark**: is an LLM agent actually better than a simp
 > - **Partial:** agent v0 on Gemini (32/100 runs) and agent v1 on Gemini (64/100 runs), paused while the Nemotron batches ran.
 > - **Queued:** the Gemini ablations.
 >
-> The numbers are in [`docs/results/report.md`](docs/results/report.md), which marks partial batches as partial. Two small decision models, Laya and Hunch, both scored below the heuristic zero-shot, so no small-model-then-agent cascade was built ([`laya.md`](docs/results/laya.md), [`hunch.md`](docs/results/hunch.md)).
+> The numbers are in [`docs/results/report.md`](docs/results/report.md), which marks partial batches as partial; what they show (model vs tools vs alert vs prompt) is in [`docs/results/agents.md`](docs/results/agents.md). Two small decision models, Laya and Hunch, both scored below the heuristic zero-shot, so no small-model-then-agent cascade was built ([`laya.md`](docs/results/laya.md), [`hunch.md`](docs/results/hunch.md)).
 
 ## How it works
 
@@ -146,7 +146,7 @@ In a client config, use absolute paths, with the venv's python as `command` and 
 | `tests/` | offline test suite (no Docker, no API key, no recorded data) |
 | `experiments/laya/`, `experiments/hunch/` | decision-model entry tests: can a small model beat the heuristic? |
 | `infra/` | Compose override that pins the observability backends to fixed host ports |
-| `docs/results/` | results: `report.md` and its figures, the Laya and Hunch entry tests, the interim heuristic-vs-agent-v0 write-up |
+| `docs/results/` | results: `report.md` and its figures, `agents.md` (what helps the agent), the Laya and Hunch entry tests, the interim heuristic-vs-agent-v0 write-up |
 
 ## Honest limits
 
