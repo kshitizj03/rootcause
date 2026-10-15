@@ -1,8 +1,8 @@
-# Week 2 results: heuristic baseline vs agent v0
+# Heuristic baseline vs agent v0 (interim)
 
-20 recorded incident snapshots: 16 faults and 4 no-fault controls (`scenarios/NOTES.md`). They are scored with the fixed rules in `rootcause/score.py`, which were written before any scoring run. The heuristic is deterministic, so it ran once. Agent v0 runs 5 times per snapshot on `gemini-3.5-flash-lite` (free tier, temperature 0). One model is pinned per batch, so results never mix models.
+20 recorded incident snapshots: 16 faults and 4 no-fault controls (`scenarios/NOTES.md`). They are scored with the fixed rules in `rootcause/score.py`, which were written before any scoring run. The heuristic is deterministic, so it ran once. Agent v0 was planned for 5 runs per snapshot on `gemini-3.5-flash-lite` (free tier, temperature 0). One model is pinned per batch, so results never mix models.
 
-> **Status:** the heuristic is complete. The agent v0 batch is in progress, and its section below is filled in from the finished records.
+> **Status:** the heuristic is complete. Agent v0 stopped at 32 of 100 runs (1–2 per scenario) while later batches ran, so its numbers here are interim. [report.md](report.md) has the current ones.
 
 ## How to read the tables
 
@@ -44,7 +44,7 @@ So cross-service incidents defeat a change-ranking rule: it scores 0 of 3. That 
 
 ## Agent v0
 
-> **Interim, from 32 of 100 runs** (1–2 runs per scenario, all at code 23ebb5e). The free-tier quota allows about 40 runs a day, so the batch finishes over the coming days. The table and the counts below will be replaced by the full batch; the patterns are what to look at for now.
+> **Interim, from 32 of 100 runs** (1–2 runs per scenario, all at code 23ebb5e). The batch stopped there while later batches ran; [report.md](report.md) has the current numbers. The patterns are what to look at here.
 
 | category | scenarios | runs | accuracy | top-3 | fault type | false alarm |
 |---|---|---|---|---|---|---|
@@ -63,9 +63,9 @@ So far agent v0 is *worse* than the heuristic on incidents (0.41 vs 0.59) and be
 
 **Confidence barely separates right from wrong.** The mean stated confidence is 0.95 on correct fault runs and 0.92 on wrong ones, including 0.9–0.95 on the "no incident" misses. Only the handful of runs at 1.0 are mostly right, and those are mostly controls. That is why the coverage curve (`report.md`) is measured rather than trusted.
 
-**Cost.** The median run takes 19.5 tool calls (max 31) and 67k prompt tokens, because every step resends the growing transcript. That is free on this tier, but it is the number the week-3 tools have to beat as well as accuracy.
+**Cost.** The median run takes 19.5 tool calls (max 31) and 67k prompt tokens, because every step resends the growing transcript. That is free on this tier, but it is the number agent v1's change-aware tools have to beat as well as accuracy.
 
-What this motivates (week 3): a tool that ranks what changed against the baseline (`top_changes`), a per-service health view, and a call graph whose edges show which dependency stopped answering (`service_map`). They were designed against the tuning-split snapshots only, then frozen before any held-out run.
+What this motivates, in agent v1's change-aware tools: a tool that ranks what changed against the baseline (`top_changes`), a per-service health view, and a call graph whose edges show which dependency stopped answering (`service_map`). They were designed against the tuning-split snapshots, then frozen before any held-out run. One exception is disclosed under Provenance in [report.md](report.md): during development, v1 tool output was viewed on one held-out incident (valkey-cart-paused).
 
 ## Caveats that apply to both solvers
 
@@ -76,7 +76,8 @@ What this motivates (week 3): a tool that ranks what changed against the baselin
   - image-slow-load: "Product pictures";
   - ad-failure, product-catalog-failure, and kafka, whose accept list includes checkout.
 
-  Part of any agent advantage on these is alert reading. The planned vague-vs-specific alert ablation (week 4) controls for this.
-- **The prompt includes the anti-anchoring sentence.** Agent v0's system prompt says "the service [the alert] mentions is often NOT the cause" and "it is possible that nothing is actually wrong". These are generic priors and name no service, but v0 is the *with-prompt* arm of the planned ablation.
-- **Temperature 0.** The 5-run spread measures API nondeterminism, not sampling diversity.
-- **Naive tools.** v0's tools show raw series thinned to one point per minute, and trace and log search, with no baseline comparison. Sawtooth peaks can be missed. The change-aware tools are week 3.
+  Part of any agent advantage on these is alert reading. The vague-alert ablation controls for this: it gives agent v1 one generic alert for every incident.
+- **The prompt includes the anti-anchoring sentence.** Agent v0's system prompt says "the service [the alert] mentions is often NOT the cause" and "it is possible that nothing is actually wrong". These are generic priors and name no service. The priors ablation removes them, but from agent v1's prompt, so it says nothing direct about v0.
+- **Ablations.** Both ablations (vague alert, no priors) change agent v1, not v0, and neither is complete on both models yet; [report.md](report.md) has their current state.
+- **Temperature 0.** The spread across runs measures API nondeterminism, not sampling diversity.
+- **Naive tools.** v0's tools show raw series thinned to one point per minute, and trace and log search, with no baseline comparison. Sawtooth peaks can be missed. Agent v1's change-aware tools add the baseline comparison.
