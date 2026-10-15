@@ -170,7 +170,7 @@ def test_custom_reports_are_validated_like_the_agents_answers():
 
 
 @pytest.mark.parametrize("name", ["agent-v1", "heuristic", "agent-v1@mine", "My-Agent", "_x", "a/b", "../x",
-                                  "heuristic.", "agent-v1.", "Agent-V1", "x.", "x-", "laya-english", "hunch-0.6b"])
+                                  "heuristic.", "agent-v1.", "Agent-V1", "x.", "x-", "laya-english", "hunch-0.6b", "con", "nul", "aux.v2", "com1"])
 def test_eval_custom_rejects_bad_or_built_in_names(lib, capsys, name):
     assert cli.main(["eval-custom", "examples.my_agent:solve", "--name", name]) == 2
     assert "--name must match" in capsys.readouterr().err and not lib.exists()
@@ -246,3 +246,10 @@ def test_eval_custom_refuses_a_name_whose_records_came_from_another_target(lib, 
         err = capsys.readouterr().err
         assert f"holds records of {prev}, not {target}" in err
     assert len(list((lib / "my-agent").glob("*.json"))) == 4
+
+
+@pytest.mark.parametrize("model", ["...", "-", "@@"])
+def test_a_model_name_without_letters_or_digits_is_a_usage_error(byo, capsys, model):
+    assert cli.main(["eval", "agent-v1", "--model", model, *BYO[2:]]) == 2
+    out = capsys.readouterr()
+    assert "no letters or digits" in out.out + out.err

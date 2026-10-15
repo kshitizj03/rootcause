@@ -336,6 +336,8 @@ def _model_override(args):
         raise _Usage(f"{', '.join(given)}: the heuristic makes no model calls; these options apply to the agent solvers only")
     if len(given) < 3:
         raise _Usage("--model, --base-url and --key-env must be given together")
+    if not slug(args.model):
+        raise _Usage(f"--model {args.model!r} has no letters or digits to name its records by")
     try:
         url = urllib.parse.urlparse(args.base_url)
         provider = url.hostname
@@ -426,11 +428,13 @@ def custom_solver(fn):
             raise
         except Exception as e:
             raise SolverError(f"your solver raised {type(e).__name__}: {e}") from e
+        if not (isinstance(out, tuple) and len(out) == 2):
+            raise SolverError(f"your solver must return (report, info), got {type(out).__name__}")
+        report, info = out
         try:
-            report, info = out
             info = dict(info or {})
         except (TypeError, ValueError) as e:
-            raise SolverError(f"your solver must return (report, info), got {type(out).__name__}") from e
+            raise SolverError(f"your solver's info must be a dict, got {type(info).__name__}") from e
         try:
             report = make_report(report_to_dict(report) if isinstance(report, Report) else report)
         except (ValueError, TypeError, AttributeError) as e:
@@ -440,9 +444,12 @@ def custom_solver(fn):
     return solve
 
 
+WINDOWS_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+
+
 def _eval_custom(args):
     if (not NAME_RE.fullmatch(args.name) or args.name.split("@")[0] in SOLVERS
-            or args.name in evaluate.PLANNED_RUNS):
+            or args.name in evaluate.EXPERIMENT_SOLVERS or args.name.split(".")[0] in WINDOWS_RESERVED):
         raise _Usage(f"--name must match {NAME_RE.pattern}, and must not be a built-in solver or experiment name or a "
                      f"built-in solver's name followed by @, got {args.name!r}")
     old = next(iter(sorted((Path(evaluate.RUNS_DIR) / args.name).glob("*.json"))), None)

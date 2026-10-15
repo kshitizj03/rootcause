@@ -248,7 +248,8 @@ def _agreement_section(data, solvers):
             "The agents run at temperature 0, yet their runs still differ, so this measures how far a single run can be "
             "trusted. A run's top answer is its first cause's service, or its verdict when it names no cause. Pairwise "
             "agreement is the share of run pairs on a scenario that give the same top answer, averaged over the "
-            "scenarios with at least 2 runs; controls included.",
+            "scenarios with at least 2 runs; controls included. With fewer runs per scenario every run agrees more "
+            "easily, so compare complete batches only.",
             _table(["solver", "scenarios with 2+ runs", "every run agrees", "pairwise agreement"], rows)
             if rows else "No agent has two runs of a scenario yet.", *_partials(data, agents)]
 

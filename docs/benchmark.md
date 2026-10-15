@@ -232,7 +232,7 @@ On a two-fault row, accuracy is the fraction of causes found, and top-3 means bo
 
 `python -m rootcause report` writes `docs/results/report.md` and `python -m rootcause site` builds the replay site. Both include every solver with records: the built-in ones first, in a fixed order, then any other (yours, or `<solver>@<model>`) sorted by name. A directory under `data/runs/` whose name starts with `_` (for example `_discarded`) is never a solver. The Laya and Hunch decision-model tests (`laya-*`, `hunch-*`) are experiments, not agents: they are in the report's tables but not on the site.
 
-- The report marks a batch with fewer than its planned runs on some incident as partial. 5 is the planned number for any solver not built in.
+- The report marks a batch with fewer than its planned runs on some incident as partial. 5 is the planned number for a solver that is not built in; a `<solver>@<model>` batch follows its base solver's plan.
 - The run-to-run agreement and calibration sections cover every solver with a stated confidence and more than one run on some incident.
 - The paired comparisons and the figures cover the built-in solvers only.
 - The accuracy-vs-coverage notes cover solver names that start with `agent`.
