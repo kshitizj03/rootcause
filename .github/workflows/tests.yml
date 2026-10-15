@@ -11,3 +11,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python -m pytest -q   # offline: no Docker, no API key, no recorded snapshots
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test "site/tests/*.test.mjs"   # the site's pure logic (site/assets/lib.js); Node expands the glob
