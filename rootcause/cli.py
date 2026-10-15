@@ -1,41 +1,62 @@
 """Command line: demo stack, scenario recording and checks, evaluation, report/site generation, MCP server."""
 import argparse
+import importlib
 import json
+import os
+import re
 import subprocess
 import sys
 import time
+import urllib.parse
 from collections import Counter
 from pathlib import Path
 
-from openai import OpenAIError  # the model clients' base error
+from openai import OpenAI, OpenAIError  # OpenAIError: the model clients' base error
 
 from rootcause import config, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot, stack
+from rootcause.score import Report, make_report
 
 
 def _heuristic_solver():
     return "heuristic", heuristic.solve, ()
 
 
-def _agent_v0_solver():
+def slug(model):
+    """A model name as a directory-safe suffix: nvidia/nemotron-3-super-120b-a12b -> nvidia-nemotron-3-super-120b-a12b."""
+    return re.sub(r"[^A-Za-z0-9._-]", "-", model)
+
+
+def _pick(base, model, default):
+    """(record name, model kwargs): the solver's own model (default()), or the one given to eval with --model, whose
+    records go under base@model so they never mix with the built-in batch."""
+    return (f"{base}@{slug(model['models'][0])}", model) if model else (base, default())
+
+
+def _gemini():
     from rootcause import agent  # imported lazily: only the agents need it (and OpenTelemetry)
-    # one model per batch (and patient retries, since 503 overloads are common): a per-day quota stops the run (resume tomorrow) instead of silently mixing models in the table
-    return agent.NAME, agent.Agent(models=agent.MODELS[:1], attempts=5).solve, (agent.QuotaExhausted,)
+    # one model per batch: a per-day quota stops the run (resume tomorrow) instead of silently mixing models in the table.
+    # The factories below also retry patiently (attempts=5), since 503 overloads are common.
+    return {"models": agent.MODELS[:1]}
 
 
-def _v1_agent(system, name, **model):
+def _nemotron_kwargs():
+    from rootcause import agent  # another model family on NVIDIA's free endpoint (NVIDIA_API_KEY in .env)
+    return {"llm": agent.make_nvidia_client(), "models": [agent.NEMOTRON], "provider": "nvidia"}
+
+
+def _agent_v0_solver(model=None, default=_gemini, base=None):
+    from rootcause import agent  # agent v0: naive tools, v0 prompt
+    name, model = _pick(base or agent.NAME, model, default)
+    kw = {"name": name} if name != agent.NAME else {}  # agent v0 on Gemini keeps the Agent's default name
+    return name, agent.Agent(**model, attempts=5, **kw).solve, (agent.QuotaExhausted,)
+
+
+def _v1(system, base, model, default=_gemini, vague=False, **kw):
+    """Agent v1's tools with `system` as the prompt; vague: shown agent.VAGUE_ALERT instead of the scenario's alert."""
     from rootcause import agent, tools_v1
-    model = model or {"models": agent.MODELS[:1]}
-    return agent.Agent(**model, attempts=5, toolset=tools_v1, system=system, name=name)
-
-
-def _agent_v1_solver():
-    from rootcause import agent
-    return agent.NAME_V1, _v1_agent(agent.SYSTEM_V1, agent.NAME_V1).solve, (agent.QuotaExhausted,)
-
-
-def _agent_v1_nopriors_solver():
-    from rootcause import agent
-    return "agent-v1-nopriors", _v1_agent(agent.SYSTEM_V1_NOPRIORS, "agent-v1-nopriors").solve, (agent.QuotaExhausted,)
+    name, model = _pick(base, model, default)
+    solve = agent.Agent(**model, attempts=5, toolset=tools_v1, system=system, name=name, **kw).solve
+    return name, _vague(solve) if vague else solve, (agent.QuotaExhausted,)
 
 
 def _vague(solve):
@@ -44,50 +65,53 @@ def _vague(solve):
     return lambda snap: solve({**snap, "meta": {**snap["meta"], "alert": agent.VAGUE_ALERT}})
 
 
-def _agent_v1_vague_solver():
+def _agent_v1_solver(model=None):
     from rootcause import agent
-    return "agent-v1-vague", _vague(_v1_agent(agent.SYSTEM_V1, "agent-v1-vague").solve), (agent.QuotaExhausted,)
+    return _v1(agent.SYSTEM_V1, agent.NAME_V1, model)
 
 
-def _nemotron_kwargs():
-    from rootcause import agent  # another model family on NVIDIA's free endpoint (NVIDIA_API_KEY in .env)
-    return {"llm": agent.make_nvidia_client(), "models": [agent.NEMOTRON], "provider": "nvidia"}
+def _agent_v1_nopriors_solver(model=None):
+    from rootcause import agent
+    return _v1(agent.SYSTEM_V1_NOPRIORS, "agent-v1-nopriors", model)
 
 
-def _agent_v0_nemotron_solver():
-    from rootcause import agent  # agent v0 exactly (naive tools, v0 prompt), on Nemotron
-    return "agent-v0-nemotron", agent.Agent(**_nemotron_kwargs(), attempts=5, name="agent-v0-nemotron").solve, (agent.QuotaExhausted,)
+def _agent_v1_vague_solver(model=None):
+    from rootcause import agent
+    return _v1(agent.SYSTEM_V1, "agent-v1-vague", model, vague=True)
 
 
-def _agent_v1_nemotron_solver():
+def _agent_v0_nemotron_solver(model=None):
+    return _agent_v0_solver(model, _nemotron_kwargs, "agent-v0-nemotron")  # agent v0 exactly, on Nemotron
+
+
+def _agent_v1_nemotron_solver(model=None):
     from rootcause import agent  # agent-v1 exactly, on Nemotron
-    return "agent-v1-nemotron", _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron", **_nemotron_kwargs()).solve, (agent.QuotaExhausted,)
+    return _v1(agent.SYSTEM_V1, "agent-v1-nemotron", model, _nemotron_kwargs)
 
 
-def _agent_v1_nemotron_nopriors_solver():
+def _agent_v1_nemotron_nopriors_solver(model=None):
     from rootcause import agent
-    a = _v1_agent(agent.SYSTEM_V1_NOPRIORS, "agent-v1-nemotron-nopriors", **_nemotron_kwargs())
-    return "agent-v1-nemotron-nopriors", a.solve, (agent.QuotaExhausted,)
+    return _v1(agent.SYSTEM_V1_NOPRIORS, "agent-v1-nemotron-nopriors", model, _nemotron_kwargs)
 
 
-def _agent_v1_nemotron_vague_solver():
+def _agent_v1_nemotron_vague_solver(model=None):
     from rootcause import agent
-    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron-vague", **_nemotron_kwargs())
-    return "agent-v1-nemotron-vague", _vague(a.solve), (agent.QuotaExhausted,)
+    return _v1(agent.SYSTEM_V1, "agent-v1-nemotron-vague", model, _nemotron_kwargs, vague=True)
 
 
-def _agent_v1_nemotron_steps30_solver():
+def _agent_v1_nemotron_steps30_solver(model=None):
     from rootcause import agent  # agent v1 on Nemotron with twice the step limit: is the limit what costs accuracy?
-    a = _v1_agent(agent.SYSTEM_V1, "agent-v1-nemotron-steps30", **_nemotron_kwargs(), max_steps=2 * agent.MAX_STEPS)
-    return "agent-v1-nemotron-steps30", a.solve, (agent.QuotaExhausted,)
+    return _v1(agent.SYSTEM_V1, "agent-v1-nemotron-steps30", model, _nemotron_kwargs, max_steps=2 * agent.MAX_STEPS)
 
 
+# CLI name -> factory of (record name, solve, stop_on). Every factory but the heuristic's takes an optional model
+# override ({"llm", "models", "provider"}, from eval --model) that replaces only the model and its client.
 SOLVERS = {"heuristic": _heuristic_solver, "agent-v0": _agent_v0_solver,
            "agent-v1": _agent_v1_solver, "agent-v1-nopriors": _agent_v1_nopriors_solver,
            "agent-v1-vague": _agent_v1_vague_solver, "agent-v1-nemotron": _agent_v1_nemotron_solver,
            "agent-v0-nemotron": _agent_v0_nemotron_solver, "agent-v1-nemotron-nopriors": _agent_v1_nemotron_nopriors_solver,
            "agent-v1-nemotron-vague": _agent_v1_nemotron_vague_solver,
-           "agent-v1-nemotron-steps30": _agent_v1_nemotron_steps30_solver}  # CLI name -> factory of (record name, solve, stop_on)
+           "agent-v1-nemotron-steps30": _agent_v1_nemotron_steps30_solver}
 
 
 class _Subparser(argparse.ArgumentParser):
@@ -125,9 +149,17 @@ def build_parser():
     ev.add_argument("--runs", type=int, default=1)
     ev.add_argument("--trace", choices=["off", "otlp", "file"], default="off",
                     help="self-trace the agent with OpenTelemetry GenAI spans (otlp: localhost:4318, file: data/agent_traces.jsonl)")
+    ev.add_argument("--model", help="run an agent solver on this model instead of its own (needs --base-url and --key-env)")
+    ev.add_argument("--base-url", help="OpenAI-compatible endpoint serving --model")
+    ev.add_argument("--key-env", help="name of the environment variable holding the endpoint's API key")
     ev.add_argument("ids", nargs="*")
+    cu = sub.add_parser("eval-custom", help="run your own solver (module:function) over the recorded snapshots and score it")
+    cu.add_argument("target", help="module:function, importable from the current directory")
+    cu.add_argument("--name", required=True, help="record name: data/runs/<name>/")
+    cu.add_argument("--runs", type=int, default=1)
+    cu.add_argument("ids", nargs="*")
     sm = sub.add_parser("summary", help="print the per-category score table for a solver's recorded runs")
-    sm.add_argument("solver", choices=list(SOLVERS))
+    sm.add_argument("solver", help="a solver name, or any record name under data/runs (e.g. agent-v1@<model>)")
     sm.add_argument("--split", choices=["all", "tune", "heldout"], default="all")
     sub.add_parser("report", help="write docs/results/report.md and figures from all recorded runs")
     sub.add_parser("site", help="write site/data (index + per-incident JSON) for the replay site from all recorded runs")
@@ -289,20 +321,102 @@ def _eval(args):
             provider.shutdown()
 
 
+class _Usage(Exception):
+    """A command-line mistake: printed, exit 2."""
+
+
+def _model_override(args):
+    """eval --model/--base-url/--key-env -> the agent's model kwargs ({"llm", "models", "provider"}), or None."""
+    given = [o for o, v in (("--model", args.model), ("--base-url", args.base_url), ("--key-env", args.key_env)) if v]
+    if not given:
+        return None
+    if args.solver == "heuristic":
+        raise _Usage(f"{', '.join(given)}: the heuristic makes no model calls; these options apply to the agent solvers only")
+    if len(given) < 3:
+        raise _Usage("--model, --base-url and --key-env must be given together")
+    provider = urllib.parse.urlparse(args.base_url).hostname
+    if not provider or not args.base_url.startswith(("http://", "https://")):
+        raise _Usage(f"--base-url must be an http(s) URL, got {args.base_url!r}")
+    from dotenv import load_dotenv
+    load_dotenv(config.ROOT / ".env")  # where the built-in solvers' keys live too
+    key = os.environ.get(args.key_env)
+    if not key:  # name the variable, never its value
+        raise _Usage(f"--key-env: the environment variable {args.key_env} is not set")
+    # max_retries=0, as for the built-in clients: the agent retries timeouts and 429s itself
+    llm = OpenAI(base_url=args.base_url, api_key=key, timeout=120, max_retries=0)
+    return {"llm": llm, "models": [args.model], "provider": provider}
+
+
+def _unknown_ids(ids):
+    """Scenario ids that are not in the library or have no recording (evaluate.run would silently skip them)."""
+    found = {sid for sid, _, _ in evaluate.targets(ids)} if ids else set()
+    return sorted(i for i in ids if i not in found)
+
+
 def _eval_traced(args):
-    found = {sid for sid, _, _ in evaluate.targets(args.ids)} if args.ids else set()
-    unknown = [i for i in args.ids if i not in found]
-    if unknown:  # evaluate.run would silently skip them
-        print(f"unknown or unrecorded scenario ids: {sorted(unknown)}")
+    model = _model_override(args)
+    if unknown := _unknown_ids(args.ids):
+        print(f"unknown or unrecorded scenario ids: {unknown}")
         return 2
-    name, solve, stop_on = SOLVERS[args.solver]()
+    name, solve, stop_on = SOLVERS[args.solver](model) if model else SOLVERS[args.solver]()
+    return _run_batch(name, solve, args, stop_on)
+
+
+def _run_batch(name, solve, args, stop_on=()):
     out = evaluate.run(name, solve, runs=args.runs, ids=args.ids or None, stop_on=stop_on)
     print(f"{out['completed']} new runs" + (f"; stopped: {out['stopped']}" if out["stopped"] else ""))
-    _print_summary(name, args.solver)
+    _print_summary(name, name)
     if out["stopped"]:
         print("re-run the same command after the quota resets to resume")
         return 4
     return 0
+
+
+NAME_RE = re.compile(r"[a-z0-9][a-z0-9._@-]*")
+
+
+def _load_target(target):
+    """module:function, imported with the current directory on the path."""
+    module, _, func = target.partition(":")
+    if not module or not func:
+        raise _Usage(f"target must be module:function, got {target!r}")
+    if os.getcwd() not in sys.path:  # `python -m` adds it; the installed `rootcause` script does not
+        sys.path.insert(0, os.getcwd())
+    try:
+        fn = getattr(importlib.import_module(module), func)
+    except (ImportError, AttributeError) as e:
+        raise _Usage(f"cannot load {target}: {type(e).__name__}: {e}")
+    if not callable(fn):
+        raise _Usage(f"{target} is not a function")
+    return fn
+
+
+def custom_solver(fn):
+    """Wrap fn(snapshot) -> (report, info) so its report goes through the same validation as the agent's answers: a
+    score.Report is kept, anything else must be a valid report dict, and an invalid one scores as insufficient_evidence
+    with the error kept in parse_error."""
+    def solve(snap):
+        report, info = fn(snap)
+        info = dict(info or {})
+        if not isinstance(report, Report):
+            try:
+                report = make_report(report)
+            except ValueError as e:
+                info["parse_error"] = str(e)
+                report = Report("insufficient_evidence")
+        return report, info
+    return solve
+
+
+def _eval_custom(args):
+    if not NAME_RE.fullmatch(args.name) or args.name.split("@")[0] in SOLVERS:
+        raise _Usage(f"--name must match {NAME_RE.pattern} and must not be (or start with) a built-in solver name, "
+                     f"got {args.name!r}")
+    fn = _load_target(args.target)
+    if unknown := _unknown_ids(args.ids):
+        print(f"unknown or unrecorded scenario ids: {unknown}")
+        return 2
+    return _run_batch(args.name, custom_solver(fn), args)
 
 
 def _print_summary(name, solver, split="all"):
@@ -314,6 +428,9 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     try:
         return _dispatch(args)
+    except _Usage as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     except OpenAIError as e:  # API failure after retries/fallback; the stack is fine, so no reset hint
         print(f"model API error: {e} -- completed runs are kept; re-run the same command to resume", file=sys.stderr)
         return 5
@@ -351,8 +468,15 @@ def _dispatch(args):
         return _revalidate(args, resanitize=True)
     elif args.cmd == "eval":
         return _eval(args)
+    elif args.cmd == "eval-custom":
+        return _eval_custom(args)
     elif args.cmd == "summary":
-        _print_summary(SOLVERS[args.solver]()[0], args.solver, args.split)
+        if args.solver in SOLVERS:
+            _print_summary(SOLVERS[args.solver]()[0], args.solver, args.split)
+        elif args.solver in evaluate.recorded_solvers():
+            _print_summary(args.solver, args.solver, args.split)
+        else:
+            raise _Usage(f"no solver and no records called {args.solver!r}; built-in solvers: {', '.join(SOLVERS)}")
     elif args.cmd == "report":
         from rootcause import report
         print(report.build())

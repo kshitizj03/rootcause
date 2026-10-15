@@ -24,6 +24,17 @@ def planned_runs(solver):
     return PLANNED_RUNS.get(solver, 5)
 
 
+def recorded_solvers(runs_dir=None):
+    """Names of the directories under runs_dir (default RUNS_DIR) that hold run records, sorted."""
+    d = Path(RUNS_DIR if runs_dir is None else runs_dir)
+    return sorted(p.name for p in d.glob("*") if p.is_dir() and any(p.glob("*.json")))
+
+
+def listed_solvers(runs_dir=None):
+    """SOLVER_ORDER, then every other solver with records under runs_dir (custom agents, name@model runs, ...), sorted."""
+    return SOLVER_ORDER + [s for s in recorded_solvers(runs_dir) if s not in SOLVER_ORDER]
+
+
 def targets(ids=None):
     lib = {s.id: s for s in scenarios.load_all()}
     rows = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl", ids or list(lib))

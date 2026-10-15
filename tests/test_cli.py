@@ -54,9 +54,10 @@ def test_parser_accepts_all_commands():
     assert p.parse_args(["record", "payment-failure-50", "control-1"]).ids == ["payment-failure-50", "control-1"]
     assert p.parse_args(["record", "--all"]).all is True
     assert p.parse_args(["leak-check"]).paths == []
-    required = {"eval": ["heuristic"], "summary": ["heuristic"], "mcp": ["snapshots/incident__x"]}
+    required = {"eval": ["heuristic"], "summary": ["heuristic"], "mcp": ["snapshots/incident__x"],
+                "eval-custom": ["examples.my_agent:solve", "--name", "my-agent"]}
     commands = ("up", "down", "status", "list", "reset-flags", "record", "leak-check", "revalidate", "resanitize",
-                "eval", "summary", "report", "site", "mcp")
+                "eval", "eval-custom", "summary", "report", "site", "mcp")
     for cmd in commands:
         assert p.parse_args([cmd, *required.get(cmd, [])]).cmd == cmd
     sub = next(a for a in p._actions if isinstance(a, argparse._SubParsersAction))
