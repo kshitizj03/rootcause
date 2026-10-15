@@ -1,4 +1,6 @@
 """Turn every stored run record into docs/results/report.md plus two figures. A solver with no records shows "not run"."""
+import itertools
+import math
 import random
 from pathlib import Path
 
@@ -192,6 +194,93 @@ def _step_limit_section(data, solvers):
                     "accuracy otherwise"], rows) if rows else "No agent runs yet."]
 
 
+def _agents(data, solvers):
+    """Solvers with a stated confidence and more than one run on some scenario: the agents, not the one-run baselines."""
+    return [s for s in solvers if any(n > 1 for _, n in _means(data["records"][s]).values())
+            and any(evaluate.confidence(r) is not None for r in data["records"][s])]
+
+
+def _top(r):
+    """The run's top answer: its first cause's service, or the verdict when it names no cause."""
+    causes = r["report"].get("causes") or []
+    return causes[0]["service"] if causes else r["report"]["verdict"]
+
+
+def agreement(records):
+    """(scenarios with at least 2 runs, how many of those have every run giving the same top answer, the mean over those
+    scenarios of the share of run pairs that agree); None when no scenario has 2 runs."""
+    by = {}
+    for r in records:
+        by.setdefault(r["scenario"], []).append(_top(r))
+    multi = [v for v in by.values() if len(v) >= 2]
+    if not multi:
+        return None
+    pairs = [sum(a == b for a, b in itertools.combinations(v, 2)) / math.comb(len(v), 2) for v in multi]
+    return len(multi), sum(len(set(v)) == 1 for v in multi), sum(pairs) / len(pairs)
+
+
+def calibration(records, bins=5):
+    """Record-level: mean stated confidence, accuracy (mean `correct`), expected calibration error over `bins`
+    equal-width confidence bins and Brier score, over the records with a numeric confidence (skipped: the rest)."""
+    pts = [(c, r["score"]["correct"]) for r in records if (c := evaluate.confidence(r)) is not None]
+    if not pts:
+        return None
+    by = {}
+    for c, y in pts:
+        by.setdefault(min(max(int(c * bins), 0), bins - 1), []).append((c, y))
+    mean = lambda xs: sum(xs) / len(xs)
+    return {"runs": len(pts), "skipped": len(records) - len(pts), "confidence": mean([c for c, _ in pts]),
+            "accuracy": mean([y for _, y in pts]),
+            "ece": sum(len(b) / len(pts) * abs(mean([c for c, _ in b]) - mean([y for _, y in b])) for b in by.values()),
+            "brier": mean([(c - y) ** 2 for c, y in pts])}
+
+
+def _partials(data, solvers):
+    return [f"{s}: partial batch ({p})" for s in solvers if (p := _partial(data, s, "all"))]
+
+
+def _agreement_section(data, solvers):
+    agents, rows = _agents(data, solvers), []
+    for s in agents:
+        if a := agreement(data["records"][s]):
+            rows.append([s, str(a[0]), f"{a[1]} of {a[0]}", fmt2(a[2])])
+    return ["## Run-to-run agreement (all incidents)",
+            "The agents run at temperature 0, yet their runs still differ, so this measures how far a single run can be "
+            "trusted. A run's top answer is its first cause's service, or its verdict when it names no cause. Pairwise "
+            "agreement is the share of run pairs on a scenario that give the same top answer, averaged over the "
+            "scenarios with at least 2 runs; controls included.",
+            _table(["solver", "scenarios with 2+ runs", "every run agrees", "pairwise agreement"], rows)
+            if rows else "No agent has two runs of a scenario yet.", *_partials(data, agents)]
+
+
+def _calibration_section(data, solvers):
+    agents, rows, cal = _agents(data, solvers), [], {}
+    for s in agents:
+        if c := calibration(data["records"][s]):
+            cal[s] = c
+            rows.append([s, str(c["runs"]), fmt2(c["confidence"]), fmt2(c["accuracy"]), fmt2(c["ece"]), fmt2(c["brier"])])
+    over = [s for s, c in cal.items() if c["confidence"] > c["accuracy"]]
+    if not cal:
+        verdict = ""
+    elif len(over) == len(cal):
+        verdict = "Every agent here states a mean confidence above its accuracy: all of them are overconfident."
+    elif over:
+        verdict = (f"Mean confidence is above accuracy (overconfident) for {', '.join(over)}, and not for "
+                   f"{', '.join(s for s in cal if s not in over)}.")
+    else:
+        verdict = "No agent here states a mean confidence above its accuracy."
+    skipped = [f"{s}: {c['skipped']}" for s, c in cal.items() if c["skipped"]]
+    return ["## Calibration (all incidents, record-level)",
+            "A well-calibrated agent's mean stated confidence matches its accuracy. Accuracy here is the mean `correct` "
+            "over runs, controls included, not the tables' mean over scenarios. ECE (expected calibration error) splits "
+            "the runs into 5 equal-width confidence bins and sums, over the bins, the bin's share of runs times "
+            "|mean confidence - accuracy|. Brier is the mean of (confidence - correct)^2. Lower is better for both. "
+            + verdict,
+            _table(["solver", "runs", "mean confidence", "accuracy", "ECE", "Brier"], rows) if rows else "No agent runs yet.",
+            *(["Runs without a numeric confidence are skipped: " + ", ".join(skipped) + "."] if skipped else []),
+            *_partials(data, agents)]
+
+
 def _per_scenario(data, solvers):
     means = {s: _means(data["records"][s]) for s in solvers}
     one = lambda s, sid: f"{fmt2(means[s][sid][0])} ({means[s][sid][1]} run{'' if means[s][sid][1] == 1 else 's'})" if sid in means[s] else "-"
@@ -328,7 +417,8 @@ def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, 
                               "(neither proves that the incident caused it).",
                               [("grounded", "all incidents", "grounded"), ("distinctive", "all incidents", "distinctive")],
                               skip=_evidence_skip(data)),
-                _paired_section(data, solvers), _step_limit_section(data, solvers), _cost(data, solvers), _per_scenario(data, solvers), _coverage_section(data, solvers), _provenance(data, solvers), _not_run(data, solvers)]
+                _paired_section(data, solvers), _step_limit_section(data, solvers), _agreement_section(data, solvers),
+                _calibration_section(data, solvers), _cost(data, solvers), _per_scenario(data, solvers), _coverage_section(data, solvers), _provenance(data, solvers), _not_run(data, solvers)]
     path = out_dir / "report.md"
     path.write_text("\n\n".join("\n\n".join(s) for s in sections) + "\n", encoding="utf-8")
     return path

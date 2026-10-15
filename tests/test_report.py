@@ -1,7 +1,9 @@
 import json
 
+import pytest
+
 from helpers import write_record
-from rootcause import config, report, scenarios
+from rootcause import config, evaluate, report, scenarios
 
 
 def write(runs, solver, sid, cat, k, correct, conf=0.8, tokens=True, evidence=True):
@@ -60,7 +62,8 @@ def test_report_content_cells_partial_batches_and_small_n(tmp_path, monkeypatch)
     assert "agent-v1: partial batch (1-2 runs per scenario, 5/15 runs)" in md
     assert "agent-v1: partial batch (1-2 runs per scenario, 3/10 runs)" in md
     assert "agent-v1: partial batch (2 runs per scenario, 2/5 runs)" in md
-    assert md.count("agent-v1: partial batch") == 4  # under the all, tune and held-out tables, and the paired comparisons
+    assert md.count("agent-v1: partial batch") == 6  # under the all, tune and held-out tables, the paired comparisons,
+    # the run-to-run agreement and the calibration
     assert "heuristic: partial" not in md
     # per-scenario cells show mean (n runs)
     assert "| a | easy | 1.00 (1 run) | 0.50 (2 runs) | not run |" in md
@@ -163,10 +166,62 @@ def test_build_lists_the_built_in_solvers_then_every_other_solver_with_records(t
     monkeypatch.setattr(config, "HELDOUT", ())
     monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario("a", "easy", "x", {}, {}, [])])
     runs = tmp_path / "runs"
-    for solver in ("heuristic", "my-agent", "agent-v1@gemma-4-26b-a4b-it"):
+    for solver in ("heuristic", "my-agent", "agent-v1@gemma-4-26b-a4b-it", "laya-english", "hunch-0.6b", "_discarded"):
         write(runs, solver, "a", "easy", 0, 1.0)
     (runs / "empty").mkdir()  # a directory without records is not a solver
     md = report.build(out_dir=tmp_path / "out", runs_dir=runs).read_text(encoding="utf-8")
     per_scenario = md.split("## Per-scenario accuracy")[1].split("\n\n")[2].splitlines()[0]
-    assert per_scenario.endswith("| agent-v1-nemotron-steps30 | agent-v1@gemma-4-26b-a4b-it | my-agent |")
+    # experiments stay in the tables, after the built-in agents; a folder starting with "_" is set aside, not a solver
+    assert per_scenario.endswith("| agent-v1-nemotron-steps30 | agent-v1@gemma-4-26b-a4b-it | hunch-0.6b | laya-english | my-agent |")
     assert "| a | easy | 1.00 (1 run) |" in md and "| my-agent | 1.00 | 1.00 |" in md and "empty" not in md
+    assert "_discarded" not in md
+
+
+def _top_rec(sid, top, conf, correct):
+    causes = [] if top in ("no_incident", "insufficient_evidence") else [{"service": top, "fault_type": "errors"}]
+    return {"scenario": sid, "report": {"verdict": "incident" if causes else top, "causes": causes, "confidence": conf},
+            "score": {"correct": correct}}
+
+
+# a: top answers payment, payment, cart; b: no_incident twice (one confidence is not a number); c: one run
+RECS = [_top_rec("a", "payment", 0.9, 1.0), _top_rec("a", "payment", 0.9, 1.0), _top_rec("a", "cart", 0.3, 0.0),
+        _top_rec("b", "no_incident", 0.7, 1.0), _top_rec("b", "no_incident", "high", 1.0), _top_rec("c", "payment", 0.1, 0.0)]
+
+
+def test_agreement_counts_scenarios_with_two_runs_and_averages_pairwise_agreement():
+    # a: 1 agreeing pair of 3 (1/3), not unanimous; b: 1 of 1, unanimous; c: one run, left out -> (1/3 + 1) / 2
+    assert report.agreement(RECS) == (2, 1, pytest.approx(2 / 3))
+    assert report.agreement(RECS[:1]) is None
+
+
+def test_calibration_by_hand():
+    # 5 numeric confidences: (0.9,1) (0.9,1) (0.3,0) (0.7,1) (0.1,0); mean 2.9/5, accuracy 3/5.
+    # ECE bins: [0.8,1] 2/5*0.1 + [0.2,0.4) 1/5*0.3 + [0.6,0.8) 1/5*0.3 + [0,0.2) 1/5*0.1 = 0.18
+    # Brier: (0.01 + 0.01 + 0.09 + 0.09 + 0.01) / 5 = 0.042
+    assert report.calibration(RECS) == pytest.approx({"runs": 5, "skipped": 1, "confidence": 0.58, "accuracy": 0.6,
+                                                      "ece": 0.18, "brier": 0.042})
+    assert report.calibration([_top_rec("a", "payment", None, 1.0)]) is None
+    assert evaluate.confidence({"report": {"confidence": True}}) is None and evaluate.confidence({"report": {}}) is None
+    assert report.calibration([_top_rec("a", "payment", 1.0, 1.0)])["ece"] == 0  # confidence 1 falls in the top bin
+
+
+def test_agreement_and_calibration_sections_cover_agents_with_repeated_runs(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "HELDOUT", ())
+    monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario(s, "easy", "x", {}, {}, []) for s in "abc"])
+    runs, k = tmp_path / "runs", {}
+    for r in RECS:
+        k[r["scenario"]] = k.get(r["scenario"], -1) + 1
+        write_record(runs / "agent-v1", r["scenario"], "easy", k[r["scenario"]], r["score"]["correct"], report=r["report"])
+    for i in range(2):  # agent-v0: sure and wrong twice on a
+        write_record(runs / "agent-v0", "a", "easy", i, 0.0, report=_top_rec("a", "cart", 0.9, 0.0)["report"])
+    for sid in "abc":  # one run each: a baseline, not in these sections
+        write_record(runs / "heuristic", sid, "easy", 0, 1.0, report=_top_rec(sid, "payment", 0.5, 1.0)["report"])
+    md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["heuristic", "agent-v0", "agent-v1"]).read_text(encoding="utf-8")
+    assert md.index("## Step limit") < md.index("## Run-to-run agreement") < md.index("## Calibration") < md.index("## Cost")
+    agree = md.split("## Run-to-run agreement (all incidents)")[1].split("\n## ")[0]
+    assert "| agent-v0 | 1 | 1 of 1 | 1.00 |" in agree and "| agent-v1 | 2 | 1 of 2 | 0.67 |" in agree
+    cal = md.split("## Calibration (all incidents, record-level)")[1].split("\n## ")[0]
+    assert "| agent-v0 | 2 | 0.90 | 0.00 | 0.90 | 0.81 |" in cal and "| agent-v1 | 5 | 0.58 | 0.60 | 0.18 | 0.04 |" in cal
+    assert "overconfident) for agent-v0, and not for agent-v1." in cal
+    assert "Runs without a numeric confidence are skipped: agent-v1: 1." in cal
+    assert "heuristic" not in agree + cal
