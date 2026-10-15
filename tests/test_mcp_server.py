@@ -5,7 +5,7 @@ import anyio
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-from helpers import series, write_snapshot
+from helpers import flat_log, flat_span, series, write_snapshot
 from rootcause import config, mcp_server, snapshot, tools_v1
 
 
@@ -27,15 +27,20 @@ async def session_calls(path, calls):
 
 
 def test_mcp_output_equals_in_process_output(tmp_path):
-    path = make_snapshot(tmp_path / "incident__x")
-    calls = [("top_changes", {}), ("service_health", {"service": "payment"}), ("nope", {}), ("service_health", {}),
-             ("get_metric", {"service": "payment", "signal": "nope"})]
-    init, names, results = anyio.run(session_calls, path, calls)
+    path = write_snapshot(tmp_path / "incident__x", metrics={"error_ratio": {"payment": series(0.0, 0.3)}},
+                          spans=[flat_span(error=True, message="boom")],
+                          logs=[flat_log("payment", "charge failed", ts="1970-01-01T00:15:30")])
+    every = [("list_services", {}), ("get_metric", {"service": "payment", "signal": "error_ratio"}),
+             ("search_traces", {"service": "payment"}), ("get_trace", {"trace_id": "t1"}),
+             ("search_logs", {"service": "payment"}), ("top_changes", {}), ("service_health", {"service": "payment"}),
+             ("service_map", {})]
+    bad = [("nope", {}), ("service_health", {}), ("get_metric", {"service": "payment", "signal": "nope"})]
+    init, names, results = anyio.run(session_calls, path, every + bad)
     snap = snapshot.load(path)
-    assert sorted(names) == sorted(tools_v1.TOOLS)
-    for (n, a), res in zip(calls, results):
+    assert sorted(names) == sorted(tools_v1.TOOLS) == sorted(n for n, _ in every)  # every tool is exercised over MCP
+    for (n, a), res in zip(every + bad, results):
         assert res.content[0].text == tools_v1.call(snap, n, a)
-    assert [r.is_error for r in results] == [False, False, True, True, True]
+    assert [r.is_error for r in results] == [False] * len(every) + [True] * len(bad)
     assert "Incident alert: x." in init.instructions and "t=0" in init.instructions and "top_changes" in init.instructions
 
 
