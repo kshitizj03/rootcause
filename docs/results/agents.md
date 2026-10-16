@@ -1,6 +1,6 @@
 # What helps the agent: model, tools, alert, prompt
 
-**Status: 2026-10-15.** All four Nemotron batches are complete (5 runs on each of 20 incidents). The Gemini batches are partial: agent v0 has 32 of 100 runs and agent v1 64 of 100. Their numbers are marked, and they will change. Every figure below comes from [`report.md`](report.md), which also has the per-scenario tables.
+**Status: 2026-10-16.** All five Nemotron batches are complete (5 runs on each of 20 incidents). The Gemini batches are partial: agent v0 has 32 of 100 runs and agent v1 64 of 100. Their numbers are marked, and they will change. Every figure below comes from [`report.md`](report.md), which also has the per-scenario tables.
 
 ## In short
 
@@ -9,6 +9,7 @@
 - **The change-aware tools do not change accuracy; they change where it comes from.** On Nemotron, v1's tools score the same as v0's naive tools (-0.02). They gain on silent faults, two-fault incidents and controls, and they lose on cross-service incidents. They also make the evidence checkable.
 - **Reading the alert helps.** Replacing each incident's alert with one generic sentence lowers accuracy by 0.12 (interval -0.25 to -0.01) and doubles false alarms.
 - **The two "prior" sentences in the prompt do nothing measurable** (-0.01, interval -0.07 to +0.06).
+- **A bigger step budget does not help.** With 30 steps instead of 15, Nemotron v1 scores the same (-0.04, interval -0.16 to +0.06) for 2.4 times the tokens. It still runs to the limit on 78% of fault incidents.
 - **One run is not enough, and stated confidence overstates accuracy.** At temperature 0, all five runs of Nemotron v1 give the same top answer on only 8 of 20 incidents. Every agent states more confidence than it earns, Gemini the most (0.91 stated vs 0.54 right).
 
 ## The numbers
@@ -24,6 +25,7 @@ Accuracy on the 16 fault incidents, and the share of control runs answered corre
 | agent v1 | Nemotron 3 Super | change-aware | 0.68 | 0.50 | 100/100 |
 | agent v1, no priors | Nemotron 3 Super | change-aware | 0.67 | 0.50 | 100/100 |
 | agent v1, vague alert | Nemotron 3 Super | change-aware | 0.56 | 0.25 | 100/100 |
+| agent v1, 30-step limit | Nemotron 3 Super | change-aware | 0.63 | 0.55 | 100/100 |
 
 The paired comparisons compare each solver's mean score per incident with another's on the same 16 incidents. The interval is a 95% bootstrap over incidents. With 16 incidents an interval that includes 0 means the benchmark cannot tell the two apart.
 
@@ -35,6 +37,7 @@ The paired comparisons compare each solver's mean score per incident with anothe
 | Nemotron v1 vs Nemotron v0 (tools) | 6 / 4 / 6 | -0.02 | -0.14 to +0.11 |
 | Nemotron v1, vague alert vs Nemotron v1 | 1 / 9 / 6 | -0.12 | -0.25 to -0.01 |
 | Nemotron v1, no priors vs Nemotron v1 | 4 / 8 / 4 | -0.01 | -0.07 to +0.06 |
+| Nemotron v1, 30 steps vs Nemotron v1 (15) | 4 / 7 / 5 | -0.04 | -0.16 to +0.06 |
 | Gemini v1 vs heuristic (partial) | 3 / 7 / 6 | -0.20 | -0.42 to -0.00 |
 
 ## Findings
@@ -109,7 +112,21 @@ The vague-alert ablation gives every incident the same alert: "Users report that
 
 v1's prompt contains two sentences: "the service the alert mentions is often NOT the cause" and "it is possible that nothing is actually wrong". Removing them changes nothing measurable on Nemotron: -0.01 on fault incidents, the same 0.50 on controls, and 4 wins and 4 losses.
 
-### 5. Runs are not repeatable, and confidence is inflated
+### 5. A bigger step budget does not help
+
+Nemotron v1 runs out of steps on 71% of fault incidents, and does worse when it does (0.61 against 0.83). So the step limit looked like a cause. With a 30-step limit:
+
+| | 15 steps | 30 steps |
+|---|---|---|
+| fault incidents | 0.68 | 0.63 |
+| controls answered correctly | 0.50 | 0.55 |
+| fault runs that hit the limit | 71% | 78% |
+| prompt tokens per run (mean) | 94k | 224k |
+| tokens per correct run | 153k | 374k |
+
+The paired difference is -0.04 (interval -0.16 to +0.06): no measurable effect, at 2.4 times the cost. Nemotron keeps calling tools until it is stopped, whatever the limit, so "hit the limit" marks the harder incidents rather than a budget that is too small. The 15-step limit stays.
+
+### 6. Runs are not repeatable, and confidence is inflated
 
 Temperature 0 does not make a hosted model deterministic:
 
