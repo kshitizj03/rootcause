@@ -121,10 +121,18 @@ def test_cli_site_prints_output_path(monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "OUT/site"
 
 
-def test_build_refuses_to_delete_run_data(tmp_path):
-    for bad in (config.ROOT, config.DATA, config.ROOT.parent, config.ROOT / "docs" / "results", config.DATA / "runs"):
-        with pytest.raises(ValueError):
-            site.build(out_dir=bad, runs_dir=tmp_path)
+def test_build_refuses_to_delete_run_data(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"  # a fake checkout: a regressed guard deletes only tmp files
+    monkeypatch.setattr(config, "ROOT", repo)
+    monkeypatch.setattr(config, "DATA", repo / "data")  # computed once at import, so it does not follow ROOT
+    record, figure = repo / "data" / "runs" / "x" / "a__0.json", repo / "docs" / "results" / "figures" / "f.png"
+    for f in (record, figure):
+        f.parent.mkdir(parents=True)
+        f.write_text("keep", encoding="utf-8")
+    for bad in (repo, repo / "data", tmp_path, repo / "docs" / "results", repo / "data" / "runs"):
+        with pytest.raises(ValueError, match="would delete run data"):
+            site.build(out_dir=bad, runs_dir=tmp_path / "runs")
+    assert record.read_text(encoding="utf-8") == figure.read_text(encoding="utf-8") == "keep"
 
 
 def test_long_json_outputs_are_shortened_by_cutting_lists_so_they_still_parse():

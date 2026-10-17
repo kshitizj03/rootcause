@@ -91,8 +91,6 @@ def test_bad_tool_arguments_are_reported_to_the_model_not_raised():
     assert report.verdict == "incident" and "error" in info["transcript"][0]["output"]
 
 
-# --- retries, parallel tool calls, message history ---
-
 def test_no_sleep_after_the_last_failed_attempt_of_a_model():
     a, _, clock = make([status_error(openai.InternalServerError, 503, "overloaded")] * 6, min_interval=0)
     with pytest.raises(openai.InternalServerError):
@@ -165,8 +163,6 @@ def test_persistent_empty_choices_falls_back_then_raises_an_api_error():
         a.solve(SNAP)
     assert {r["model"] for r in llm.requests} == set(agent.MODELS)
 
-
-# --- served model, client errors, replay data ---
 
 def test_models_records_the_model_that_served_the_response():
     served = Msg(content=FINAL)
@@ -286,7 +282,8 @@ def test_v1_prompt_edits_fail_loudly_when_the_v0_text_drifts():
     assert "//" not in agent.SYSTEM_V1.split('"evidence"')[1]  # no comments a model could copy into its JSON
 
 
-def test_clients_leave_retries_to_the_agent_so_hidden_sdk_retries_do_not_spend_quota(monkeypatch):
+def test_clients_leave_retries_to_the_agent_so_hidden_sdk_retries_do_not_spend_quota(monkeypatch, tmp_path):
+    monkeypatch.setattr(agent.config, "ROOT", tmp_path)  # no .env is read from the repository
     monkeypatch.setenv("GEMINI_API_KEY", "x")
     monkeypatch.setenv("NVIDIA_API_KEY", "x")
     assert agent.make_client().max_retries == 0 and agent.make_nvidia_client().max_retries == 0

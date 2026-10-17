@@ -30,7 +30,6 @@ def byo(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "OpenAI", FakeOpenAI)
     monkeypatch.setattr(config, "ROOT", tmp_path)  # no .env is read from the repository
     monkeypatch.setenv("RC_TEST_KEY", SECRET)
-    RecordingAgent.instances.clear()
     FakeOpenAI.built.clear()
     runs = {}
     monkeypatch.setattr(evaluate, "run", lambda name, solve, **kw: runs.update(name=name, solve=solve, **kw)

@@ -64,7 +64,7 @@ def status_error(cls, code, text="bad"):
 
 class RecordingAgent:
     """Stands in for agent.Agent: keeps every instance, with its kwargs and the alerts it was asked to solve.
-    Clear `instances` at the start of each test that uses it."""
+    tests/conftest.py empties `instances` before each test."""
     instances = []
 
     def __init__(self, **kw):

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from helpers import write_record
+from helpers import series, write_record, write_snapshot
 from rootcause import config, evaluate, report, scenarios
 
 
@@ -257,3 +257,19 @@ def test_failure_modes_classify_each_wrong_fault_run():
     assert c == {"said no incident": 1, "named the top-changed service": 1, "true cause ranked 2nd or 3rd": 1,
                  "abstained": 1, "another wrong service": 1, "found one of two causes": 1}
     assert report.failure_modes(records, accept, {})["another wrong service"] == 2  # without snapshots: no symptom call
+
+
+def test_failure_modes_section_names_the_top_changed_service_from_the_recorded_snapshot(tmp_path, monkeypatch):
+    snaps = tmp_path / "snapshots"
+    write_snapshot(snaps / "incident__a", metrics={"error_ratio": {"checkout": series(0.0, 0.5), "payment": series(0.0, 0.0)}})
+    (snaps / "index.jsonl").write_text(json.dumps({"scenario": "a", "path": "incident__a", "valid": True}) + "\n")
+    monkeypatch.setattr(config, "SNAPSHOTS", snaps)
+    monkeypatch.setattr(scenarios, "load_all", lambda: [
+        scenarios.Scenario("a", "easy", "x", {}, {"causes": [{"accept": ["payment"], "fault_type": "errors"}]}, [])])
+    runs = tmp_path / "runs"
+    write_record(runs / "agent-v1", "a", "easy", 0, 0.0, report={"verdict": "incident", "confidence": 0.8,
+                                                              "causes": [{"service": "checkout", "fault_type": "errors"}]})
+    md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["agent-v1"]).read_text(encoding="utf-8")
+    section = md.split("## Failure modes")[1].split("\n## ")[0]
+    assert "Recorded snapshots not found" not in section
+    assert "| agent-v1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |" in section  # the one wrong run named the symptom service
