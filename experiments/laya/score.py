@@ -5,7 +5,7 @@ Records go to data/runs/<variant>/ through evaluate.run, so the scoring rules, t
 same as every other solver's. A report ranks services by the model's probability (top 3); `no_incident` wins only if
 it is the single most likely option. Neither model cites evidence, so their reports carry none.
 
-    .venv/Scripts/python.exe -m experiments.laya.score [predictions.json]   (default: Laya's; Hunch's are in
+    python -m experiments.laya.score [predictions.json]   (default: Laya's; Hunch's are in
     .cache/hunch/predictions.json)
 """
 import json

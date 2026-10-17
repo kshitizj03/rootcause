@@ -6,8 +6,8 @@ Two variants, both fixed before any result was seen:
                      as usage.input_tokens showed)
 Zero-shot: no fine-tuning, no temperature fitting, nothing learned from these incidents.
 
-    HF_HOME=.cache/hf  (any local cache path)
-    .cache/venv-laya/Scripts/python.exe -I experiments/laya/predict.py
+    <laya venv python> -I experiments/laya/predict.py      (with HF_HOME set to a local cache path, e.g. .cache/hf)
+Laya's venv is separate: torch plus laya 0.4.6 from PyPI.
 """
 import json
 import time

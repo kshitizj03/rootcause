@@ -4,7 +4,7 @@ The table is the heuristic's own input (summary.changes: every service's signals
 ranked by relative change). No alert text, no ground truth. Keyed by the snapshot's fault_start, which is what
 score.py sees again through evaluate.run.
 
-    .venv/Scripts/python.exe -m experiments.laya.prepare
+    python -m experiments.laya.prepare
 """
 import json
 

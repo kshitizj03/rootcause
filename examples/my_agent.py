@@ -1,6 +1,8 @@
 """A tiny baseline to copy: names the service whose error ratio rose most after the alert.
 
-    rootcause eval-custom examples.my_agent:solve --name my-agent --runs 5
+    python -m rootcause eval-custom examples.my_agent:solve --name my-agent
+
+It is deterministic, so one run per incident (the default) is enough; give --runs N for a solver that varies.
 
 Replace solve() with your own agent. docs/benchmark.md describes the snapshot it gets and the report it returns."""
 
