@@ -138,7 +138,7 @@ Both commands need recorded incidents (see **Data** above): the snapshots are no
 # a built-in agent on any OpenAI-compatible endpoint with tool calling; records go to data/runs/agent-v1@<model>/
 python -m rootcause eval agent-v1 --model <model> --base-url <endpoint URL> --key-env <VAR holding the key> --runs 5
 # your own solver: a function that takes a snapshot and returns (report, info)
-python -m rootcause eval-custom examples.my_agent:solve --name my-agent --runs 5
+python -m rootcause eval-custom examples.my_agent:solve --name my-agent
 ```
 
 Both are scored by the same rules as the built-in solvers, and `summary`, `report` and `site` pick their records up. [`docs/benchmark.md`](docs/benchmark.md) describes what a snapshot holds, what a solver may read, the report schema, the scoring rules, the splits and the rules for honest use. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers adding scenarios and built-in solvers.

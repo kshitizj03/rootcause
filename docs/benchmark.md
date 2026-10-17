@@ -194,7 +194,7 @@ def solve(snap):            # snap = {"meta": ..., "metrics": ..., "spans": ...,
 [`examples/my_agent.py`](../examples/my_agent.py) is a short baseline: it names the service whose error ratio rose most. Run it from the repository root:
 
 ```bash
-python -m rootcause eval-custom examples.my_agent:solve --name my-agent --runs 5
+python -m rootcause eval-custom examples.my_agent:solve --name my-agent
 python -m rootcause summary my-agent
 ```
 
