@@ -1,9 +1,10 @@
-"""The diagnosis agent: an OpenAI-compatible tool loop (Gemini or NVIDIA) over one snapshot, plus the v0/v1 prompts
-and their ablations.
+"""The diagnosis agent: an OpenAI-compatible tool loop over one snapshot (Gemini and NVIDIA clients built in; eval
+--model takes any compatible endpoint), plus the v0/v1 prompts and their ablations.
 
-Returns a validated Report plus transcript, full message history and token usage. Free tier only: requests are spaced out, per-minute
-rate limits back off, a per-day quota falls back to the next model and finally raises QuotaExhausted so a batch
-can stop cleanly and resume later."""
+Returns a validated Report plus transcript, full message history and token usage. Free tier only: requests are spaced
+out and rate limits back off. After repeated failures, or at once on a per-day quota, it moves to the next model in
+`models` (the CLI passes one), and raises QuotaExhausted when every model's daily quota is used up, so a batch can stop
+cleanly and resume later."""
 import os
 import time
 from contextlib import contextmanager
@@ -18,7 +19,7 @@ from rootcause.score import Report, parse_report
 
 NAME = "agent-v0"
 MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
-MAX_STEPS = 15
+MAX_STEPS = 15  # model turns in the tool loop, not tool calls (one turn may hold several tool calls)
 ATTEMPTS = 3  # tries per model before falling back
 MIN_INTERVAL_S = 4.5  # stay under ~15 requests/minute on the free tier
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -68,6 +69,23 @@ SYSTEM_V1_NOPRIORS = _replace_once(_replace_once(
 VAGUE_ALERT = "Users report that something is wrong with the shop."
 
 
+class MissingKey(Exception):
+    """An API key variable is unset. The message names the variable, never a value."""
+    def __init__(self, var):
+        super().__init__(f"set {var} in .env (see .env.example)")
+        self.var = var
+
+
+def api_key(var):
+    """The value of environment variable `var` (after loading .env). Raises MissingKey when it is unset or empty, so the
+    OpenAI SDK never falls back to OPENAI_API_KEY and sends that key to another provider."""
+    from dotenv import load_dotenv
+    load_dotenv(config.ROOT / ".env")
+    if not (key := os.environ.get(var)):
+        raise MissingKey(var)
+    return key
+
+
 class QuotaExhausted(RuntimeError):
     """Every model's daily free-tier quota is used up."""
 
@@ -88,9 +106,7 @@ def _dump(m):
 # max_retries=0 on both clients: Agent._chat retries timeouts and 429s itself (attempts, backoff); the SDK's own hidden
 # retries would also count against the free-tier daily quota.
 def make_client():
-    from dotenv import load_dotenv
-    load_dotenv(config.ROOT / ".env")
-    return OpenAI(base_url=BASE_URL, api_key=os.getenv("GEMINI_API_KEY"), timeout=90, max_retries=0)
+    return OpenAI(base_url=BASE_URL, api_key=api_key("GEMINI_API_KEY"), timeout=90, max_retries=0)
 
 
 # A second model family for the model comparison: NVIDIA's free trial endpoint (OpenAI-compatible, rate-limited per
@@ -100,9 +116,7 @@ NEMOTRON = "nvidia/nemotron-3-super-120b-a12b"
 
 
 def make_nvidia_client():
-    from dotenv import load_dotenv
-    load_dotenv(config.ROOT / ".env")
-    return OpenAI(base_url=NVIDIA_BASE_URL, api_key=os.getenv("NVIDIA_API_KEY"), timeout=120, max_retries=0)
+    return OpenAI(base_url=NVIDIA_BASE_URL, api_key=api_key("NVIDIA_API_KEY"), timeout=120, max_retries=0)
 
 
 def _per_day(err):
@@ -215,8 +229,9 @@ class Agent:
 
     def _solve_scored(self, snap):
         # steps = tool calls executed; turns = model requests inside the tool loop (a turn may hold several tool calls);
-        # requests = every successful model request, including the repair / step-limit final ones
-        info = {"solver": self.name, "models": [], "steps": 0, "turns": 0, "requests": 0, "prompt_tokens": 0,
+        # requests = every successful model request, including the repair / step-limit final ones;
+        # hit_step_limit = the loop used all max_steps turns and the agent was told "Step limit reached"
+        info = {"solver": self.name, "models": [], "steps": 0, "turns": 0, "hit_step_limit": False, "requests": 0, "prompt_tokens": 0,
                 "completion_tokens": 0, "wait_s": 0, "parse_error": None, "error": None, "transcript": [], "messages": []}
         try:
             return self._solve(snap, info), info
@@ -246,6 +261,7 @@ class Agent:
                 info["steps"] += 1
                 info["transcript"].append({"tool": tc.function.name, "args": tc.function.arguments, "output": out})
                 msgs.append({"role": "tool", "tool_call_id": tc.id, "content": out})
+        info["hit_step_limit"] = True
         msgs.append({"role": "user", "content": "Step limit reached. Give your final answer now as ONLY the JSON object."})
         m = self._chat(info, messages=msgs, temperature=0)
         msgs.append(_dump(m))

@@ -494,6 +494,14 @@ def test_eval_gemini_api_error_exits_5_without_the_reset_hint(monkeypatch, capsy
     assert "model API error: no choices" in err and "reset-flags" not in err
 
 
+def test_eval_with_an_unset_key_exits_2_naming_the_variable(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(config, "ROOT", tmp_path)  # no .env to load
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    _stub_eval(monkeypatch, lambda *a, **k: pytest.fail("must not run"))
+    assert cli.main(["eval", "agent-v1-nemotron"]) == 2
+    assert "set NVIDIA_API_KEY in .env (see .env.example)" in capsys.readouterr().err
+
+
 def test_stack_runtime_errors_still_exit_3_with_the_hint(monkeypatch, capsys):
     from rootcause import evaluate
 

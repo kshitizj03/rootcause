@@ -90,7 +90,7 @@ def test_missing_key_variable_exits_2_naming_it_without_its_value(byo, monkeypat
     monkeypatch.setenv("OTHER_KEY", SECRET)
     assert cli.main(["eval", "agent-v1", *BYO]) == 2
     out = capsys.readouterr()
-    assert "RC_TEST_KEY is not set" in out.err and SECRET not in out.out + out.err
+    assert "set RC_TEST_KEY in .env (see .env.example)" in out.err and SECRET not in out.out + out.err
     assert byo == {} and not FakeOpenAI.built
 
 

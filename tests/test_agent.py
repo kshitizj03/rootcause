@@ -45,6 +45,14 @@ def test_step_limit_forces_a_final_answer():
     a, llm, _ = make(calls + [Msg(content=FINAL)], max_steps=2)
     report, info = a.solve(SNAP)
     assert report.verdict == "incident" and info["steps"] == 2 and "tools" not in llm.requests[-1]
+    assert info["hit_step_limit"] and llm.requests[-1]["messages"][-1]["content"].startswith("Step limit reached")
+
+
+def test_an_answer_on_the_last_allowed_turn_is_not_a_step_limit_hit():
+    calls = [Msg(tool_calls=[tool_call("list_services", {}, i=str(i))]) for i in range(2)]
+    a, _, _ = make(calls + [Msg(content=FINAL)], max_steps=3)
+    _, info = a.solve(SNAP)
+    assert info["turns"] == 3 and not info["hit_step_limit"]
 
 
 def test_throttle_spaces_requests():
@@ -282,3 +290,15 @@ def test_clients_leave_retries_to_the_agent_so_hidden_sdk_retries_do_not_spend_q
     monkeypatch.setenv("GEMINI_API_KEY", "x")
     monkeypatch.setenv("NVIDIA_API_KEY", "x")
     assert agent.make_client().max_retries == 0 and agent.make_nvidia_client().max_retries == 0
+
+
+def test_an_unset_key_raises_missing_key_instead_of_falling_back_to_openai_api_key(monkeypatch, tmp_path):
+    monkeypatch.setattr(agent.config, "ROOT", tmp_path)  # no .env to load
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-must-not-be-sent")
+    with pytest.raises(agent.MissingKey, match="set GEMINI_API_KEY in .env") as e:
+        agent.make_client()
+    assert "sk-must-not-be-sent" not in str(e.value)
+    with pytest.raises(agent.MissingKey, match="NVIDIA_API_KEY"):
+        agent.make_nvidia_client()

@@ -347,11 +347,8 @@ def _model_override(args):
         raise _Usage(f"--base-url must be an http(s) URL, got {args.base_url!r}")
     if url.scheme.lower() == "http" and provider not in ("localhost", "127.0.0.1", "::1"):
         print(f"warning: --base-url is plain http to {provider}: the API key will be sent unencrypted", file=sys.stderr)
-    from dotenv import load_dotenv
-    load_dotenv(config.ROOT / ".env")  # where the built-in solvers' keys live too
-    key = os.environ.get(args.key_env)
-    if not key:  # name the variable, never its value
-        raise _Usage(f"--key-env: the environment variable {args.key_env} is not set")
+    from rootcause import agent
+    key = agent.api_key(args.key_env)  # .env, as for the built-in solvers' keys; MissingKey names the variable only
     # max_retries=0, as for the built-in clients: the agent retries timeouts and 429s itself
     llm = OpenAI(base_url=args.base_url, api_key=key, timeout=120, max_retries=0)
     return {"llm": llm, "models": [args.model], "provider": provider}
@@ -364,16 +361,20 @@ def _unknown_ids(ids):
 
 
 def _eval_traced(args):
-    model = _model_override(args)
-    if unknown := _unknown_ids(args.ids):
-        print(f"unknown or unrecorded scenario ids: {unknown}")
-        return 2
-    if model:
-        name, solve, stop_on = SOLVERS[args.solver](model)
-        solve = _tagged(solve, provider=model["provider"])  # the endpoint's host only: a URL can carry keys in its query
-    else:
-        name, solve, stop_on = SOLVERS[args.solver]()
-    return _run_batch(name, solve, args, stop_on)
+    from rootcause import agent
+    try:
+        model = _model_override(args)
+        if unknown := _unknown_ids(args.ids):
+            print(f"unknown or unrecorded scenario ids: {unknown}")
+            return 2
+        if model:
+            name, solve, stop_on = SOLVERS[args.solver](model)
+            solve = _tagged(solve, provider=model["provider"])  # the endpoint's host only: a URL can carry keys in its query
+        else:
+            name, solve, stop_on = SOLVERS[args.solver]()
+        return _run_batch(name, solve, args, stop_on)
+    except agent.MissingKey as e:  # raised when a client is built: at the factory, or at the first model request
+        raise _Usage(str(e)) from e
 
 
 def _tagged(solve, **tags):
