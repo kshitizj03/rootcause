@@ -111,7 +111,7 @@ def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=None
         runs = {n: v for n, v in runs.items() if v}
         meta = {"id": s.id, "category": s.category, "heldout": s.id in config.HELDOUT, "alert": s.alert,
                 "truth": _truth(s, rows)}
-        _dump(out_dir / "data" / "incidents" / f"{s.id}.json", {**meta, "runs": runs, "window_end_s": config.SETTLE_S})
+        _dump(out_dir / "data" / "incidents" / f"{s.id}.json", {**meta, "runs": runs, "window_end_s": s.settle_s})
         incidents.append({**meta, "results": {n: [r["score"]["correct"] for r in v] for n, v in runs.items()}})
     expected = evaluate.expected_counts("all")
     index = {"generated": date.today().isoformat(), "solvers": list(records), "incidents": incidents,

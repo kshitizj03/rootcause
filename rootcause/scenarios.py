@@ -7,9 +7,9 @@ import yaml
 
 from rootcause import config, signals
 from rootcause.inject import docker_errors
+from rootcause.score import FAULT_TYPES
 
-CATEGORIES = {"easy", "hard-cross-service", "hard-silent", "hard-noisy", "hard-two-faults", "control"}
-FAULT_TYPES = {"errors", "latency", "resource"}
+CATEGORIES = ["easy", "hard-cross-service", "hard-silent", "hard-noisy", "hard-two-faults", "control"]  # in report order
 
 
 @dataclass(frozen=True)

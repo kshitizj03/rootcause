@@ -1,1 +1,1 @@
-"""RootCause: an LLM agent (and baselines) for diagnosing microservice incidents."""
+"""RootCause: a benchmark of LLM agents and baselines diagnosing recorded microservice incidents."""

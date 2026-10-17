@@ -237,6 +237,15 @@ def test_resanitize_dry_run_leaves_metrics_alone(tmp_path):
     assert (tmp_path / "metrics.json").read_text() == text
 
 
+def test_resanitize_counts_series_and_drops_a_hidden_service_with_no_points(tmp_path):
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [])
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [])
+    (tmp_path / "metrics.json").write_text(json.dumps({"rps": {"payment": [[1.0, 2.0], [2.0, 3.0]], "flagd": []}}))
+    assert snapshot.resanitize(tmp_path, NAMES)["metrics"] == (2, 1)
+    assert json.loads((tmp_path / "metrics.json").read_text()) == {"rps": {"payment": [[1.0, 2.0], [2.0, 3.0]]}}
+    assert "metrics.json" not in sanitize.scan_snapshot(tmp_path, NAMES)
+
+
 def test_resanitize_removes_stale_tmp_files_and_never_promotes_them(tmp_path):
     snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [flat_span(span_id="ok")])
     snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [])

@@ -43,3 +43,12 @@ def test_jaeger_raw_404_returns_empty_payload(monkeypatch):
         status_code = 404
     monkeypatch.setattr(backends.requests, "get", lambda *args, **kwargs: MockResponse())
     assert backends.flatten_otlp(backends.jaeger_raw("s", 0, 1, 10)) == []
+
+
+def test_status_probe_counts_known_services_only_and_says_whether_logs_flow(monkeypatch):
+    from rootcause import backends, stack
+    series = [{"metric": {"service_name": s}, "values": []} for s in ("payment", "cart", "load-generator", "flagd")]
+    monkeypatch.setattr(backends, "prom_range", lambda *a, **k: series)
+    monkeypatch.setattr(backends, "jaeger_services", lambda: ["payment"])
+    monkeypatch.setattr(backends, "os_logs", lambda *a, **k: [{"body": "x"}])
+    assert stack.probe() == {"services_with_traffic": 2, "jaeger_services": 1, "logs_flowing": True}

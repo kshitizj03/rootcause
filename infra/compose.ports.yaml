@@ -1,4 +1,5 @@
-# Pin the observability backends to fixed host ports so the agent's tools can reach them.
+# Pin the observability backends to fixed host ports so snapshot capture and `rootcause status` can reach them
+# (the agent's tools never do: they read only recorded snapshots).
 # Layered on top of the upstream OpenTelemetry Demo compose files (which stay untouched).
 services:
   jaeger:

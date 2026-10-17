@@ -76,7 +76,7 @@ def test_build_writes_index_and_incidents_without_private_fields(tmp_path, monke
 
     inc = json.loads((out / "data" / "incidents" / "a.json").read_text(encoding="utf-8"))
     run0, run1 = inc["runs"]["agent-v1"]
-    assert inc["window_end_s"] == config.SETTLE_S
+    assert inc["window_end_s"] == config.SETTLE_S  # the scenario's settle_s, which defaults to it
     assert inc["runs"]["heuristic"][0]["steps"] == []
     assert run0["steps"][0] == {"tool": "list_services", "args": {}, "output": {"services": ["ad"]}, "truncated": False}
     assert run0["steps"][1]["args"] == {"service": "ad"}

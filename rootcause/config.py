@@ -13,7 +13,7 @@ COMPOSE_FILES = ["compose.yaml", "compose.full.yaml", "compose.observability.yam
                  "compose.extras.yaml", str(ROOT / "infra" / "compose.ports.yaml")]
 
 PROM = "http://localhost:9090"
-JAEGER = "http://localhost:16686/jaeger/ui/api/v3"  # Jaeger v2 serves only the v3 API
+JAEGER = "http://localhost:16686/jaeger/ui/api/v3"  # the v3 API returns OTLP-shaped JSON, which backends.flatten_otlp parses
 OPENSEARCH = "http://localhost:9200"
 
 # Services whose telemetry the agent may see (traced apps).
@@ -38,7 +38,8 @@ CAPTURE_LOOKBACK_S = 300    # spans/logs captured from 5 minutes before injectio
 TRACES_PER_SERVICE = 50
 LOGS_PER_SERVICE = 200
 
-# Frozen 2026-10-13, before any agent-v1 tuning: the alphabetically last scenario of each category. Never used to
-# tune prompts or tools; reported separately from the rest (the tuning set).
+# Frozen 2026-10-13, before any agent-v1 tuning: the alphabetically last scenario of each category; reported separately
+# from the rest (the tuning set). Not used to tune prompts or tools, except that v1 tool output was viewed on
+# valkey-cart-paused once during agent-v1 development (report.DISCLOSURE says what was kept).
 HELDOUT = ("product-catalog-failure", "valkey-cart-paused", "recommendation-cache-leak",
            "payment-failure-with-flood", "payment-failure-and-recommendation-leak", "control-4")

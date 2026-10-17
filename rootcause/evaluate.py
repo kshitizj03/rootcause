@@ -145,7 +145,7 @@ def _row(category, recs, expected=None):
             "errors": rate(lambda r: None if "error" not in r else r["error"] is not None)}  # None: solver never sets it
 
 
-ORDER = ["easy", "hard-cross-service", "hard-silent", "hard-noisy", "hard-two-faults", "control"]
+ORDER = scenarios.CATEGORIES
 
 
 def in_split(scenario_id, split):

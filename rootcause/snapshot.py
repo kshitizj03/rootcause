@@ -112,9 +112,9 @@ def resanitize(path, names, dry_run=False):
         dropped[name] = [r for r in rows if not clean([r], names)] if dry_run else []
     metrics = json.loads((path / "metrics.json").read_text(encoding="utf-8")) if (path / "metrics.json").exists() else {}
     clean_metrics = sanitize.sanitize_metrics(metrics)
-    count = lambda m: sum(len(v) for v in m.values())
+    count = lambda m: sum(len(by_service) for by_service in m.values())  # series, not points
     counts["metrics"] = (count(metrics), count(clean_metrics))
-    changed = counts["metrics"][0] != counts["metrics"][1]
+    changed = clean_metrics != metrics  # also drops a hidden service's empty series
     if not dry_run:
         tmps = {n: path / f"{n}.jsonl.gz.tmp" for n in kept}
         mtmp = path / "metrics.json.tmp"

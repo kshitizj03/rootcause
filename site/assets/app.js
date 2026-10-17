@@ -170,7 +170,7 @@ function changesTable(rows, label, text) {
 }
 
 /** get_metric as a sparkline: the alert (t=0) is a vertical rule and everything after it is tinted. */
-let windowEndS = 300;  // seconds from the alert to the snapshot's end: the incident JSON's window_end_s (config.SETTLE_S)
+let windowEndS = 300;  // seconds from the alert to the snapshot's end: the incident JSON's window_end_s (the scenario's settle_s)
 
 function sparkline(o, args = {}) {
   const g = sparkGeometry(o, args, windowEndS);

@@ -1,4 +1,4 @@
-"""MCP server: exposes a toolset over stdio for ONE recorded snapshot (read-only; only snapshot.load data).
+"""MCP server: exposes the v1 tools over stdio for ONE recorded snapshot (read-only; only snapshot.load data).
 
 Usage: python -m rootcause.mcp_server <snapshot-dir>   (or: python -m rootcause mcp <snapshot-dir>)"""
 import sys
@@ -15,14 +15,14 @@ from rootcause import sanitize, snapshot, tools_v1
 FILES = ("meta.json", *sanitize.SNAPSHOT_TOOL_FILES)
 
 
-def build_server(snap, toolset=tools_v1):
+def build_server(snap):
     async def on_list_tools(ctx, params):
         return types.ListToolsResult(tools=[
             types.Tool(name=s["function"]["name"], description=s["function"]["description"],
-                       inputSchema=s["function"]["parameters"]) for s in toolset.SCHEMAS])
+                       inputSchema=s["function"]["parameters"]) for s in tools_v1.SCHEMAS])
 
     async def on_call_tool(ctx, params):
-        text = toolset.call(snap, params.name, params.arguments or {})
+        text = tools_v1.call(snap, params.name, params.arguments or {})
         return types.CallToolResult(content=[types.TextContent(type="text", text=text)],
                                     isError=text.startswith('{"error"'))
 
@@ -31,8 +31,8 @@ def build_server(snap, toolset=tools_v1):
     return Server("rootcause", instructions=instructions, on_list_tools=on_list_tools, on_call_tool=on_call_tool)
 
 
-async def serve(path, toolset=tools_v1):
-    server = build_server(snapshot.load(path), toolset)
+async def serve(path):
+    server = build_server(snapshot.load(path))
     async with stdio_server() as (r, w):
         await server.run(r, w, server.create_initialization_options())
 
