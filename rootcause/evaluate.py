@@ -67,14 +67,29 @@ def code_version(cwd=config.ROOT):
     return (sha + ("-dirty" if dirty else "")) if sha else "unknown"
 
 
+class SnapshotChanged(ValueError):
+    """A scenario's existing records were scored on another snapshot than the one it would now be scored on."""
+
+
+def _check_same_snapshot(d, todo):
+    """Refuse to resume a record name whose existing records of a scenario name another snapshot (it was re-recorded or
+    replaced since), so one batch never mixes snapshot contents. Records from before the "snapshot" field pass."""
+    for sid, _, path in todo:
+        for f in d.glob(f"{sid}__*.json"):
+            if (prev := json.loads(f.read_text(encoding="utf-8")).get("snapshot")) not in (None, Path(path).name):
+                raise SnapshotChanged(f"{d.name}/{f.name} was scored on snapshot {prev}, but {sid} is now {Path(path).name}: "
+                                      f"start a new record name rather than mixing snapshots in one batch")
+
+
 def run(solver_name, solve, runs=1, ids=None, out_dir=RUNS_DIR, stop_on=(), clock=time.time):
     """Write out_dir/solver_name/<scenario>__<k>.json per run; existing records are kept (resumable).
-    Run-major (every scenario once, then again), so a quota stop leaves each scenario with the same number of runs."""
+    Run-major (every scenario once, then again), so a quota stop leaves every scenario within one run of the others."""
     d = Path(out_dir) / solver_name
     d.mkdir(parents=True, exist_ok=True)
-    done, code = 0, code_version()
+    done, code, todo = 0, code_version(), targets(ids)
+    _check_same_snapshot(d, todo)
     for k in range(runs):
-        for sid, category, path in targets(ids):
+        for sid, category, path in todo:
             f = d / f"{sid}__{k}.json"
             if f.exists():
                 continue
@@ -84,7 +99,8 @@ def run(solver_name, solve, runs=1, ids=None, out_dir=RUNS_DIR, stop_on=(), cloc
                 report, info = solve(snap)
             except stop_on as e:  # e.g. the daily free-tier quota: stop cleanly, resume tomorrow
                 return {"completed": done, "stopped": f"{type(e).__name__}: {e}"}
-            rec = {**info, "scenario": sid, "category": category, "run": k, "seconds": clock() - t0, "code": code,  # info first: it can't overwrite these
+            rec = {**info, "scenario": sid, "category": category, "run": k, "snapshot": Path(path).name,  # info first: it can't overwrite these
+                   "seconds": clock() - t0, "code": code,
                    "report": report_to_dict(report), "score": score(report, snapshot.load_truth(path)),
                    "evidence_check": evidence.check(report, snap)}
             tmp = f.with_suffix(".tmp")
@@ -101,7 +117,8 @@ def _mean(xs):
 
 def _row(category, recs, expected=None):
     """Every rate is the mean over scenarios of each scenario's own mean, so a scenario with more records (a partial
-    batch) does not outweigh the rest. The sd covers only run indices that have a record for every scenario."""
+    batch) does not outweigh the rest. The sd is the sample sd across the run indices that have a record for every
+    scenario."""
     by_scn, by_run = defaultdict(list), defaultdict(dict)
     for r in recs:
         by_scn[r["scenario"]].append(r)
@@ -116,7 +133,7 @@ def _row(category, recs, expected=None):
     return {"category": category, "scenarios": len(by_scn), "expected": expected, "runs": len(by_run),
             "records_min": min(per_scenario), "records_max": max(per_scenario),
             "accuracy_mean": rate(lambda r: r["score"]["correct"]),
-            "accuracy_std": statistics.pstdev(complete) if len(complete) >= 2 else None,
+            "accuracy_std": statistics.stdev(complete) if len(complete) >= 2 else None,  # sample sd (n - 1)
             "top3": rate(lambda r: r["score"]["top3"]),
             "fault_type": rate(lambda r: r["score"]["fault_type_ok"]),
             "false_alarm": rate(lambda r: r["score"]["false_alarm"]),

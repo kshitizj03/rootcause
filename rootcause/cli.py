@@ -476,7 +476,7 @@ def main(argv=None):
     except _Usage as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    except evaluate.NoValidSnapshot as e:
+    except (evaluate.NoValidSnapshot, evaluate.SnapshotChanged) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except SolverError as e:  # the user's own code failed: no stack reset or API retry would help

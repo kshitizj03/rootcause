@@ -76,7 +76,8 @@ def test_summarise_means_and_spread_over_runs(tmp_path):
               ("c1", "control", 0, 1.0), ("c1", "control", 1, 0.0)]:
         write_record(tmp_path / "x", *r)
     rows = {r["category"]: r for r in evaluate.summarise("x", out_dir=tmp_path)}
-    assert rows["easy"]["accuracy_mean"] == 0.75 and rows["easy"]["accuracy_std"] == 0.25
+    assert rows["easy"]["accuracy_mean"] == 0.75
+    assert rows["easy"]["accuracy_std"] == pytest.approx(0.5 ** 0.5 / 2)  # sample sd of run means 0.5 and 1.0
     assert rows["easy"]["scenarios"] == 2 and rows["easy"]["runs"] == 2
     assert rows["control"]["false_alarm"] == 0.5 and rows["control"]["fault_type"] is None
     assert rows["all incidents"]["accuracy_mean"] == 0.75
@@ -134,7 +135,7 @@ def test_sd_uses_only_run_indices_covering_every_scenario(tmp_path):
               ("p2", "easy", 1, 0.0), ("p1", "easy", 2, 1.0)]:  # run 2 is incomplete
         write_record(tmp_path / "x", *r)
     row = evaluate.summarise("x", out_dir=tmp_path)[0]
-    assert row["accuracy_std"] == 0.5
+    assert row["accuracy_std"] == pytest.approx(0.5 ** 0.5)  # sample sd (n - 1) of run means 1.0 and 0.0
 
 
 def test_expected_scenarios_shown_when_they_differ(tmp_path):
@@ -322,3 +323,18 @@ def test_targets_skip_a_newer_failed_recording_and_refuse_a_scenario_with_no_val
     assert [s for s, _, _ in evaluate.targets(["pay", "not-in-library"])] == ["pay"]
     with pytest.raises(evaluate.NoValidSnapshot, match="ctl"):
         evaluate.targets()
+
+
+def test_records_name_their_snapshot_and_resume_refuses_to_mix_snapshots(lib):
+    solve = lambda snap: (Report("no_incident"), {})
+    evaluate.run("s", solve, runs=1, out_dir=lib / "runs")
+    rec = json.loads((lib / "runs" / "s" / "pay__0.json").read_text())
+    assert rec["snapshot"] == "incident__a"
+    index = lib / "snapshots" / "index.jsonl"  # pay re-recorded: a newer valid snapshot
+    index.write_text(index.read_text() + "\n" + json.dumps({"scenario": "pay", "path": "incident__c", "valid": True}))
+    with pytest.raises(evaluate.SnapshotChanged, match="pay__0.json was scored on snapshot incident__a"):
+        evaluate.run("s", solve, runs=2, out_dir=lib / "runs")
+    assert not (lib / "runs" / "s" / "pay__1.json").exists() and not (lib / "runs" / "s" / "ctl__1.json").exists()
+    del rec["snapshot"]  # records from before the field resume as before
+    (lib / "runs" / "s" / "pay__0.json").write_text(json.dumps(rec))
+    assert evaluate.run("s", solve, runs=2, out_dir=lib / "runs")["completed"] == 2
