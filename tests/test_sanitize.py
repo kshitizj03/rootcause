@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from helpers import FLAGS, flat_log, flat_span
+from helpers import FLAGS, flat_log, flat_span, write_snapshot
 from rootcause import sanitize, snapshot
 
 NAMES = sanitize.flag_names(FLAGS)
@@ -137,23 +137,20 @@ def test_span_charge_card_and_payment_failure_unchanged():
     assert out[0]["message"] == "payment failure"
 
 
-def test_soft_hyphen_body_is_kept_and_json_safe():
-    # Body with soft hyphen U+00AD followed by HighCpu: the flag "adHighCpu" is NOT present
-    # (U+00AD is a single character, not the letters "ad")
-    logs = [{"service": "x", "body": "\u00adHighCpu"}]
-    out = sanitize.sanitize_logs(logs, NAMES)
-    assert len(out) == 1
-    assert out[0]["body"] == "\u00adHighCpu", "Soft hyphen body unchanged"
-    assert json.dumps(out)  # Must be serializable
+@pytest.mark.parametrize("body", ["­HighCpu", "lagd", "eature flag on"])
+def test_control_characters_before_letters_are_not_flag_names_to_sanitiser_or_scanner(tmp_path, body):
+    # U+00AD and form feed are single characters, not the letters "ad" / "f"; written to JSON they become ­ and
+    # , so the scanner must match decoded values like the sanitiser does or it flags a log the sanitiser kept
+    out = sanitize.sanitize_logs([flat_log("x", body)], NAMES)
+    assert [l["body"] for l in out] == [body]
+    assert sanitize.scan_snapshot(write_snapshot(tmp_path / "s", logs=out), NAMES) == {}
 
 
-def test_form_feed_before_lagd_is_not_flagd():
-    # Form-feed character \f followed by "lagd": doesn't contain "flagd"
-    logs = [{"service": "x", "body": "\flagd"}]
-    out = sanitize.sanitize_logs(logs, NAMES)
-    assert len(out) == 1
-    assert out[0]["body"] == "\flagd", "Form-feed flagd unchanged (form-feed is not 'f')"
-    assert json.dumps(out)
+def test_scan_snapshot_finds_flag_names_in_decoded_values_and_keys(tmp_path):
+    d = write_snapshot(tmp_path / "s", metrics={"error_ratio": {"payment": [[1, 0.1]]}, "flagd_x": {}},
+                       spans=[flat_span(attrs={"note": "café adHighCpu"})], logs=[flat_log("x", "ok 	flagd")])
+    assert sanitize.scan_snapshot(d, NAMES) == {"metrics.json": ["flagd"], "spans.jsonl.gz": ["adhighcpu"],
+                                                "logs.jsonl.gz": ["flagd"]}
 
 
 def test_hidden_services_case_insensitive_and_span_name_matching():

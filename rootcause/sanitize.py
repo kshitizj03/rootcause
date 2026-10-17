@@ -94,14 +94,27 @@ def _strip_keys(obj, pat):
     return obj
 
 
-def _matches(obj, pat):
+def _strings(obj):
+    """Every string in obj, dict keys included."""
     if isinstance(obj, str):
-        return bool(pat.search(obj))
-    if isinstance(obj, list):
-        return any(_matches(v, pat) for v in obj)
-    if isinstance(obj, dict):
-        return any(_matches(k, pat) or _matches(v, pat) for k, v in obj.items())
-    return False
+        yield obj
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _strings(v)
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            yield from _strings(k)
+            yield from _strings(v)
+
+
+def _matches(obj, pat):
+    return any(pat.search(s) for s in _strings(obj))
+
+
+def _leaks(obj, names):
+    """find_leaks over the decoded strings of obj (not its JSON text, where a form feed written as \\f reads as an "f")."""
+    pat = leak_pattern(names)
+    return sorted({m.group(0).lower() for s in _strings(obj) for m in pat.finditer(s)})
 
 
 def sanitize_spans(spans, names):
@@ -148,17 +161,15 @@ def scan_snapshot(path, names):
             raise FileNotFoundError(f"Required snapshot file missing: {name}")
         if name.endswith(".gz"):
             with gzip.open(p, "rt", encoding="utf-8") as f:
-                text = f.read()
-        else:
-            text = p.read_text(encoding="utf-8")
-        hits = find_leaks(text, names)
-        if name == "metrics.json":
-            services = {k for by_service in json.loads(text).values() for k in by_service}
-        else:
-            rows = [json.loads(l) for l in text.splitlines() if l.strip()]
+                rows = [json.loads(l) for l in f if l.strip()]
+            hits = _leaks(rows, names)  # the decoded values, as the sanitiser matched them
             services = {str(r.get("service", "")).lower() for r in rows}
             if any(_has_fault_flag(r) for r in rows):  # scan-only: the sanitiser rewrites these, never drops
                 hits.append("fault-injection flag")
+        else:
+            metrics = json.loads(p.read_text(encoding="utf-8"))
+            hits = _leaks(metrics, names)
+            services = {k for by_service in metrics.values() for k in by_service}
         hits += [f"hidden service: {k}" for k in sorted(services & config.HIDDEN_SERVICES)]
         if hits:
             found[name] = hits
