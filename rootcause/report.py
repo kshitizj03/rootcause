@@ -208,7 +208,7 @@ def _top_changed():
     from rootcause import snapshot, summary
     try:
         lib = scenarios.load_all()
-        rows = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl", [s.id for s in lib])
+        rows = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl", [s.id for s in lib], valid_only=True)
         out = {}
         for sid, row in rows.items():
             ups = [c for c in summary.changes(snapshot.load(row["path"])) if c["direction"] == "up" and c["signal"] != "rps"]

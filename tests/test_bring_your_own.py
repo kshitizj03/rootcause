@@ -129,7 +129,7 @@ def lib(tmp_path, monkeypatch):
     pay = write_snapshot(snaps / "incident__a", metrics={"error_ratio": {"payment": series(0.01, 0.3), "cart": series(0.0, 0.0)}},
                          truth={"causes": [{"accept": ["payment"], "fault_type": "errors"}]})
     ctl = write_snapshot(snaps / "incident__c", metrics={"error_ratio": {"payment": series(0.01, 0.01)}})
-    (snaps / "index.jsonl").write_text("\n".join(json.dumps({"scenario": s, "path": str(p)}) for s, p in (("pay", pay), ("ctl", ctl))))
+    (snaps / "index.jsonl").write_text("\n".join(json.dumps({"scenario": s, "path": str(p), "valid": True}) for s, p in (("pay", pay), ("ctl", ctl))))
     monkeypatch.setattr(config, "SNAPSHOTS", snaps)
     monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario("pay", "easy", "a", {}, {}, []),
                                                         scenarios.Scenario("ctl", "control", "a", {}, {}, [])])

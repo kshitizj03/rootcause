@@ -309,3 +309,16 @@ def test_folders_starting_with_an_underscore_are_never_solvers(tmp_path):
         write_record(tmp_path / d, "a", "easy", 0, 1.0)
     assert evaluate.recorded_solvers(tmp_path) == ["mine"]
     assert evaluate.listed_solvers(tmp_path) == evaluate.SOLVER_ORDER + ["mine"]
+
+
+def test_targets_skip_a_newer_failed_recording_and_refuse_a_scenario_with_no_valid_one(lib):
+    index = lib / "snapshots" / "index.jsonl"
+    with open(index, "a", encoding="utf-8") as f:
+        f.write("\n" + json.dumps({"scenario": "pay", "path": "incident__failed", "valid": False}))
+    assert dict((s, p) for s, _, p in evaluate.targets())["pay"] == str(lib / "snapshots" / "incident__a")
+    index.write_text("\n".join(json.dumps(r) for r in [
+        {"scenario": "pay", "path": "incident__a", "valid": True, "leaks": {}},
+        {"scenario": "ctl", "path": "incident__c", "valid": True, "leaks": {"logs.jsonl.gz": ["x"]}}]), encoding="utf-8")
+    assert [s for s, _, _ in evaluate.targets(["pay", "not-in-library"])] == ["pay"]
+    with pytest.raises(evaluate.NoValidSnapshot, match="ctl"):
+        evaluate.targets()

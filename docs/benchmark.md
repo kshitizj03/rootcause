@@ -6,7 +6,7 @@ This page is for anyone who wants to score their own model, or their own diagnos
 
 ## What a snapshot contains
 
-Each recorded incident is a directory `data/snapshots/incident__<UTC time of the injection>/`, for example `incident__20261002T160026Z`. The name carries no scenario id. `data/snapshots/index.jsonl` maps scenario ids to directories; for each scenario, the newest row with a path is the one used.
+Each recorded incident is a directory `data/snapshots/incident__<UTC time of the injection>/`, for example `incident__20261002T160026Z`. The name carries no scenario id. `data/snapshots/index.jsonl` maps scenario ids to directories; for each scenario, the newest valid row (every check passed, no leaks) is the one used.
 
 | File | Contents | Given to solvers |
 |---|---|---|

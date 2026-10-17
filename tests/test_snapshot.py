@@ -11,7 +11,7 @@ NAMES = sanitize.flag_names(FLAGS)
 
 def test_capture_writes_sanitised_valid_snapshot(tmp_path):
     out = snapshot.capture(SCENARIO, T_INJECT, T_END, NAMES, fetch=fake_fetch(), out_dir=tmp_path, demo_commit="abc")
-    path = Path(out["path"])
+    path = tmp_path / out["path"]
     assert out["valid"] is True and out["leaks"] == {}
     assert out["scenario"] == "payment-test" and "path" in out
 
@@ -70,7 +70,7 @@ def test_capture_empty_spans_and_logs(tmp_path):
                                 inject={}, truth={"causes": []},
                                 checks=[{"service": "payment", "signal": "error_ratio", "at_most": 0.05}])
     out = snapshot.capture(control_scenario, T_INJECT, T_END, NAMES, fetch=empty_fetch(), out_dir=tmp_path)
-    path = Path(out["path"])
+    path = tmp_path / out["path"]
 
     # All three tool files written, even when empty
     assert (path / "metrics.json").exists()
@@ -151,7 +151,7 @@ def test_capture_fetches_pre_fault_and_fault_windows_per_service(tmp_path):
     assert len(log_calls) == 2 * len(config.KNOWN_TARGETS)
 
     # chatty backend: cap-many items per call -> snapshot holds both windows, not just the newest
-    snap = snapshot.load(out["path"])
+    snap = snapshot.load(tmp_path / out["path"])
     cart_spans = [s for s in snap["spans"] if s["service"] == "cart"]
     assert len(cart_spans) == 2 * config.TRACES_PER_SERVICE
     assert {s["span_id"].split("-")[1] for s in cart_spans} == {str(since), str(T_INJECT)}
@@ -162,7 +162,7 @@ def test_capture_fetches_pre_fault_and_fault_windows_per_service(tmp_path):
 def test_validate_snapshot_rescores_stored_metrics_against_changed_checks(tmp_path):
     out = snapshot.capture(SCENARIO, T_INJECT, T_END, NAMES, fetch=fake_fetch(prom_value_after=0.05), out_dir=tmp_path)
     assert out["valid"] is False
-    path = Path(out["path"])
+    path = tmp_path / out["path"]
     meta_before = (path / "meta.json").read_bytes()
 
     relaxed = Scenario(**{**SCENARIO.__dict__, "checks": [{"service": "payment", "signal": "error_ratio", "at_least": 0.04}]})
@@ -259,9 +259,34 @@ def test_latest_rows_newest_row_with_a_path_wins(tmp_path):
             {"scenario": "a", "valid": False, "error": "capture failed"},   # no path: skipped, p2 stays latest
             {"scenario": "c", "valid": False, "error": "never captured"}]   # only pathless rows: absent
     index.write_text("\n".join(json.dumps(r) for r in rows) + "\n\n", encoding="utf-8")
-    assert snapshot.latest_rows(index) == {"a": rows[2], "b": rows[1]}
-    assert snapshot.latest_rows(index, ["b", "zzz"]) == {"b": rows[1]}
+    at = lambda r, name: {**r, "path": str(tmp_path / name)}  # paths resolve next to the index
+    assert snapshot.latest_rows(index) == {"a": at(rows[2], "p2"), "b": at(rows[1], "q1")}
+    assert snapshot.latest_rows(index, ["b", "zzz"]) == {"b": at(rows[1], "q1")}
     assert snapshot.latest_rows(tmp_path / "missing.jsonl") == {}
+
+
+def test_latest_rows_valid_only_skips_rows_that_failed_checks_or_the_leak_scan(tmp_path):
+    index = tmp_path / "index.jsonl"
+    rows = [{"scenario": "a", "path": "good", "valid": True, "leaks": {}},
+            {"scenario": "a", "path": "failed", "valid": False},   # a newer failed re-record
+            {"scenario": "b", "path": "leaky", "valid": True, "leaks": {"logs.jsonl.gz": ["x"]}}]
+    index.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    assert snapshot.latest_rows(index)["a"]["path"] == str(tmp_path / "failed")
+    assert {k: v["path"] for k, v in snapshot.latest_rows(index, valid_only=True).items()} == {"a": str(tmp_path / "good")}
+
+
+def test_latest_rows_loads_rows_holding_a_foreign_absolute_path(tmp_path):
+    from helpers import write_snapshot
+    write_snapshot(tmp_path / "incident__20261002T160026Z")
+    write_snapshot(tmp_path / "incident__20261003T000000Z")
+    index = tmp_path / "index.jsonl"
+    index.write_text("\n".join(json.dumps({"scenario": s, "path": p, "valid": True}) for s, p in (
+        ("win", r"X:\elsewhere\data\snapshots\incident__20261002T160026Z"),
+        ("posix", "/srv/other/data/snapshots/incident__20261003T000000Z"))), encoding="utf-8")
+    rows = snapshot.latest_rows(index)
+    assert rows["win"]["path"] == str(tmp_path / "incident__20261002T160026Z")
+    assert rows["posix"]["path"] == str(tmp_path / "incident__20261003T000000Z")
+    assert snapshot.load(rows["win"]["path"])["meta"] and snapshot.load(rows["posix"]["path"])["meta"]
 
 
 # --- log capture: exact service match, exact duplicates removed ---
@@ -285,13 +310,13 @@ def test_capture_logs_keep_only_the_queried_service_and_drop_exact_duplicates(tm
 
     fetch.os_logs = os_logs
     out = snapshot.capture(SCENARIO, T_INJECT, T_END, NAMES, fetch=fetch, out_dir=tmp_path)
-    logs = snapshot.load(out["path"])["logs"]
+    logs = snapshot.load(tmp_path / out["path"])["logs"]
     assert sorted((l["service"], l["body"], l["ts"]) for l in logs) == [
         ("frontend", "GET /", "t1"), ("recommendation", "rec ok", "t1"), ("recommendation", "rec ok", "t2")]
     # frontend-proxy keeps its own logs when queried as itself
     fetch.os_logs = lambda q, s, e, n: [_os_row("frontend-proxy", "own")] if q.endswith('"frontend-proxy"') and s >= T_INJECT else []
     out = snapshot.capture(SCENARIO, T_INJECT, T_END, NAMES, fetch=fetch, out_dir=tmp_path / "again")
-    assert [l["service"] for l in snapshot.load(out["path"])["logs"]] == ["frontend-proxy"]
+    assert [l["service"] for l in snapshot.load(tmp_path / "again" / out["path"])["logs"]] == ["frontend-proxy"]
 
 
 def test_resanitize_drops_exact_duplicate_logs_only(tmp_path):

@@ -7,9 +7,8 @@ score.py sees again through evaluate.run.
     .venv/Scripts/python.exe -m experiments.laya.prepare
 """
 import json
-from pathlib import Path
 
-from rootcause import config, scenarios, snapshot, summary
+from rootcause import config, evaluate, snapshot, summary
 
 OUT = config.ROOT / ".cache" / "laya" / "inputs.json"
 TOP = 20  # rows given to the English checkpoint, which truncates at 1,024 input tokens, questions included
@@ -27,11 +26,9 @@ def table(rows):
 
 
 def main():
-    lib = scenarios.load_all()
-    index = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl", [s.id for s in lib])
     items = []
-    for s in lib:
-        snap = snapshot.load(index[s.id]["path"])
+    for _, _, path in evaluate.targets():  # the snapshots evaluate.run scores
+        snap = snapshot.load(path)
         rows = summary.changes(snap)
         items.append({"key": snap["meta"]["fault_start"], "services": sorted({r["service"] for r in rows}),
                       "full": table(rows), "top": table(rows[:TOP])})

@@ -285,7 +285,7 @@ def _revalidate(args, resanitize=False):
             print(f"{i}: error: {type(e).__name__}: {e}")
             all_valid = False
             continue
-        harness.write_index_row(Path(config.SNAPSHOTS), {"scenario": i, "path": path, "valid": res["valid"],
+        harness.write_index_row(Path(config.SNAPSHOTS), {"scenario": i, "path": Path(path).name, "valid": res["valid"],
                                                           "leaks": res["leaks"],
                                                           "resanitized" if resanitize else "revalidated": True})
         if resanitize:
@@ -474,6 +474,9 @@ def main(argv=None):
     try:
         return _dispatch(args)
     except _Usage as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    except evaluate.NoValidSnapshot as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     except SolverError as e:  # the user's own code failed: no stack reset or API retry would help

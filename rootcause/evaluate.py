@@ -40,10 +40,20 @@ def listed_solvers(runs_dir=None):
     return SOLVER_ORDER + [s for s in recorded_solvers(runs_dir) if s not in SOLVER_ORDER]
 
 
+class NoValidSnapshot(ValueError):
+    """A requested library scenario has no valid, leak-free recording to score on."""
+
+
 def targets(ids=None):
+    """[(scenario id, category, snapshot path)] for the requested library scenarios (default: all), each on its newest
+    valid, leak-free recording. Ids not in the library are left out; a library scenario without such a recording raises
+    NoValidSnapshot rather than being scored on a failed one or silently skipped."""
     lib = {s.id: s for s in scenarios.load_all()}
-    rows = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl", ids or list(lib))
-    return [(sid, lib[sid].category, rows[sid]["path"]) for sid in sorted(rows) if sid in lib]
+    wanted = [i for i in (ids or lib) if i in lib]
+    rows = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl", wanted, valid_only=True)
+    if missing := sorted(set(wanted) - set(rows)):
+        raise NoValidSnapshot(f"no valid, leak-free recording for {', '.join(missing)}: record or revalidate them first")
+    return [(sid, lib[sid].category, rows[sid]["path"]) for sid in sorted(rows)]
 
 
 def code_version(cwd=config.ROOT):

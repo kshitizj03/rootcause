@@ -3,7 +3,7 @@ import gzip
 import json
 import os
 import time
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from rootcause import backends, config, sanitize, signals, summary
 
@@ -30,12 +30,21 @@ def _dedupe_logs(logs):
     return out
 
 
-def latest_rows(index_path, scenario_ids=None):
-    """{scenario id: newest index.jsonl row that has a path}; rows without a path (failed captures) are skipped.
-    scenario_ids, if given, restricts the result to those ids. A missing index gives {}."""
+def is_valid(row):
+    """An index row whose snapshot passed every signal check and the leak scan."""
+    return row.get("valid") is True and not row.get("leaks")
+
+
+def latest_rows(index_path, scenario_ids=None, valid_only=False):
+    """{scenario id: newest index.jsonl row that has a path}; rows without a path (failed captures) are skipped, and so
+    are invalid rows (see is_valid) when valid_only. scenario_ids, if given, restricts the result to those ids. A missing
+    index gives {}.
+    Each returned row's path is the snapshot directory next to the index, by the stored path's last component: rows
+    hold a directory name, and older rows an absolute path from the recording machine (Windows or POSIX)."""
     index = Path(index_path)
     rows = [json.loads(l) for l in index.read_text(encoding="utf-8").splitlines() if l.strip()] if index.exists() else []
-    latest = {r["scenario"]: r for r in rows if r.get("path")}  # later rows overwrite earlier ones
+    latest = {r["scenario"]: {**r, "path": str(index.parent / PureWindowsPath(r["path"]).name)}  # splits on both separators
+              for r in rows if r.get("path") and (is_valid(r) or not valid_only)}  # later rows overwrite earlier ones
     return latest if scenario_ids is None else {i: latest[i] for i in scenario_ids if i in latest}
 
 
@@ -76,7 +85,7 @@ def capture(scenario, t_inject, t_end, names, fetch=backends, out_dir=config.SNA
     _write_jsonl_gz(path / "logs.jsonl.gz", logs)
 
     result = validate_snapshot(path, scenario, names)
-    return {"scenario": scenario.id, "path": str(path), **result}
+    return {"scenario": scenario.id, "path": path.name, **result}  # a name: the index stays valid wherever data/ moves
 
 
 def resanitize(path, names, dry_run=False):

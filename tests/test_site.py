@@ -50,7 +50,7 @@ def _setup(tmp_path, monkeypatch):
     snap.mkdir(parents=True)
     # the snapshot truth wins over the YAML truth (which says "cart")
     (snap / "truth.json").write_text(json.dumps({"causes": [{"accept": ["ad"], "fault_type": "errors"}]}), encoding="utf-8")
-    (tmp_path / "snaps" / "index.jsonl").write_text(json.dumps({"scenario": "a", "path": str(snap)}) + "\n", encoding="utf-8")
+    (tmp_path / "snaps" / "index.jsonl").write_text(json.dumps({"scenario": "a", "path": str(snap), "valid": True}) + "\n", encoding="utf-8")
     fig = tmp_path / "docs" / "results" / "figures"
     fig.mkdir(parents=True)
     (fig / "f.png").write_bytes(b"png")

@@ -101,7 +101,7 @@ def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=None
     for generated in ("data", "figures"):  # drop outputs of scenarios/figures that no longer exist
         shutil.rmtree(out_dir / generated, ignore_errors=True)
     lib = scenarios.load_all()
-    rows = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl", [s.id for s in lib])
+    rows = snapshot.latest_rows(Path(config.SNAPSHOTS) / "index.jsonl", [s.id for s in lib], valid_only=True)
     records = {n: evaluate.load_records(n, runs_dir) for n in solvers}
     records = {n: rs for n, rs in records.items() if rs}
     incidents = []

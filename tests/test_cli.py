@@ -314,12 +314,12 @@ def test_revalidate_latest_row_per_scenario_skips_pathless_and_appends(reval, sn
            {"scenario": "gone", "path": "p/gone", "valid": True}]  # no longer a scenario: ignored
     _index(snaps, *old)
     assert cli.main(["revalidate"]) == 0
-    assert [(c[0], c[1]) for c in calls] == [("p/new", "s1"), ("p/s2", "s2")]
+    assert [(c[0], c[1]) for c in calls] == [(str(snaps / "new"), "s1"), (str(snaps / "s2"), "s2")]
     assert calls[0][2] == ["f"]
     assert _rows(snaps)[:len(old)] == old  # earlier rows untouched
     assert _rows(snaps)[len(old):] == [
-        {"scenario": "s1", "path": "p/new", "valid": True, "leaks": {}, "revalidated": True},
-        {"scenario": "s2", "path": "p/s2", "valid": True, "leaks": {}, "revalidated": True}]
+        {"scenario": "s1", "path": "new", "valid": True, "leaks": {}, "revalidated": True},  # names only from now on
+        {"scenario": "s2", "path": "s2", "valid": True, "leaks": {}, "revalidated": True}]
     assert capsys.readouterr().out.splitlines() == ["s1: valid=True (was False)", "s2: valid=True (was True)"]
 
 
@@ -377,7 +377,7 @@ def test_resanitize_filters_files_leaves_others_alone_is_idempotent_and_appends_
     assert [s["span_id"] for s in snap["spans"]] == ["b"]
     assert [l["service"] for l in snap["logs"]] == ["payment", "cart"]  # incl. legacy-stub log dropped
     assert _snap_bytes(path) == untouched
-    assert _rows(snaps)[1:] == [{"scenario": "s1", "path": str(path), "valid": True, "leaks": {}, "resanitized": True}]
+    assert _rows(snaps)[1:] == [{"scenario": "s1", "path": path.name, "valid": True, "leaks": {}, "resanitized": True}]
 
     before = snapshot.load(path)
     assert cli.main(["resanitize", "s1"]) == 0
@@ -492,6 +492,17 @@ def test_eval_gemini_api_error_exits_5_without_the_reset_hint(monkeypatch, capsy
     assert cli.main(["eval", "agent-v0"]) == 5
     err = capsys.readouterr().err
     assert "model API error: no choices" in err and "reset-flags" not in err
+
+
+def test_eval_without_a_valid_recording_exits_2_naming_the_scenario(monkeypatch, capsys):
+    from rootcause import evaluate
+    _stub_eval(monkeypatch, lambda *a, **k: pytest.fail("must not run"))
+
+    def none_valid(ids=None):
+        raise evaluate.NoValidSnapshot("no valid, leak-free recording for ad-failure")
+    monkeypatch.setattr(evaluate, "targets", none_valid)
+    assert cli.main(["eval", "heuristic", "ad-failure"]) == 2
+    assert "no valid, leak-free recording for ad-failure" in capsys.readouterr().err
 
 
 def test_eval_with_an_unset_key_exits_2_naming_the_variable(monkeypatch, capsys, tmp_path):
