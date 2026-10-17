@@ -1,16 +1,16 @@
 # What helps the agent: model, tools, alert, prompt
 
-**Status: 2026-10-16.** All five Nemotron batches are complete (5 runs on each of 20 incidents). The Gemini batches are partial: agent v0 has 32 of 100 runs and agent v1 64 of 100. Their numbers are marked, and they will change. Every figure below comes from [`report.md`](report.md), which also has the per-scenario tables.
+**Status: 2026-10-17.** Complete: all five Nemotron batches and Gemini agents v0 and v1 (5 runs on each of 20 incidents). Running: the two Gemini ablations, quota-bound. Every figure below comes from [`report.md`](report.md), which also has the per-scenario tables.
 
 ## In short
 
-- **The model matters most.** With the same tools and prompt, Nemotron 3 Super beats Gemini 3.5 Flash-Lite on fault incidents by 0.28 (95% interval +0.12 to +0.45).
+- **The model matters most.** With the same tools and prompt, Nemotron 3 Super beats Gemini 3.5 Flash-Lite on fault incidents by 0.26 (95% interval +0.10 to +0.44).
 - **No agent is clearly better than the simple rule.** The best agent beats the heuristic by about 0.08-0.10 on fault incidents, but the intervals include 0. It also raises more false alarms on the no-fault controls.
-- **The change-aware tools do not change accuracy; they change where it comes from.** On Nemotron, v1's tools score the same as v0's naive tools (-0.02). They gain on silent faults, two-fault incidents and controls, and they lose on cross-service incidents. They also make the evidence checkable.
+- **The change-aware tools do not change accuracy; they change where it comes from.** v1's tools score the same as v0's naive tools on both models (Nemotron -0.02, Gemini -0.06; both intervals include 0). They gain on silent faults, two-fault incidents and controls, and they lose on cross-service incidents. They also make the evidence checkable.
 - **Reading the alert helps.** Replacing each incident's alert with one generic sentence lowers accuracy by 0.12 (interval -0.25 to -0.01) and doubles false alarms.
 - **The two "prior" sentences in the prompt do nothing measurable** (-0.01, interval -0.07 to +0.06).
 - **A bigger step budget does not help.** With 30 steps instead of 15, Nemotron v1 scores the same (-0.04, interval -0.16 to +0.06) for 2.4 times the tokens. It still runs to the limit on 78% of fault incidents.
-- **One run is not enough, and stated confidence overstates accuracy.** At temperature 0, all five runs of Nemotron v1 give the same top answer on only 8 of 20 incidents. Every agent states more confidence than it earns, Gemini the most (0.91 stated vs 0.54 right).
+- **One run is not enough, and stated confidence overstates accuracy.** At temperature 0, all five runs of Nemotron v1 give the same top answer on only 8 of 20 incidents. Every agent states more confidence than it earns, Gemini the most (0.91 stated vs 0.53 right).
 
 ## The numbers
 
@@ -19,8 +19,8 @@ Accuracy on the 16 fault incidents, and the share of control runs answered corre
 | solver | model | tools | fault incidents | controls | runs |
 |---|---|---|---|---|---|
 | heuristic | none | change ranking | 0.59 | 0.75 | 1 per incident |
-| agent v0 | Gemini 3.5 Flash-Lite | naive | 0.41 | 1.00 | 32/100 (partial) |
-| agent v1 | Gemini 3.5 Flash-Lite | change-aware | 0.40 | 1.00 | 64/100 (partial) |
+| agent v0 | Gemini 3.5 Flash-Lite | naive | 0.47 | 1.00 | 100/100 |
+| agent v1 | Gemini 3.5 Flash-Lite | change-aware | 0.41 | 1.00 | 100/100 |
 | agent v0 | Nemotron 3 Super | naive | 0.69 | 0.30 | 100/100 |
 | agent v1 | Nemotron 3 Super | change-aware | 0.68 | 0.50 | 100/100 |
 | agent v1, no priors | Nemotron 3 Super | change-aware | 0.67 | 0.50 | 100/100 |
@@ -31,31 +31,33 @@ The paired comparisons compare each solver's mean score per incident with anothe
 
 | comparison | wins / ties / losses | mean difference | 95% interval |
 |---|---|---|---|
-| Nemotron v1 vs Gemini v1 (model) | 10 / 4 / 2 | +0.28 | +0.12 to +0.45 |
+| Nemotron v1 vs Gemini v1 (model) | 9 / 5 / 2 | +0.26 | +0.10 to +0.44 |
 | Nemotron v1 vs heuristic | 5 / 8 / 3 | +0.08 | -0.05 to +0.23 |
 | Nemotron v0 vs heuristic | 6 / 4 / 6 | +0.10 | -0.15 to +0.35 |
 | Nemotron v1 vs Nemotron v0 (tools) | 6 / 4 / 6 | -0.02 | -0.14 to +0.11 |
+| Gemini v1 vs Gemini v0 (tools) | 5 / 6 / 5 | -0.06 | -0.23 to +0.10 |
 | Nemotron v1, vague alert vs Nemotron v1 | 1 / 9 / 6 | -0.12 | -0.25 to -0.01 |
 | Nemotron v1, no priors vs Nemotron v1 | 4 / 8 / 4 | -0.01 | -0.07 to +0.06 |
 | Nemotron v1, 30 steps vs Nemotron v1 (15) | 4 / 7 / 5 | -0.04 | -0.16 to +0.06 |
-| Gemini v1 vs heuristic (partial) | 3 / 7 / 6 | -0.20 | -0.42 to -0.00 |
+| Gemini v0 vs heuristic | 3 / 5 / 8 | -0.12 | -0.39 to +0.17 |
+| Gemini v1 vs heuristic | 3 / 7 / 6 | -0.18 | -0.40 to +0.02 |
 
 ## Findings
 
 ### 1. The model, not the toolset, separates the agents
 
-Gemini 3.5 Flash-Lite and Nemotron 3 Super get the same prompt, tools and step limit, yet the gap on fault incidents is +0.28. Most of it comes from what each model does when it runs out of steps. An agent still calling tools after 15 model turns is told to answer:
+Gemini 3.5 Flash-Lite and Nemotron 3 Super get the same prompt, tools and step limit, yet the gap on fault incidents is +0.26. Most of it comes from what each model does when it runs out of steps. An agent still calling tools after 15 model turns is told to answer:
 
 | solver | fault runs | hit the limit | then said "no incident" | accuracy when hit | accuracy otherwise |
 |---|---|---|---|---|---|
-| Gemini v1 (partial) | 51 | 32 (63%) | 19 of 32 | 0.28 | 0.63 |
+| Gemini v1 | 80 | 53 (66%) | 28 of 53 | 0.32 | 0.59 |
 | Nemotron v1 | 80 | 57 (71%) | 2 of 57 | 0.61 | 0.83 |
 
-When Gemini Flash-Lite is cut off, it usually concludes that nothing is wrong. That happens even when its first tool call ranked the fault first. On ad-high-cpu, `top_changes` put ad's CPU at the top (+163x), and both of the first two v1 runs still answered "no incident" at 0.9 confidence. Nemotron names its best suspect. Gemini's perfect control score is the other side of the same habit, not better judgement. When it finishes on its own, its accuracy (0.63) is close to Nemotron's.
+When Gemini Flash-Lite is cut off, it usually concludes that nothing is wrong. That happens even when its first tool call ranked the fault first. On ad-high-cpu, `top_changes` put ad's CPU at the top (+163x), and both of the first two v1 runs still answered "no incident" at 0.9 confidence. Nemotron names its best suspect. Gemini's perfect control score is the other side of the same habit, not better judgement. When it finishes on its own, its accuracy (0.59) is close to Nemotron's v1 at the limit (0.61).
 
 ### 2. The change-aware tools move accuracy around
 
-On Nemotron the overall score is the same with v0's naive tools (raw metric series, trace and log search) and v1's change-aware ones (`top_changes`, `service_health`, `service_map`), but the categories differ:
+On Gemini, v1's tools change nothing measurable either (0.41 against v0's 0.47; paired -0.06, interval -0.23 to +0.10), because Gemini's errors are mostly "no incident" with either toolset. On Nemotron the overall score is the same with v0's naive tools (raw metric series, trace and log search) and v1's change-aware ones (`top_changes`, `service_health`, `service_map`), but the categories differ:
 
 | category | Nemotron v0 (naive) | Nemotron v1 (change-aware) |
 |---|---|---|
@@ -86,11 +88,11 @@ The report's failure-mode table sorts every wrong run on a fault incident:
 
 | solver | wrong runs | said no incident | true cause ranked 2nd or 3rd | named the top-changed service | found one of two causes | other |
 |---|---|---|---|---|---|---|
-| Gemini v1 (partial) | 47 | **33** | 2 | 8 | 4 | 0 |
+| Gemini v1 | 49 | **34** | 2 | 9 | 4 | 0 |
 | Nemotron v0 | 29 | 0 | 2 | 5 | 9 | 13 |
 | Nemotron v1 | 29 | 2 | **10** | 8 | 6 | 3 |
 
-- **Gemini's errors are mostly "no incident"** (33 of 47).
+- **Gemini's errors are mostly "no incident"** (34 of 49).
 - **Nemotron v1 is usually close:**
   - in 10 of its 29 wrong runs, the true cause is in its answer, just not first;
   - in 8 more, it named the service with the largest rise in the change table, which is where the symptom shows and also the heuristic's whole method.
@@ -132,7 +134,7 @@ Temperature 0 does not make a hosted model deterministic:
 
 | solver | incidents where all runs agree | pairwise agreement | mean confidence | accuracy | calibration error (ECE) |
 |---|---|---|---|---|---|
-| Gemini v1 (partial) | 12 of 20 | 0.79 | 0.91 | 0.54 | 0.37 |
+| Gemini v1 | 12 of 20 | 0.80 | 0.91 | 0.53 | 0.38 |
 | Nemotron v0 | 6 of 20 | 0.54 | 0.82 | 0.61 | 0.20 |
 | Nemotron v1 | 8 of 20 | 0.66 | 0.87 | 0.64 | 0.23 |
 | Nemotron v1, vague alert | 9 of 20 | 0.58 | 0.85 | 0.49 | 0.36 |
@@ -140,7 +142,7 @@ Temperature 0 does not make a hosted model deterministic:
 (Accuracy and confidence here are over every run, controls included. ECE is over 5 equal-width confidence bins.)
 
 - **A single run would be misleading.** On 12 of 20 incidents, Nemotron v1's five runs disagree on the top answer. This is why every batch is planned at 5 runs and the report averages per incident before comparing.
-- **Gemini is more repeatable but more wrong.** Its runs agree more often (0.79). The agreement includes its repeated "no incident" answers (see finding 1).
+- **Gemini is more repeatable but more wrong.** Its runs agree more often (0.80). The agreement includes its repeated "no incident" answers (see finding 1).
 - **Every agent is overconfident.** Stated confidence is 0.2-0.4 above accuracy. The vague alert makes this worse: accuracy drops but confidence barely moves. Confidence alone is not a usable signal for when to trust an answer; the coverage curve in `report.md` shows the same.
 
 ## Caveats
@@ -149,4 +151,4 @@ Temperature 0 does not make a hosted model deterministic:
 - **Sixteen fault incidents, one demo app.** Category numbers rest on 2-6 incidents each.
 - **Held out.** One held-out incident's v1 tool output was viewed during development; see the Provenance section of `report.md`.
 - **Temperature 0.** The 5-run spread measures nondeterminism in the model APIs, not sampling.
-- **Partial Gemini batches.** Gemini v0 and v1 are partial, and their ablations have not run yet. This page will be updated when they finish.
+- **Gemini ablations pending.** The vague-alert and no-priors runs on Gemini are quota-bound and still running; this page will add them when they finish.

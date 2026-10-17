@@ -4,11 +4,10 @@ An LLM agent that investigates microservice incidents. Given a symptom ("custome
 
 RootCause is mainly a **benchmark**: is an LLM agent actually better than a simple rule, and where? Every answer is scored against ground truth on 20 recorded incidents. The scoring rules were fixed before the first run, there are no-fault controls, each agent batch is planned for 5 runs per incident (3 for the Gemini ablations), and a held-out split is kept out of tuning (one exception, disclosed under Provenance in the report).
 
-> **Status, as of 2026-10-15.** Everything is built; not every agent batch is finished yet.
-> - **Complete:** the heuristic; agent v1 on Nemotron (100 runs); agent v0 on Nemotron; the no-priors ablation on Nemotron.
-> - **Running:** the vague-alert ablation on Nemotron.
-> - **Partial:** agent v0 on Gemini (32/100 runs) and agent v1 on Gemini (64/100 runs), paused while the Nemotron batches ran.
-> - **Queued:** the Gemini ablations.
+> **Status, as of 2026-10-17.** Everything is built, and every main batch is complete.
+> - **Complete:** the heuristic; agents v0 and v1 on Gemini and on Nemotron (100 runs each); on Nemotron, the no-priors, vague-alert and 30-step ablations.
+> - **Running:** the Gemini vague-alert and no-priors ablations (the free tier allows about 40 runs a day).
+> - **Headline:** the model matters more than the tools. With the same tools, Nemotron beats Gemini Flash-Lite by 0.26 on fault incidents (95% interval +0.10 to +0.44), while the change-aware tools change nothing measurable on either model, and no agent is clearly better than the simple heuristic.
 >
 > The numbers are in [`docs/results/report.md`](docs/results/report.md), which marks partial batches as partial; what they show (model vs tools vs alert vs prompt) is in [`docs/results/agents.md`](docs/results/agents.md). Two small decision models, Laya and Hunch, both scored below the heuristic zero-shot, so no small-model-then-agent cascade was built ([`laya.md`](docs/results/laya.md), [`hunch.md`](docs/results/hunch.md)).
 
