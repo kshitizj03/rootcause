@@ -220,7 +220,7 @@ python -m rootcause summary my-agent
 | category | the incident category, then "all incidents" (every non-control) |
 | scenarios | scenarios with records; `n/m` when some of the library's `m` have none |
 | runs | records per scenario; `lo-hi` when a batch is uneven (stopped part-way) |
-| accuracy (mean +/- sd) | mean over scenarios of each scenario's mean `correct`; sd across run indices that cover every scenario |
+| accuracy (mean +/- sd) | mean over scenarios of each scenario's mean `correct`; sample sd (n - 1) across run indices that cover every scenario |
 | top-3 | as above for `top3` (not shown for controls) |
 | fault type (cause+type) | `fault_type_ok` |
 | false alarm | `false_alarm`, controls only |

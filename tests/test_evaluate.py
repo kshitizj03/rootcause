@@ -84,8 +84,6 @@ def test_summarise_means_and_spread_over_runs(tmp_path):
     assert "| easy |" in evaluate.format_summary(list(rows.values()))
 
 
-# --- partial batches, record layout, console-safe table ---
-
 def test_summarise_exposes_uneven_records_per_scenario(tmp_path):
     for sid, k in [("p1", 0), ("p1", 1), ("p1", 2), ("p2", 0)]:
         write_record(tmp_path / "x", sid, "easy", k, 1.0)
@@ -117,8 +115,6 @@ def test_solver_info_cannot_overwrite_record_fields(lib):
     assert (rec["scenario"], rec["category"], rec["run"]) == ("pay", "easy", 0)
     assert rec["seconds"] >= 0 and isinstance(rec["report"], dict) and isinstance(rec["score"], dict) and rec["extra"] == 1
 
-
-# --- scenario-balanced table, run-major order, code version ---
 
 def test_uneven_records_give_scenario_balanced_rates_and_no_sd(tmp_path):
     # p1 solved 5 times, p2 failed once: balanced accuracy is (1 + 0) / 2, not 5/6
@@ -153,7 +149,7 @@ def test_format_dashes_for_meaningless_cells_and_footnotes_the_two_fault_metrics
     write_record(tmp_path / "x", "c1", "control", 0, 0.0)
     lines = evaluate.format_summary(evaluate.summarise("x", out_dir=tmp_path)).splitlines()
     cells = {l.split("|")[1].strip(): [c.strip() for c in l.split("|")[2:-1]] for l in lines if l.startswith("| ") and "category" not in l}
-    # columns: scenarios, runs, accuracy, top-3, fault type, false alarm, abstain
+    # columns: scenarios, runs, accuracy, top-3, fault type, false alarm, abstain, grounded, distinctive, errors
     assert cells["easy"][4:6] == ["1.00", "-"] and cells["all incidents"][5] == "-"
     assert cells["control"][3] == "-" and cells["control"][4] == "-" and cells["control"][5] == "1.00"
     assert "fault type (cause+type)" in lines[0]

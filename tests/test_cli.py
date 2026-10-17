@@ -218,12 +218,6 @@ def test_leak_check_without_the_vendored_demo_exits_2_saying_what_is_missing(mon
     assert "needs the vendored OpenTelemetry Demo" in capsys.readouterr().err
 
 
-def test_runs_must_be_positive():
-    with pytest.raises(SystemExit):
-        cli.build_parser().parse_args(["eval", "heuristic", "--runs", "0"])
-    assert cli.build_parser().parse_args(["eval", "heuristic", "--runs", "3"]).runs == 3
-
-
 # --- record ---
 
 @pytest.fixture
@@ -246,11 +240,6 @@ def test_record_unknown_or_missing_ids_exit_2(rec, capsys):
     assert cli.main(["record"]) == 2
     assert "give scenario ids or --all" in capsys.readouterr().out
     assert rec == []
-
-
-def test_cli_solver_keys_are_the_reported_solvers():
-    from rootcause import evaluate
-    assert set(cli.SOLVERS) == {s for s in evaluate.SOLVER_ORDER if not s.startswith(("laya-", "hunch-"))}
 
 
 def test_record_validation_failure_exit_2_and_nothing_recorded(rec, monkeypatch, capsys):
@@ -458,6 +447,8 @@ def test_resanitize_bad_snapshot_is_reported_skipped_and_exit_nonzero(resan, sna
     assert [r["scenario"] for r in _rows(snaps)[2:]] == ["s2"]  # no row for the failed id
 
 
+# --- eval and summary ---
+
 def test_eval_and_summary_commands_parse():
     p = cli.build_parser()
     a = p.parse_args(["eval", "heuristic"])
@@ -492,7 +483,11 @@ def test_eval_without_tracing_never_imports_the_opentelemetry_module(monkeypatch
     assert cli.main(["eval", "heuristic"]) == 0
 
 
-# --- eval exit codes and summary messages ---
+def test_runs_must_be_positive():
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["eval", "heuristic", "--runs", "0"])
+    assert cli.build_parser().parse_args(["eval", "heuristic", "--runs", "3"]).runs == 3
+
 
 def test_eval_unknown_or_unrecorded_ids_exit_2_and_run_nothing(monkeypatch, capsys):
     from rootcause import evaluate
@@ -558,13 +553,17 @@ def test_summary_with_no_records_says_so(monkeypatch, capsys, solver):
     assert f"no runs recorded for {solver}" in capsys.readouterr().out
 
 
-# --- solver table, one model per batch, expected counts ---
+# --- solvers ---
+
+def test_cli_solver_keys_are_the_reported_solvers():
+    from rootcause import evaluate
+    assert set(cli.SOLVERS) == set(evaluate.SOLVER_ORDER) and not set(cli.SOLVERS) & set(evaluate.EXPERIMENT_SOLVERS)
+
 
 def test_eval_agent_pins_the_batch_to_one_model(monkeypatch):
     from rootcause import agent
     _stub_eval(monkeypatch, lambda name, solve, runs, ids, stop_on=(): {"completed": 0, "stopped": None})
     monkeypatch.setattr(agent, "Agent", RecordingAgent)
-    RecordingAgent.instances.clear()
     assert cli.main(["eval", "agent-v0"]) == 0
     # a per-day quota must stop the batch, not switch models mid-table
     assert [a.kw for a in RecordingAgent.instances] == [{"models": agent.MODELS[:1], "attempts": 5, "name": "agent-v0"}]
@@ -594,7 +593,6 @@ def test_summary_reads_records_by_name_without_building_a_model_client(monkeypat
 
 
 def test_every_built_in_solver_records_under_its_own_name(monkeypatch):
-    from agent_fakes import RecordingAgent
     from rootcause import agent
     monkeypatch.setattr(agent, "Agent", RecordingAgent)
     monkeypatch.setattr(agent, "make_nvidia_client", lambda: "nvidia-client")

@@ -4,8 +4,9 @@ import random
 from helpers import flat_log, flat_span, series, write_snapshot
 from rootcause import snapshot, tools_v1
 
-# well-typed but extreme values for each parameter kind: a tool must answer them itself, never through call()'s
-# catch-all "bad call" path, which exists for malformed input and would hide a bug in the tool
+# extreme and loosely typed values a model may send (numbers as strings, "yes"/"1"/0 for booleans, floats for integers):
+# a tool must answer them itself, never through call()'s catch-all "bad call" path, which exists for malformed input and
+# would hide a bug in the tool
 VALUES = {
     "service": ["payment", "PAYMENT", " payment ", "nope", "", "支付", "a" * 300],
     "signal": ["error_ratio", "p95_ms", "mem_mb", "cpu_cores", "rps", "uptime_s", "nope", ""],
@@ -21,7 +22,7 @@ VALUES = {
 }
 
 
-def test_well_typed_extreme_arguments_never_reach_the_catch_all(tmp_path):
+def test_extreme_and_loosely_typed_arguments_never_reach_the_catch_all(tmp_path):
     spans = [flat_span(span_id=f"s{i}", error=i % 3 == 0, message="boom" if i % 3 == 0 else "") for i in range(30)]
     logs = [flat_log("payment", f"charge failed {i}", ts=f"1970-01-01T00:{10 + i // 6:02d}:{i % 6 * 10:02d}") for i in range(30)]
     path = write_snapshot(tmp_path / "incident__x", spans=spans, logs=logs,

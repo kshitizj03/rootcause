@@ -18,8 +18,8 @@ def test_restarts_counts_uptime_drops():
     pts = [[0, 100], [10, 110], [20, 5], [30, 15], [40, 2]]
     assert signals.restarts(pts, 0, 40) == 2
     assert signals.restarts(pts, 0, 10) == 0
-    assert signals.restarts(pts, 30, 40) == 1  # drop at window start counts
-    assert signals.restarts(pts, 20, 40) == 2  # drop exactly at start + drop before end
+    assert signals.restarts(pts, 30, 40) == 1  # rise from the point before start, then a drop exactly at the window end
+    assert signals.restarts(pts, 20, 40) == 2  # drop at the window start (seen via the point before start) + drop exactly at the end
     assert signals.restarts(pts, 100, 150) is None  # no in-window points
 
 
