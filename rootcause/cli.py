@@ -14,7 +14,7 @@ from pathlib import Path
 
 from openai import OpenAI, OpenAIError  # OpenAIError: the model clients' base error
 
-from rootcause import config, evaluate, harness, heuristic, inject, sanitize, scenarios, snapshot, stack
+from rootcause import config, evaluate, harness, heuristic, inject, release, sanitize, scenarios, snapshot, stack
 from rootcause.score import Report, make_report, report_to_dict
 
 
@@ -180,6 +180,13 @@ def build_parser():
     sub.add_parser("site", help="write site/data (index + per-incident JSON) for the replay site from all recorded runs")
     mc = sub.add_parser("mcp", help="serve the v1 tools for one snapshot over MCP (stdio)")
     mc.add_argument("path")
+    pk = sub.add_parser("pack-data", help="build the data release archive (snapshots scored on, run records) and its "
+                                          "checksum")
+    pk.add_argument("--out", type=Path, help="archive path (default: data/rootcause-data-v1.zip)")
+    fd = sub.add_parser("fetch-data", help="download the data release, check its checksum and unpack it into data/")
+    fd.add_argument("--from", dest="source", help="archive path or URL (default: the GitHub release)")
+    fd.add_argument("--force", action="store_true", help="overwrite files that already exist under data/")
+    sub.add_parser("prompts", help="write docs/prompts.md (prompts, alert and tool schemas) from the code")
     return p
 
 
@@ -507,6 +514,9 @@ def main(argv=None):
     except (evaluate.NoValidSnapshot, evaluate.SnapshotChanged) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    except (release.PrivateContent, release.FetchError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     except SolverError as e:  # the user's own code failed: no stack reset or API retry would help
         print(f"error: {e} -- completed runs are kept", file=sys.stderr)
         return 1
@@ -570,4 +580,17 @@ def _dispatch(args):
     elif args.cmd == "mcp":
         from rootcause import mcp_server
         return mcp_server.main([args.path])
+    elif args.cmd == "pack-data":
+        out = args.out or config.DATA / release.ARCHIVE
+        digest = release.pack(out)
+        print(f"wrote {out} and {out.name}.sha256\nsha256 {digest}\n"
+              f"when the data-v1 release is cut: DATA_SHA256 = \"{digest}\" in rootcause/config.py")
+    elif args.cmd == "fetch-data":
+        n = release.fetch(args.source or release.URL, force=args.force)
+        print(f"unpacked {n} files into {config.DATA}")
+    elif args.cmd == "prompts":
+        from rootcause import agent
+        path = config.ROOT / "docs" / "prompts.md"
+        path.write_text(agent.prompts_markdown(), encoding="utf-8", newline="\n")
+        print(f"wrote {path}")
     return 0

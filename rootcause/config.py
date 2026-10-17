@@ -8,6 +8,9 @@ DATA = ROOT / "data"
 SNAPSHOTS = DATA / "snapshots"
 STATE_FILE = DATA / "state.json"
 SCENARIOS_DIR = ROOT / "scenarios"
+# SHA-256 of the data release archive that fetch-data accepts: a placeholder until the data-v1 release is cut, then the
+# digest `rootcause pack-data` prints for the published archive
+DATA_SHA256 = "unset: filled in when the data-v1 release is cut"
 
 COMPOSE_FILES = ["compose.yaml", "compose.full.yaml", "compose.observability.yaml",
                  "compose.extras.yaml", str(ROOT / "infra" / "compose.ports.yaml")]
