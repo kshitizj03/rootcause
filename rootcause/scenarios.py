@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from rootcause import config, signals
+from rootcause import config, sanitize, signals
 from rootcause.inject import docker_errors
 from rootcause.score import FAULT_TYPES
 
@@ -42,8 +42,9 @@ def validate(s, variants, targeting_errs=None):
         errs.append(f"unknown category {s.category}")
     if not s.alert.strip():
         errs.append("empty alert")
-    for name in variants:
-        if name.lower() in s.alert.lower():
+    for name in variants:  # also spelled out: "Kafka queue problems" names kafkaQueueProblems
+        words = sanitize.flag_words(name) or [name]
+        if re.search(r"\b" + r"[\s_.-]*".join(map(re.escape, words)) + r"\b", s.alert, re.IGNORECASE):
             errs.append(f"alert mentions flag {name}")
     for flag, variant in (s.inject.get("flags") or {}).items():
         if flag not in variants:

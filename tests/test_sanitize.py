@@ -93,6 +93,23 @@ def test_scan_snapshot_raises_filenotfound_for_missing_files(tmp_path):
         sanitize.scan_snapshot(tmp_path, NAMES)
 
 
+def test_a_flag_name_inside_another_word_is_not_a_leak_but_a_camelcase_hump_is():
+    for ok in ("readFailure", "upload_failure", "UPLOAD_FAILURE", "thread.failure", "loadHighCpu"):
+        assert sanitize.find_leaks(ok, NAMES) == [], ok
+    for leak in ("isAdFailureEnabled", "flag=adFailure", "ad_failure", "AD-HIGH-CPU", "x.adManualGc"):
+        assert sanitize.find_leaks(leak, NAMES), leak
+    logs = [{"service": "ad", "body": "readFailure retried"}, {"service": "ad", "body": "adFailure on"}]
+    assert [l["body"] for l in sanitize.sanitize_logs(logs, NAMES)] == ["readFailure retried"]
+
+
+def test_scan_snapshot_scans_the_alert_agents_read_in_meta_json(tmp_path):
+    (tmp_path / "meta.json").write_text(json.dumps({"alert": "kafka_queue_problems detected", "fault_start": 1}))
+    (tmp_path / "metrics.json").write_text(json.dumps({}))
+    snapshot._write_jsonl_gz(tmp_path / "logs.jsonl.gz", [])
+    snapshot._write_jsonl_gz(tmp_path / "spans.jsonl.gz", [])
+    assert sanitize.scan_snapshot(tmp_path, NAMES) == {"meta.json": ["kafka_queue_problems"]}
+
+
 def test_find_leaks_separator_tolerant_flag_matching():
     for variant in ("kafka_queue_problems", "kafka-queue-problems", "kafka.queue.problems", "KAFKA_QUEUE_PROBLEMS"):
         assert sanitize.find_leaks(variant, NAMES) == [variant.lower()], variant

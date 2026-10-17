@@ -67,6 +67,13 @@ def test_validate_rejects(case, needle):
     assert any(needle in e for e in errs), f"expected {needle!r}, got: {errs}"
 
 
+def test_alert_must_not_spell_out_a_flag_name_but_may_contain_its_letters():
+    variants = {**VARIANTS, "kafkaQueueProblems": {"on": 1}, "adFailure": {"on": 1}}
+    assert "alert mentions flag kafkaQueueProblems" in scenarios.validate(make(alert="Kafka queue problems detected"), variants)
+    assert "alert mentions flag adFailure" in scenarios.validate(make(alert="Ad failure on the home page"), variants)
+    assert scenarios.validate(make(alert="A bad failure at checkout"), variants) == []
+
+
 def test_alert_leak_checks_spaced_and_plural_forms():
     """Alert leak checks should catch spaced/plural forms of service names."""
     # "product catalog" with cause "product-catalog" should be rejected

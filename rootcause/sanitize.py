@@ -19,18 +19,20 @@ def flag_names(flags_file=config.FLAGS_FILE):
     return sorted(json.loads(Path(flags_file).read_text(encoding="utf-8"))["flags"])
 
 
+def flag_words(name):
+    """Split a camelCase flag name: "kafkaQueueProblems" -> ["kafka", "Queue", "Problems"]."""
+    return re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+", name)
+
+
+# A flag name must start a word: after a non-alphanumeric, or at a camelCase hump (isAdFailure), never inside a word
+# ("readFailure", "upload_failure" hold "adfailure" but name no flag). Case-sensitive, inside the case-blind pattern.
+_WORD_START = r"(?-i:(?<![A-Za-z0-9])|(?<=[a-z0-9])(?=[A-Z]))"
+
+
 def leak_pattern(names):
-    # Convert camelCase flag names to separator-tolerant patterns
-    sep_names = []
-    for n in names:
-        # Split camelCase: "kafkaQueueProblems" -> ["kafka", "Queue", "Problems"]
-        words = re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+", n)
-        if words:
-            # Join with optional separators (no space): kafka[_\-.]?queue[_\-.]?problems
-            pattern = r"[_\-.]?".join(re.escape(w) for w in words)
-            sep_names.append(pattern)
-        else:
-            sep_names.append(re.escape(n))
+    # camelCase flag names as separator-tolerant patterns (no space): kafka[_\-.]?queue[_\-.]?problems
+    sep_names = [_WORD_START + (r"[_\-.]?".join(re.escape(w) for w in words) if (words := flag_words(n)) else re.escape(n))
+                 for n in names]
     return re.compile("|".join(sep_names + PHRASES), re.IGNORECASE)
 
 
@@ -137,6 +139,9 @@ def find_leaks(text, names):
 
 def scan_snapshot(path, names):
     path, found = Path(path), {}
+    meta = path / "meta.json"  # agents read its alert too
+    if meta.exists() and (hits := find_leaks(str(json.loads(meta.read_text(encoding="utf-8")).get("alert", "")), names)):
+        found["meta.json"] = hits
     for name in SNAPSHOT_TOOL_FILES:
         p = path / name
         if not p.exists():
