@@ -127,27 +127,44 @@ def test_report_has_a_paired_section_for_solver_pairs_with_records(tmp_path, mon
         write(runs, "agent-v1", sid, cat, 0, v)
     md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["heuristic", "agent-v0", "agent-v1"]).read_text(encoding="utf-8")
     sec = md.split("## Paired comparisons")[1].split("\n## ")[0]
-    assert "| agent-v1 vs heuristic | 2/2 | 1 / 1 / 0 | +0.50 | n/a (too few incidents or no spread) |" in sec  # no controls
+    na = "n/a (too few incidents or no spread)"  # fault-only columns first, then the same pair with the control
+    assert f"| agent-v1 vs heuristic | 2/2 | 1 / 1 / 0 | +0.50 | {na} | +0.00 | {na} |" in sec
     assert "agent-v0" not in sec  # no records, no row
 
 
-def test_step_limit_section_splits_fault_runs_by_whether_they_hit_the_limit(tmp_path, monkeypatch):
+def test_step_limit_section_counts_runs_told_the_limit_was_reached_not_turn_counts(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "HELDOUT", ())
     monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario(s, "easy", "x", {}, {}, []) for s in "abcd"]
                         + [scenarios.Scenario("c0", "control", "x", {}, {}, [])])
     runs = tmp_path / "runs"
-    for sid, turns, verdict, correct in (("a", 15, "no_incident", 0.0), ("b", 15, "incident", 1.0), ("c", 4, "incident", 1.0),
-                                         ("d", 15, "no_incident", 0.0), ("c0", 15, "no_incident", 1.0)):
-        write(runs, "agent-v1", sid, "control" if sid == "c0" else "easy", 0, correct)
-        f = runs / "agent-v1" / f"{sid}__0.json"
+    told = [{"role": "user", "content": "Step limit reached. Give your final answer now as ONLY the JSON object."}]
+
+    def put(solver, sid, turns, verdict, correct, messages=(), **flag):
+        write(runs, solver, sid, "control" if sid == "c0" else "easy", 0, correct)
+        f = runs / solver / f"{sid}__0.json"
         r = json.loads(f.read_text())
-        r["turns"], r["report"]["verdict"] = turns, verdict
+        r.update(turns=turns, messages=list(messages), **flag)
+        r["report"]["verdict"] = verdict
         f.write_text(json.dumps(r))
+
+    # 15-turn limit: a and d were told; b answered on its 15th turn by itself; c0 is a control (left out)
+    put("agent-v1", "a", 15, "no_incident", 0.0, told)
+    put("agent-v1", "b", 15, "incident", 1.0)
+    put("agent-v1", "c", 4, "incident", 1.0)
+    put("agent-v1", "d", 15, "no_incident", 0.0, told)
+    put("agent-v1", "c0", 15, "no_incident", 1.0, told)
+    # 30-turn limit: 15 turns is well inside it; only the 30-turn run was told; a newer record carries the flag
+    put("agent-v1-nemotron-steps30", "a", 15, "incident", 1.0)
+    put("agent-v1-nemotron-steps30", "b", 30, "no_incident", 0.0, told)
+    put("agent-v1-nemotron-steps30", "c", 30, "incident", 1.0, hit_step_limit=False)
+    put("agent-v1-nemotron-steps30", "d", 12, "incident", 0.0, hit_step_limit=True)
     write(runs, "heuristic", "a", "easy", 0, 1.0, tokens=False)
-    md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["heuristic", "agent-v1"]).read_text(encoding="utf-8")
+    md = report.build(out_dir=tmp_path / "out", runs_dir=runs,
+                      solvers=["heuristic", "agent-v1", "agent-v1-nemotron-steps30"]).read_text(encoding="utf-8")
     sec = md.split("## Step limit")[1].split("\n## ")[0]
-    # 4 fault runs (the control is left out); 3 hit the 15-step limit; of those 2 said no incident, 1 was right
-    assert "| agent-v1 | 4 | 3 (75%) | 2 of 3 | 0.33 | 1.00 |" in sec
+    assert "15 model turns; 30 for the 30-step ablation" in sec
+    assert "| agent-v1 | 4 | 2 (50%) | 2 of 2 | 0.00 | 1.00 |" in sec
+    assert "| agent-v1-nemotron-steps30 | 4 | 2 (50%) | 1 of 2 | 0.00 | 1.00 |" in sec
     assert "heuristic" not in sec  # no model, no step limit
 
 

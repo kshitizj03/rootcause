@@ -28,13 +28,13 @@ MIN_PAIRED = 5  # fewer shared incidents than this: no interval
 # (a, b): is a better than b? Each is shown only when both have records.
 PAIRS = [("agent-v0", "heuristic"), ("agent-v1", "heuristic"), ("agent-v1", "agent-v0"),
          ("agent-v1-nopriors", "agent-v1"), ("agent-v1-vague", "agent-v1"), ("agent-v0-nemotron", "heuristic"), ("agent-v1-nemotron", "heuristic"),
-         ("agent-v1-nemotron", "agent-v1"), ("agent-v1-nemotron", "agent-v0-nemotron"),
+         ("agent-v1-nemotron", "agent-v1"), ("agent-v0-nemotron", "agent-v0"), ("agent-v1-nemotron", "agent-v0-nemotron"),
          ("agent-v1-nemotron-nopriors", "agent-v1-nemotron"), ("agent-v1-nemotron-vague", "agent-v1-nemotron"),
          ("agent-v1-nemotron-steps30", "agent-v1-nemotron")]
 FLASH_NOTE = ("A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run "
               "takes about 12-15 requests (up to 17), so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparison is instead "
-              "agent-v1-nemotron: agent v1 unchanged (prompt, tools, step limit) on `nvidia/nemotron-3-super-120b-a12b` "
-              "through NVIDIA's free trial endpoint.")
+              "agent-v0-nemotron and agent-v1-nemotron: agents v0 and v1 unchanged (prompt, tools, step limit) on "
+              "`nvidia/nemotron-3-super-120b-a12b` through NVIDIA's free trial endpoint.")
 
 
 def _table(header, rows):
@@ -89,8 +89,9 @@ def _categories(rows):
 
 def _accuracy_tables(data, solvers):
     out = ["## Accuracy by category",
-           "Accuracy is the mean over scenarios of each scenario's mean; ± is the sd across run indices "
-           "(shown when at least two complete runs exist). The held-out split was frozen before any agent-v1 tuning."]
+           "Accuracy is the mean over scenarios of each scenario's mean; ± is the sample sd across complete run indices "
+           "(shown when at least two complete runs exist). The held-out split was frozen before any agent-v1 tuning. "
+           "One held-out incident was viewed during agent-v1 development; see the disclosure under Provenance."]
     for split in SPLITS:
         rows = _rows(data, split, solvers)
         cats = _categories(rows)
@@ -150,26 +151,34 @@ def paired(a, b, draws=10000, seed=0):
             "mean_diff": sum(d) / n, "ci": ci}
 
 
+def _ci(p):
+    return f"{p['ci'][0]:+.2f} to {p['ci'][1]:+.2f}" if p["ci"] else "n/a (too few incidents or no spread)"
+
+
 def _paired_section(data, solvers):
+    lib = {s.id for s in scenarios.load_all()}
     faults = {s.id for s in scenarios.load_all() if s.category != "control"}
     rows, partial = [], {}
     for a, b in PAIRS:
         if a in solvers and b in solvers and data["records"][a] and data["records"][b]:
-            ma, mb = ({sid: m for sid, (m, _) in _means(data["records"][s]).items() if sid in faults} for s in (a, b))
-            p = paired(ma, mb)
+            ma, mb = ({sid: m for sid, (m, _) in _means(data["records"][s]).items()} for s in (a, b))
+            p = paired({k: v for k, v in ma.items() if k in faults}, {k: v for k, v in mb.items() if k in faults})
             if p:
-                ci = f"{p['ci'][0]:+.2f} to {p['ci'][1]:+.2f}" if p["ci"] else "n/a (too few incidents or no spread)"
+                every = paired({k: v for k, v in ma.items() if k in lib}, {k: v for k, v in mb.items() if k in lib})
                 rows.append([f"{a} vs {b}", f"{p['n']}/{len(faults)}", f"{p['wins']} / {p['ties']} / {p['losses']}",
-                             f"{p['mean_diff']:+.2f}", ci])
+                             f"{p['mean_diff']:+.2f}", _ci(p), f"{every['mean_diff']:+.2f}", _ci(every)])
                 partial.update({s: note for s in (a, b) if (note := _partial(data, s, "all"))})
-    return ["## Paired comparisons (all split, fault incidents)",
+    return ["## Paired comparisons (all split, fault incidents; the last two columns add the controls)",
             "Each solver's mean score per incident, compared on the incidents both have run. Wins / ties / losses count "
             "incidents where the first solver scored higher / the same / lower, by any margin. A per-incident mean of 0.5 "
             "can mean one of two causes found or half of the runs right. The 95% interval is a percentile bootstrap over "
             "incidents (10,000 resamples, fixed seed); at this few incidents it is approximate and somewhat too narrow, and "
             f"it is not given below {MIN_PAIRED} shared incidents. An interval that includes 0 means this benchmark cannot "
-            "tell the two apart.",
-            _table(["comparison", "incidents", "wins / ties / losses", "mean difference", "95% interval"], rows)
+            "tell the two apart. About a dozen comparisons are shown with no multiple-comparison correction; an interval "
+            "that only just excludes 0 is suggestive, not established. Fault-only differences ignore false alarms on the "
+            f"{len(lib - faults)} controls; the last two columns include them.",
+            _table(["comparison", "incidents", "wins / ties / losses", "mean difference", "95% interval",
+                    f"mean difference (all {len(lib)}, controls incl.)", f"95% interval (all {len(lib)})"], rows)
             if rows else "No pair of solvers has run a shared fault incident yet.",
             *(f"{s}: partial batch ({note})" for s, note in partial.items())]
 
@@ -234,20 +243,29 @@ def _failure_section(data, solvers):
             _table(["solver", "wrong runs", *FAILURE_MODES], rows) if rows else "No runs yet."]
 
 
+def hit_step_limit(r):
+    """Whether the agent was told "Step limit reached": the record's flag, or for records from before the flag, that
+    message in its history (a run that answered on its last allowed turn did not hit the limit)."""
+    if "hit_step_limit" in r:
+        return bool(r["hit_step_limit"])
+    return any(m.get("role") == "user" and str(m.get("content", "")).startswith("Step limit reached")
+               for m in r.get("messages") or [])
+
+
 def _step_limit_section(data, solvers):
-    from rootcause.agent import MAX_STEPS  # lazily: the report needs no model client otherwise
     rows = []
     for s in solvers:
         recs = [r for r in data["records"][s] if r["category"] != "control" and "turns" in r]
         if not recs:
             continue
-        hit = [r for r in recs if r["turns"] >= MAX_STEPS]
-        free = [r for r in recs if r["turns"] < MAX_STEPS]
+        hit = [r for r in recs if hit_step_limit(r)]
+        free = [r for r in recs if not hit_step_limit(r)]
         acc = lambda rs: fmt2(sum(r["score"]["correct"] for r in rs) / len(rs)) if rs else "-"
         rows.append([s, str(len(recs)), f"{len(hit)} ({len(hit) / len(recs):.0%})",
                      f"{sum(r['report']['verdict'] == 'no_incident' for r in hit)} of {len(hit)}", acc(hit), acc(free)])
     return ["## Step limit (all split, fault runs)",
-            f"An agent that is still calling tools after {MAX_STEPS} model turns is told to give its final answer. "
+            "An agent still calling tools when it reaches its step limit (15 model turns; 30 for the 30-step ablation) "
+            "is told to give its final answer. "
             "This splits each agent's fault runs by whether that happened: how many hit the limit, how many of those then "
             "answered \"no incident\", and the accuracy (mean over runs, not per scenario) with and without hitting it.",
             _table(["solver", "fault runs", "hit the limit", "then said no incident", "accuracy when hit",
@@ -305,7 +323,7 @@ def _agreement_section(data, solvers):
         if a := agreement(data["records"][s]):
             rows.append([s, str(a[0]), f"{a[1]} of {a[0]}", fmt2(a[2])])
     return ["## Run-to-run agreement (all incidents)",
-            "The agents run at temperature 0, yet their runs still differ, so this measures how far a single run can be "
+            "The built-in agents run at temperature 0, yet their runs still differ, so this measures how far a single run can be "
             "trusted. A run's top answer is its first cause's service, or its verdict when it names no cause. Pairwise "
             "agreement is the share of run pairs on a scenario that give the same top answer, averaged over the "
             "scenarios with at least 2 runs; controls included. With fewer runs per scenario every run agrees more "
@@ -354,8 +372,9 @@ def _coverage_section(data, solvers):
     out = ["## Accuracy vs coverage (all split, record-level)", "![accuracy vs coverage](figures/coverage.png)",
            "Coverage is the fraction of all runs whose answer is at or above the confidence threshold (abstentions never count). "
            "Accuracy here is over answered runs only, so the lowest-threshold point can exceed the tables' accuracy, which counts abstentions as wrong."]
+    agents = _agents(data, solvers)
     for s in solvers:
-        if not s.startswith("agent") or not data["records"][s]:
+        if s not in agents or not data["records"][s]:
             continue
         curve = evaluate.coverage_curve(data["records"][s])
         if not curve:
@@ -443,9 +462,9 @@ def _bars(data, solvers):
 
 def _lines(data, solvers):
     def draw(ax):
-        drawn = False
+        drawn, agents = False, _agents(data, solvers)
         for s in (s for s in solvers if s in FIGURE_SOLVERS):
-            curve = evaluate.coverage_curve(data["records"][s]) if s.startswith("agent") else []
+            curve = evaluate.coverage_curve(data["records"][s]) if s in agents else []
             if curve:
                 drawn = True
                 ax.plot([p["coverage"] for p in curve], [p["accuracy"] for p in curve], marker="o", markersize=6, linewidth=2,
@@ -468,14 +487,15 @@ def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, 
            "accuracy (fraction of covered runs correct)", _lines(data, solvers), out_dir / "figures" / "coverage.png")
     sections = [["# RootCause evaluation report"], _accuracy_tables(data, solvers),
                 ["![accuracy by category](figures/accuracy_by_category.png)",
-                 "Bars: accuracy over all scenarios; error bars ± sd across run indices, clipped to 0-1 (none when fewer than two complete runs). "
+                 "Bars: accuracy over all scenarios; error bars ± sample sd across complete run indices, clipped to 0-1 (none when fewer than two complete runs). "
                  "A solver with no record in a category has no bar there."],
                 _rate_section(data, solvers, "## False alarms and abstentions (all split)",
                               "False alarm = claiming an incident on a control; abstain = insufficient evidence on an incident.",
                               [("control false-alarm rate", "control", "false_alarm"), ("incident abstain rate", "all incidents", "abstain")]),
                 _rate_section(data, solvers, "## Evidence (all split, incidents)",
                               "Grounded = cited evidence exists in the snapshot; distinctive = it also looks anomalous against the baseline "
-                              "(neither proves that the incident caused it).",
+                              "(neither proves that the incident caused it). The heuristic cites rows of the same change "
+                              "table this check reads, so its 1.00 is by construction.",
                               [("grounded", "all incidents", "grounded"), ("distinctive", "all incidents", "distinctive")],
                               skip=_evidence_skip(data)),
                 _paired_section(data, solvers), _failure_section(data, solvers), _step_limit_section(data, solvers), _agreement_section(data, solvers),
