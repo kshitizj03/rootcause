@@ -182,20 +182,46 @@ def test_reset_invalid_ncpu_is_an_error_and_state_stays_dirty(stack, state, bad)
 # --- error reporting ---
 
 @pytest.mark.parametrize("exc", [harness.DirtyStateError("dirty"), harness.RestoreError("restore failed"),
-                                 RuntimeError("reset incomplete")])
-def test_main_reports_stack_errors_in_one_line_with_hint(monkeypatch, capsys, exc):
-    def boom():
+                                 RuntimeError("capture broke")])
+def test_record_reports_stack_errors_in_one_line_with_one_reset_hint(rec, monkeypatch, capsys, exc):
+    def boom(*a, **k):
         raise exc
+    monkeypatch.setattr(harness, "record_all", boom)
+    assert cli.main(["record", "--all"]) == 3
+    err = capsys.readouterr().err.strip()
+    assert str(exc) in err and err.count("python -m rootcause reset-flags") == 1 and len(err.splitlines()) == 1
+
+
+def test_a_failed_reset_is_not_told_to_run_reset_flags(monkeypatch, capsys):
+    def boom():
+        raise RuntimeError("reset incomplete: docker ps: not found")
     monkeypatch.setattr(cli, "reset_stack", boom)
     assert cli.main(["reset-flags"]) == 3
     err = capsys.readouterr().err.strip()
-    assert str(exc) in err and "python -m rootcause reset-flags" in err and len(err.splitlines()) == 1
+    assert "reset incomplete" in err and "fix the errors listed, then re-run reset-flags" in err
+    assert "run `python -m rootcause reset-flags`" not in err
 
 
-def test_dirty_hint_names_the_real_command(state):
-    state.write_text(json.dumps({"dirty": True, "error": "x"}))
-    with pytest.raises(harness.DirtyStateError, match="python -m rootcause reset-flags"):
+def test_dirty_state_message_leaves_the_hint_to_the_cli(state):
+    state.write_text(json.dumps({"dirty": True, "error": "in flight: x"}))
+    with pytest.raises(harness.DirtyStateError, match="a restore failed or a recording was interrupted") as e:
         harness.wait_cooldown(state_file=state)
+    assert "reset-flags" not in str(e.value)  # cli.main adds it, once
+
+
+def test_leak_check_without_the_vendored_demo_exits_2_saying_what_is_missing(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(config, "SNAPSHOTS", tmp_path)
+    (tmp_path / "incident__1").mkdir()
+    real = sanitize.flag_names  # as without vendor/: the flag file does not exist
+    monkeypatch.setattr(sanitize, "flag_names", lambda: real(tmp_path / "vendor" / "demo.flagd.json"))
+    assert cli.main(["leak-check"]) == 2
+    assert "needs the vendored OpenTelemetry Demo" in capsys.readouterr().err
+
+
+def test_runs_must_be_positive():
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["eval", "heuristic", "--runs", "0"])
+    assert cli.build_parser().parse_args(["eval", "heuristic", "--runs", "3"]).runs == 3
 
 
 # --- record ---
@@ -513,14 +539,14 @@ def test_eval_with_an_unset_key_exits_2_naming_the_variable(monkeypatch, capsys,
     assert "set NVIDIA_API_KEY in .env (see .env.example)" in capsys.readouterr().err
 
 
-def test_stack_runtime_errors_still_exit_3_with_the_hint(monkeypatch, capsys):
+def test_runtime_errors_outside_the_stack_exit_3_without_the_reset_hint(monkeypatch, capsys):
     from rootcause import evaluate
 
     def boom(*a, **k):
-        raise RuntimeError("stack broke")
+        raise RuntimeError("something broke")
     monkeypatch.setattr(evaluate, "run", boom)
     assert cli.main(["eval", "heuristic"]) == 3
-    assert "reset-flags" in capsys.readouterr().err
+    assert "something broke" in (err := capsys.readouterr().err) and "reset-flags" not in err
 
 
 @pytest.mark.parametrize("solver", ["heuristic", "agent-v0"])
@@ -541,7 +567,7 @@ def test_eval_agent_pins_the_batch_to_one_model(monkeypatch):
     RecordingAgent.instances.clear()
     assert cli.main(["eval", "agent-v0"]) == 0
     # a per-day quota must stop the batch, not switch models mid-table
-    assert [a.kw for a in RecordingAgent.instances] == [{"models": agent.MODELS[:1], "attempts": 5}]
+    assert [a.kw for a in RecordingAgent.instances] == [{"models": agent.MODELS[:1], "attempts": 5, "name": "agent-v0"}]
 
 
 def test_eval_and_summary_resolve_solvers_through_the_solvers_table(monkeypatch):

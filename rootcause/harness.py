@@ -16,7 +16,7 @@ class RestoreError(RuntimeError):
 
 
 class DirtyStateError(RuntimeError):
-    """Raised when state file indicates a prior restore failed."""
+    """Raised when the state file is dirty: a restore failed, or a recording was killed before its restore ran."""
 
 
 def mark_restored(t, state_file=config.STATE_FILE):
@@ -40,7 +40,8 @@ def wait_cooldown(now=time.time, sleep=time.sleep, state_file=config.STATE_FILE)
         try:
             state = json.loads(state_file.read_text(encoding="utf-8"))
             if state.get("dirty"):
-                raise DirtyStateError(f"State is dirty (restore failed): {state.get('error', 'unknown error')}. Run `python -m rootcause reset-flags` to recover.")
+                raise DirtyStateError(f"State is dirty (a restore failed or a recording was interrupted): "
+                                      f"{state.get('error', 'unknown error')}")  # the CLI adds the reset-flags hint
             remaining = config.COOLDOWN_S - (t_now - state.get("last_restore", t_now))
         except (json.JSONDecodeError, ValueError, TypeError, AttributeError, UnicodeDecodeError):
             remaining = config.COOLDOWN_S

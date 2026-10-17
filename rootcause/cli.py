@@ -30,8 +30,9 @@ def slug(model):
 
 def _pick(base, model, default):
     """(record name, model kwargs): the solver's own model (default()), or the one given to eval with --model, whose
-    records go under base@model so they never mix with the built-in batch."""
-    return (f"{base}@{slug(model['models'][0])}", model) if model else (base, default())
+    records go under base@model so they never mix with the built-in batch. With --model a Nemotron solver is the same
+    agent on another model, so its name drops "-nemotron" (agent-v1-nemotron --model X records as agent-v1@x)."""
+    return (f"{base.replace('-nemotron', '')}@{slug(model['models'][0])}", model) if model else (base, default())
 
 
 def _gemini():
@@ -49,8 +50,7 @@ def _nemotron_kwargs():
 def _agent_v0_solver(model=None, default=_gemini, base=None):
     from rootcause import agent  # agent v0: naive tools, v0 prompt
     name, model = _pick(base or agent.NAME, model, default)
-    kw = {"name": name} if name != agent.NAME else {}  # agent v0 on Gemini keeps the Agent's default name
-    return name, agent.Agent(**model, attempts=5, **kw).solve, (agent.QuotaExhausted,)
+    return name, agent.Agent(**model, attempts=5, name=name).solve, (agent.QuotaExhausted,)
 
 
 def _v1(system, base, model, default=_gemini, vague=False, **kw):
@@ -131,11 +131,24 @@ class _Subparser(argparse.ArgumentParser):
             self._intermixed = False
 
 
+def _positive_int(text):
+    n = int(text)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {n}")
+    return n
+
+
+RUNS_HELP = "runs per scenario (resumes: existing runs are kept)"
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="rootcause")
     sub = p.add_subparsers(dest="cmd", required=True, parser_class=_Subparser)
-    for name in ("up", "down", "status", "list", "reset-flags"):
-        sub.add_parser(name)
+    for name, text in (("up", "start the demo stack (docker compose up)"), ("down", "stop the demo stack"),
+                       ("status", "probe Prometheus, Jaeger and OpenSearch for recent telemetry"),
+                       ("list", "list the scenario library"),
+                       ("reset-flags", "undo any injected fault and restart the cool-down")):
+        sub.add_parser(name, help=text)
     rec = sub.add_parser("record", help="inject scenarios and capture snapshots")
     rec.add_argument("ids", nargs="*")
     rec.add_argument("--all", action="store_true")
@@ -148,7 +161,7 @@ def build_parser():
     resan.add_argument("--dry-run", action="store_true", help="report what would be dropped; write nothing")
     ev = sub.add_parser("eval", help="run a solver over the recorded snapshots and score it")
     ev.add_argument("solver", choices=list(SOLVERS))
-    ev.add_argument("--runs", type=int, default=1)
+    ev.add_argument("--runs", type=_positive_int, default=1, help=RUNS_HELP)
     ev.add_argument("--trace", choices=["off", "otlp", "file"], default="off",
                     help="self-trace the agent with OpenTelemetry GenAI spans (otlp: localhost:4318, file: data/agent_traces.jsonl)")
     ev.add_argument("--model", help="run an agent solver on this model instead of its own (needs --base-url and --key-env)")
@@ -158,7 +171,7 @@ def build_parser():
     cu = sub.add_parser("eval-custom", help="run your own solver (module:function) over the recorded snapshots and score it")
     cu.add_argument("target", help="module:function, importable from the current directory")
     cu.add_argument("--name", required=True, help="record name: data/runs/<name>/")
-    cu.add_argument("--runs", type=int, default=1)
+    cu.add_argument("--runs", type=_positive_int, default=1, help=RUNS_HELP)
     cu.add_argument("ids", nargs="*")
     sm = sub.add_parser("summary", help="print the per-category score table for a solver's recorded runs")
     sm.add_argument("solver", help="a solver name, or any record name under data/runs (e.g. agent-v1@<model>)")
@@ -240,8 +253,17 @@ def _record(args):
     if problems:
         print(json.dumps(problems, indent=1))
         return 2
-    summaries = harness.record_all(chosen, sanitize.flag_names(), inject.Injector(), demo_commit=stack.demo_commit())
+    summaries = harness.record_all(chosen, _flag_names(), inject.Injector(), demo_commit=stack.demo_commit())
     return 0 if all(s["valid"] for s in summaries) else 1
+
+
+def _flag_names():
+    """The demo's flag names, which the leak scan looks for; a clear error without the vendored demo."""
+    try:
+        return sanitize.flag_names()
+    except FileNotFoundError as e:
+        raise _Usage(f"{config.FLAGS_FILE.name} not found under vendor/: this command needs the vendored OpenTelemetry "
+                     f"Demo (see the README's Quick start)") from e
 
 
 def _leak_check(args):
@@ -249,7 +271,7 @@ def _leak_check(args):
     if not paths:
         print("no snapshots found: nothing was scanned")
         return 1
-    names = sanitize.flag_names()
+    names = _flag_names()
     found = {}
     for p in paths:
         try:
@@ -271,7 +293,7 @@ def _revalidate(args, resanitize=False):
     if unknown or not ids:
         print(f"unknown or unrecorded scenario ids: {sorted(unknown)}" if unknown else "no recorded snapshots found")
         return 2
-    names = sanitize.flag_names()
+    names = _flag_names()
     all_valid = True
     for i in ids:
         path = latest[i]["path"]
@@ -289,17 +311,19 @@ def _revalidate(args, resanitize=False):
                                                           "leaks": res["leaks"],
                                                           "resanitized" if resanitize else "revalidated": True})
         if resanitize:
-            print(f"{i}: spans {counts['spans'][0]}->{counts['spans'][1]}, logs {counts['logs'][0]}->{counts['logs'][1]}, "
-                  f"metrics {counts['metrics'][0]}->{counts['metrics'][1]}, valid={res['valid']}")
+            print(f"{i}: {_counts_line(counts)}, valid={res['valid']}")
         else:
             print(f"{i}: valid={res['valid']} (was {latest[i].get('valid')})")
         all_valid &= res["valid"]
     return 0 if all_valid else 1
 
 
+def _counts_line(counts):
+    return ", ".join(f"{k} {counts[k][0]}->{counts[k][1]}" for k in ("spans", "logs", "metrics"))
+
+
 def _print_dry_run(i, counts):
-    print(f"{i}: spans {counts['spans'][0]}->{counts['spans'][1]}, logs {counts['logs'][0]}->{counts['logs'][1]}, "
-          f"metrics {counts['metrics'][0]}->{counts['metrics'][1]}")
+    print(f"{i}: {_counts_line(counts)}")
     if counts["duplicate_logs"]:
         print(f"  dropped {counts['duplicate_logs']} exact duplicate logs")
     for kind, label in (("spans", "name"), ("logs", "body")):
@@ -388,7 +412,7 @@ def _tagged(solve, **tags):
 def _run_batch(name, solve, args, stop_on=()):
     out = evaluate.run(name, solve, runs=args.runs, ids=args.ids or None, stop_on=stop_on)
     print(f"{out['completed']} new runs" + (f"; stopped: {out['stopped']}" if out["stopped"] else ""))
-    _print_summary(name, name)
+    _print_summary(name)
     if out["stopped"]:
         print("re-run the same command after the quota resets to resume")
         return 4
@@ -437,6 +461,10 @@ def custom_solver(fn):
         except (TypeError, ValueError) as e:
             raise SolverError(f"your solver's info must be a dict, got {type(info).__name__}") from e
         try:
+            json.dumps(info)  # evaluate.run stores it as JSON
+        except (TypeError, ValueError) as e:
+            raise SolverError(f"your solver's info is not JSON-serialisable: {e}") from e
+        try:
             report = make_report(report_to_dict(report) if isinstance(report, Report) else report)
         except (ValueError, TypeError, AttributeError) as e:
             info["parse_error"] = str(e)
@@ -464,9 +492,9 @@ def _eval_custom(args):
     return _run_batch(args.name, _tagged(custom_solver(fn), solver=args.name, target=args.target), args)
 
 
-def _print_summary(name, solver, split="all"):
+def _print_summary(name, split="all"):
     rows = evaluate.summarise(name, expected=evaluate.expected_counts(split), split=split)
-    print(evaluate.format_summary(rows) if rows else f"no runs recorded for {solver} ({split})")
+    print(evaluate.format_summary(rows) if rows else f"no runs recorded for {name} ({split})")
 
 
 def main(argv=None):
@@ -486,7 +514,13 @@ def main(argv=None):
         print(f"model API error: {e} -- completed runs are kept; re-run the same command to resume", file=sys.stderr)
         return 5
     except RuntimeError as e:  # includes harness.DirtyStateError / RestoreError
-        print(f"error: {e} -- run `python -m rootcause reset-flags` to reset the stack", file=sys.stderr)
+        if args.cmd == "reset-flags":  # never "run reset-flags" for reset-flags' own failure
+            hint = " -- fix the errors listed, then re-run reset-flags"
+        elif args.cmd in ("record", "up") or isinstance(e, (harness.DirtyStateError, harness.RestoreError)):
+            hint = " -- run `python -m rootcause reset-flags` to reset the stack"
+        else:  # report, site, mcp, eval: nothing to do with the stack
+            hint = ""
+        print(f"error: {e}{hint}", file=sys.stderr)
         return 3
 
 
@@ -524,7 +558,7 @@ def _dispatch(args):
     elif args.cmd == "summary":
         # a built-in solver's records are under its own name: no factory call, so no model client and no API key
         if args.solver in SOLVERS or args.solver in evaluate.recorded_solvers():
-            _print_summary(args.solver, args.solver, args.split)
+            _print_summary(args.solver, args.split)
         else:
             raise _Usage(f"no solver and no records called {args.solver!r}; built-in solvers: {', '.join(SOLVERS)}")
     elif args.cmd == "report":

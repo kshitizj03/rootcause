@@ -59,7 +59,8 @@ def test_model_override_replaces_only_the_model_and_client_on_every_agent_solver
         byo["solve"](snap)
         (kw_base, alert_base), (kw, alert) = [(a.kw, a.alerts[0]) for a in RecordingAgent.instances]
         assert same(kw) == same(kw_base) and alert == alert_base, solver  # prompt, tools, steps, attempts, alert
-        assert byo["name"] == kw["name"] == f"{base_name}@nvidia-nemotron-3-super-120b-a12b"
+        # a Nemotron solver on another model is that agent on that model: its records drop "-nemotron"
+        assert byo["name"] == kw["name"] == f"{base_name.replace('-nemotron', '')}@nvidia-nemotron-3-super-120b-a12b"
         assert byo["stop_on"] == base_stop == (agent.QuotaExhausted,)
         assert kw["models"] == ["nvidia/nemotron-3-super-120b-a12b"] and kw["provider"] == "models.example.com"
         assert kw["llm"] is FakeOpenAI.built[-1]
@@ -67,6 +68,21 @@ def test_model_override_replaces_only_the_model_and_client_on_every_agent_solver
                                        "max_retries": 0}
     out = capsys.readouterr()
     assert SECRET not in out.out + out.err
+
+
+@pytest.mark.parametrize("solver, name", [("agent-v1-nemotron", "agent-v1@x"), ("agent-v0-nemotron", "agent-v0@x"),
+                                          ("agent-v1-nemotron-steps30", "agent-v1-steps30@x"),
+                                          ("agent-v1-nemotron-vague", "agent-v1-vague@x")])
+def test_a_nemotron_solver_on_another_model_records_without_nemotron_in_its_name(byo, solver, name):
+    assert cli.main(["eval", solver, "--model", "x", *BYO[2:]]) == 0
+    assert byo["name"] == name
+
+
+def test_a_custom_solver_whose_info_is_not_json_exits_1_naming_it(lib, capsys, monkeypatch, tmp_path):
+    (tmp_path / "setinfo.py").write_text("def solve(snap):\n    return {'verdict': 'no_incident'}, {'seen': {1, 2}}\n")
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["eval-custom", "setinfo:solve", "--name", "setinfo"]) == 1
+    assert "your solver's info is not JSON-serialisable" in capsys.readouterr().err
 
 
 def test_record_name_is_the_solver_at_the_slugged_model(byo):
