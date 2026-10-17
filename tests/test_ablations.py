@@ -19,7 +19,6 @@ def seen():
 
 def test_ablation_solvers_change_one_thing(monkeypatch):
     monkeypatch.setattr(agent, "Agent", RecordingAgent)
-    RecordingAgent.instances.clear()
     snap = {"meta": {"alert": "Orders fail at checkout."}, "metrics": {}, "spans": [], "logs": []}
     for name in ("agent-v1", "agent-v1-nopriors", "agent-v1-vague"):  # agent-v1 is the control the ablations are compared with
         record_name, solve, stop_on = cli.SOLVERS[name]()
@@ -42,7 +41,6 @@ def test_ablation_solvers_change_one_thing(monkeypatch):
 def test_nemotron_solver_is_agent_v1_with_only_the_model_swapped(monkeypatch):
     monkeypatch.setattr(agent, "Agent", RecordingAgent)
     monkeypatch.setattr(agent, "make_nvidia_client", lambda: "nvidia-client")
-    RecordingAgent.instances.clear()
     snap = {"meta": {"alert": "Orders fail at checkout."}, "metrics": {}, "spans": [], "logs": []}
     for name in ("agent-v1", "agent-v1-nemotron"):
         record_name, solve, stop_on = cli.SOLVERS[name]()
@@ -71,14 +69,13 @@ def test_nemotron_variants_match_their_gemini_counterparts_except_the_model(monk
         assert record_name == nemotron
         (kw_g, alert_g), (kw_n, alert_n) = seen()
         assert same(kw_n) == same(kw_g) and alert_n == alert_g, nemotron
-        assert kw_n["llm"] == "nvidia-client" and kw_n["models"] == [agent.NEMOTRON] and kw_n["name"] == nemotron
+        assert kw_n["llm"] == "nvidia-client" and kw_n["models"] == [agent.NEMOTRON] and kw_n["name"] == nemotron             and kw_n.get("provider") == "nvidia", nemotron
 
 
 def test_step_budget_ablation_is_nemotron_v1_with_only_max_steps_doubled(monkeypatch):
     monkeypatch.setattr(agent, "Agent", RecordingAgent)
     monkeypatch.setattr(agent, "make_nvidia_client", lambda: "nvidia-client")
     snap = {"meta": {"alert": "Orders fail at checkout."}, "metrics": {}, "spans": [], "logs": []}
-    RecordingAgent.instances.clear()
     for name in ("agent-v1-nemotron", "agent-v1-nemotron-steps30"):
         record_name, solve, stop_on = cli.SOLVERS[name]()
         assert record_name == name and stop_on == (agent.QuotaExhausted,)

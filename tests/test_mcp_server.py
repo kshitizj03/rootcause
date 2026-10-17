@@ -1,4 +1,3 @@
-import inspect
 import sys
 
 import anyio
@@ -42,11 +41,6 @@ def test_mcp_output_equals_in_process_output(tmp_path):
         assert res.content[0].text == tools_v1.call(snap, n, a)
     assert [r.is_error for r in results] == [False] * len(every) + [True] * len(bad)
     assert "Incident alert: x." in init.instructions and "t=0" in init.instructions and "top_changes" in init.instructions
-
-
-def test_server_never_reads_answer_files():
-    src = inspect.getsource(mcp_server)
-    assert "truth" not in src and "validation" not in src and "index.jsonl" not in src
 
 
 def test_bad_path_exits_with_usage(tmp_path, capsys):

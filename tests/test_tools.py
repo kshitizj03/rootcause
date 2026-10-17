@@ -3,6 +3,7 @@ import json
 
 import pytest
 
+from rootcause import mcp_server, signals, summary, tools_v1
 from rootcause import tools_v0 as tools
 
 T0 = 1000.0
@@ -81,22 +82,16 @@ def test_bad_arguments_never_raise():
     assert "error" in out("get_trace", [1, 2])
 
 
-def test_outputs_are_capped():
-    big = dict(SNAP, logs=[dict(SNAP["logs"][0], body="x" * 500) for _ in range(500)])
-    text = tools.call(big, "search_logs", {"service": "payment", "limit": 500})
-    assert len(text) <= tools.MAX_TOOL_CHARS
-
-
 def test_schemas_cover_every_tool():
     assert {s["function"]["name"] for s in tools.SCHEMAS} == set(tools.TOOLS)
 
 
-def test_tools_never_touch_answer_files():
-    src = inspect.getsource(tools)
-    assert "truth" not in src and "validation" not in src and "index.jsonl" not in src
+@pytest.mark.parametrize("mod", [tools, tools_v1, summary, signals, mcp_server], ids=lambda m: m.__name__)
+def test_tool_modules_do_not_mention_answer_files(mod):
+    # a source check: the v0 and v1 tools, the modules they call and the MCP server never name an answer file
+    src = inspect.getsource(mod)
+    assert not any(w in src for w in ("truth", "validation", "index.jsonl"))
 
-
-# --- time windows, text=None, coercions, schema, never-raises ---
 
 def spread_logs(n, severity=None):
     return [{"ts": f"1970-01-01T00:{(1000 + i) // 60:02d}:{(1000 + i) % 60:02d}.000Z", "service": "payment", "severity": "INFO",
@@ -162,7 +157,7 @@ def test_call_never_raises_for_odd_tool_names_or_unserialisable_output(monkeypat
 
 def test_truncation_marker_says_how_to_narrow():
     big = dict(SNAP, logs=[dict(SNAP["logs"][0], body="x" * 500) for _ in range(500)])
-    text = tools.call(big, "search_logs", {"service": "payment", "limit": 200})
+    text = tools.call(big, "search_logs", {"service": "payment", "limit": 500})  # over the 200-line clamp too
     assert text.endswith("[truncated: reduce limit or add a text/time filter]") and len(text) <= tools.MAX_TOOL_CHARS
 
 

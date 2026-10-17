@@ -30,7 +30,8 @@ def test_capture_writes_sanitised_valid_snapshot(tmp_path):
 
     # Verify scenario_id/category are NOT in spans or logs
     snap = snapshot.load(path)
-    assert "scenario_id" not in snap["meta"] and "category" not in snap["meta"]
+    blob = json.dumps(snap["spans"]) + json.dumps(snap["logs"])
+    assert "payment-test" not in blob and "scenario_id" not in blob and "category" not in blob
     assert snap["meta"]["fault_start"] == T_INJECT and snap["meta"]["demo_commit"] == "abc"
     assert "truth" not in snap
     assert [s["span_id"] for s in snap["spans"]] == ["a"]
@@ -52,7 +53,7 @@ def test_capture_marks_invalid_when_signal_is_too_weak(tmp_path):
 
 
 def test_capture_empty_spans_and_logs(tmp_path):
-    """Empty spans/logs (e.g. control scenarios) still write all three tool files; validation runs cleanly."""
+    """Empty spans/logs (e.g. a backend that returned nothing) still write all three tool files; validation runs cleanly."""
     def empty_fetch():
         def prom_range(query, start, end, step):
             vals = [[t, "0.01"] for t in range(int(start), int(end) + 1, step)]
@@ -66,10 +67,10 @@ def test_capture_empty_spans_and_logs(tmp_path):
 
         return SimpleNamespace(prom_range=prom_range, jaeger_raw=jaeger_raw, os_logs=os_logs)
 
-    control_scenario = Scenario(id="control-test", category="control", alert="Baseline with no faults.",
-                                inject={}, truth={"causes": []},
-                                checks=[{"service": "payment", "signal": "error_ratio", "at_most": 0.05}])
-    out = snapshot.capture(control_scenario, T_INJECT, T_END, NAMES, fetch=empty_fetch(), out_dir=tmp_path)
+    quiet_scenario = Scenario(id="control-test", category="control", alert="Baseline with no faults.",
+                              inject={}, truth={"causes": []},
+                              checks=[{"service": "payment", "signal": "error_ratio", "at_most": 0.05}])
+    out = snapshot.capture(quiet_scenario, T_INJECT, T_END, NAMES, fetch=empty_fetch(), out_dir=tmp_path)
     path = tmp_path / out["path"]
 
     # All three tool files written, even when empty

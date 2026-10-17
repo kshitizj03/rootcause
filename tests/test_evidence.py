@@ -79,13 +79,6 @@ def test_citations_must_fall_inside_the_incident_window():
     assert [i["grounded"] for i in evidence.check(r, snap)["items"]] == [False, False, False]
 
 
-def test_restarts_citation_is_grounded_by_an_uptime_drop():
-    up = [[float(t), float(t)] for t in range(0, 1080, 15)] + [[1080.0, 5.0], [1095.0, 20.0]]
-    snap = {**SNAP, "metrics": {"uptime_s": {"email": up}}}
-    r = report({"kind": "metric", "service": "email", "signal": "restarts", "claim": "restarted"})
-    assert evidence.check(r, snap)["grounded"] == 1
-
-
 def test_metric_citation_is_normalised_and_uptime_s_means_restarts():
     up = [[float(t), float(t)] for t in range(0, 1080, 15)] + [[1080.0, 5.0], [1095.0, 20.0]]
     snap = {**SNAP, "metrics": {**SNAP["metrics"], "uptime_s": {"email": up}}}

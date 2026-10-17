@@ -18,23 +18,36 @@ def traced_agent(script, **kw):
     return a, exporter
 
 
+def _attributes(exporter):
+    """Every span and span-event attribute dict the exporter received."""
+    spans = exporter.get_finished_spans()
+    return [dict(s.attributes) for s in spans] + [dict(ev.attributes) for s in spans for ev in s.events]
+
+
 def test_spans_follow_genai_conventions_without_content():
-    a, exporter = traced_agent([Msg(tool_calls=[tool_call("list_services", {})]), Msg(content=FINAL)])
-    a.solve(SNAP)
-    spans = {s.name: s for s in exporter.get_finished_spans()}
+    call = tool_call("get_metric", {"service": "payment", "signal": "error_ratio"})  # its output holds "points"
+    a, exp = traced_agent([Msg(tool_calls=[call]), Msg(content=FINAL)])
+    _, info = a.solve(SNAP)
+    spans = {s.name: s for s in exp.get_finished_spans()}
     root = spans["invoke_agent agent-v0"]
-    chats = [s for s in exporter.get_finished_spans() if s.name.startswith("chat ")]
-    tool = spans["execute_tool list_services"]
+    chats = [s for s in exp.get_finished_spans() if s.name.startswith("chat ")]
+    tool = spans["execute_tool get_metric"]
     assert root.attributes["gen_ai.operation.name"] == "invoke_agent" and root.attributes["rootcause.verdict"] == "incident"
     assert len(chats) == 2 and chats[0].attributes["gen_ai.usage.input_tokens"] == 100
     assert chats[0].attributes["gen_ai.provider.name"] == "gcp.gemini"
-    b, exporter = traced_agent([Msg(content=FINAL)], provider="nvidia")
-    b.solve(SNAP)
-    assert [s.attributes["gen_ai.provider.name"] for s in exporter.get_finished_spans() if s.name.startswith("chat ")] == ["nvidia"]
-    assert tool.attributes["gen_ai.tool.name"] == "list_services"
+    assert tool.attributes["gen_ai.tool.name"] == "get_metric"
     assert all(s.parent.span_id == root.context.span_id for s in chats + [tool])
-    dumped = json.dumps([dict(s.attributes) for s in exporter.get_finished_spans()])
+    # the tool really answered with "points", so its absence below means the span did not copy the output
+    assert any('"points"' in m["content"] for m in info["messages"] if m["role"] == "tool")
+    dumped = json.dumps(_attributes(exp))
     assert "Orders fail" not in dumped and "points" not in dumped  # no prompt / tool output content
+
+
+def test_nvidia_provider_names_its_chat_spans():
+    b, exp = traced_agent([Msg(content=FINAL)], provider="nvidia")
+    b.solve(SNAP)
+    assert [s.attributes["gen_ai.provider.name"] for s in exp.get_finished_spans() if s.name.startswith("chat ")] == ["nvidia"]
+    assert "Orders fail" not in json.dumps(_attributes(exp))
 
 
 def test_tracing_off_is_a_noop():

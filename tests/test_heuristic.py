@@ -22,6 +22,12 @@ def test_below_threshold_is_no_incident():
     assert r.verdict == "no_incident" and r.confidence == 0.5
 
 
+def test_exactly_doubled_counts_as_an_incident():
+    # score exactly 1.0 = THRESHOLD: the rule is inclusive (>=), and the baseline every agent is compared with depends on it
+    assert heuristic.THRESHOLD == 1.0
+    assert heuristic.diagnose(snap({"p95_ms": {"cart": series(100.0, 200.0)}})).verdict == "incident"
+
+
 def test_at_most_three_distinct_services():
     m = {"error_ratio": {s: series(0.0, 0.1 * (i + 1)) for i, s in enumerate(["a", "b", "c", "d"])},
          "p95_ms": {"d": series(10.0, 1000.0)}}
