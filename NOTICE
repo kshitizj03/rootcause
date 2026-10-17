@@ -1,0 +1,10 @@
+RootCause
+Copyright 2026 Kshitiz Jain
+
+This product includes material from the OpenTelemetry Demo
+(https://github.com/open-telemetry/opentelemetry-demo), Copyright The OpenTelemetry Authors,
+licensed under the Apache License, Version 2.0:
+
+- tests/fixtures/demo.flagd.json is a copy of the demo's src/flagd/demo.flagd.json.
+- The incident scenarios run on the demo, checked out under vendor/opentelemetry-demo (not
+  redistributed in this repository); infra/compose.ports.yaml is layered on its compose files.

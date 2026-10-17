@@ -1,14 +1,27 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]  # PEP 639 license expression
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "rootcause"
 version = "0.1.0"
-description = "An honest benchmark of an LLM incident-diagnosis agent on recorded microservice incidents"
+description = "An honest benchmark of LLM incident-diagnosis agents on recorded microservice incidents"
 readme = "README.md"
 requires-python = ">=3.11"
-# requirements.txt, which CI installs, has these plus pytest
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Kshitiz Jain" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: System :: Monitoring",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# requirements.txt has these plus pytest; requirements-lock.txt pins that tree and is what CI installs
 dependencies = [
     "requests>=2.31",
     "pyyaml>=6.0",
@@ -19,6 +32,9 @@ dependencies = [
     "opentelemetry-sdk>=1.45",
     "opentelemetry-exporter-otlp-proto-http>=1.45",
 ]
+
+[project.urls]
+Repository = "https://github.com/kshitizj03/rootcause"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
