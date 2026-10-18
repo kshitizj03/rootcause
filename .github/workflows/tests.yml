@@ -9,15 +9,15 @@ jobs:
         os: [ubuntu-latest, windows-latest]   # the documented workflow is Windows-first
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: requirements-lock.txt
       - run: pip install -r requirements-lock.txt   # pinned; pyproject.toml keeps the >= ranges
       - run: python -m pytest -q   # offline: no Docker, no API key, no recorded snapshots
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: node --test "site/tests/*.test.mjs"   # the site's pure logic (site/assets/lib.js); Node expands the glob
