@@ -2,59 +2,61 @@
 
 ## Accuracy by category
 
-Accuracy is the mean over scenarios of each scenario's mean; ± is the sd across run indices (shown when at least two complete runs exist). The held-out split was frozen before any agent-v1 tuning.
+Accuracy is the mean over scenarios of each scenario's mean; ± is the sample sd across complete run indices (shown when at least two complete runs exist). The held-out split was frozen before any agent-v1 tuning. One held-out incident was viewed during agent-v1 development; see the disclosure under Provenance.
 
 ### Split: all
 
-| category | heuristic | agent-v0 | agent-v1 | agent-v1-nopriors | agent-v1-vague | agent-v0-nemotron | agent-v1-nemotron | agent-v1-nemotron-nopriors | agent-v1-nemotron-vague | agent-v1-nemotron-steps30 | agent-v1@gemma-4-26b-a4b-it | hunch-0.6b | hunch-1.7b | laya-english | laya-multilingual |
+| category | heuristic | agent-v0 | agent-v1 | agent-v1-nopriors | agent-v1-vague | agent-v0-nemotron | agent-v1-nemotron | agent-v1-nemotron-nopriors | agent-v1-nemotron-vague | agent-v1-nemotron-steps30 | agent-v1@z-ai-glm-5.3-flash | hunch-0.6b | hunch-1.7b | laya-english | laya-multilingual |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| easy | 0.67 ± - (3/3 sc, 1 run) | 0.93 ± 0.13 (3/3 sc, 5 runs) | 0.67 ± 0.00 (3/3 sc, 5 runs) | not run | 1.00 ± - (1/3 sc, 1 run) | 1.00 ± 0.00 (3/3 sc, 5 runs) | 0.87 ± 0.16 (3/3 sc, 5 runs) | 0.93 ± 0.13 (3/3 sc, 5 runs) | 0.87 ± 0.16 (3/3 sc, 5 runs) | 0.87 ± 0.16 (3/3 sc, 5 runs) | 1.00 ± - (1/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.33 ± - (3/3 sc, 1 run) |
-| hard-cross-service | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± 0.00 (3/3 sc, 5 runs) | 0.07 ± 0.13 (3/3 sc, 5 runs) | not run | - | 0.67 ± 0.21 (3/3 sc, 5 runs) | 0.33 ± 0.21 (3/3 sc, 5 runs) | 0.27 ± 0.13 (3/3 sc, 5 runs) | 0.27 ± 0.25 (3/3 sc, 5 runs) | 0.33 ± 0.21 (3/3 sc, 5 runs) | - | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) |
-| hard-silent | 0.83 ± - (6/6 sc, 1 run) | 0.47 ± 0.12 (6/6 sc, 5 runs) | 0.47 ± 0.19 (6/6 sc, 5 runs) | not run | 0.33 ± - (3/6 sc, 1 run) | 0.63 ± 0.12 (6/6 sc, 5 runs) | 0.80 ± 0.12 (6/6 sc, 5 runs) | 0.73 ± 0.13 (6/6 sc, 5 runs) | 0.57 ± 0.08 (6/6 sc, 5 runs) | 0.63 ± 0.07 (6/6 sc, 5 runs) | - | 0.00 ± - (6/6 sc, 1 run) | 0.00 ± - (6/6 sc, 1 run) | 0.33 ± - (6/6 sc, 1 run) | 0.50 ± - (6/6 sc, 1 run) |
-| hard-noisy | 0.50 ± - (2/2 sc, 1 run) | 0.70 ± 0.24 (2/2 sc, 5 runs) | 0.60 ± 0.20 (2/2 sc, 5 runs) | not run | - | 0.70 ± 0.24 (2/2 sc, 5 runs) | 0.60 ± 0.20 (2/2 sc, 5 runs) | 0.60 ± 0.20 (2/2 sc, 5 runs) | 0.60 ± 0.20 (2/2 sc, 5 runs) | 0.50 ± 0.00 (2/2 sc, 5 runs) | - | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.50 ± - (2/2 sc, 1 run) | 0.50 ± - (2/2 sc, 1 run) |
-| hard-two-faults | 0.75 ± - (2/2 sc, 1 run) | 0.25 ± 0.00 (2/2 sc, 5 runs) | 0.20 ± 0.19 (2/2 sc, 5 runs) | not run | - | 0.45 ± 0.10 (2/2 sc, 5 runs) | 0.60 ± 0.25 (2/2 sc, 5 runs) | 0.75 ± 0.16 (2/2 sc, 5 runs) | 0.45 ± 0.10 (2/2 sc, 5 runs) | 0.85 ± 0.20 (2/2 sc, 5 runs) | - | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) |
-| control | 0.75 ± - (4/4 sc, 1 run) | 1.00 ± 0.00 (4/4 sc, 5 runs) | 1.00 ± 0.00 (4/4 sc, 5 runs) | not run | 0.75 ± - (4/4 sc, 1 run) | 0.30 ± 0.19 (4/4 sc, 5 runs) | 0.50 ± 0.16 (4/4 sc, 5 runs) | 0.50 ± 0.16 (4/4 sc, 5 runs) | 0.25 ± 0.16 (4/4 sc, 5 runs) | 0.55 ± 0.19 (4/4 sc, 5 runs) | - | 1.00 ± - (4/4 sc, 1 run) | 1.00 ± - (4/4 sc, 1 run) | 0.00 ± - (4/4 sc, 1 run) | 0.50 ± - (4/4 sc, 1 run) |
-| all incidents | 0.59 ± - (16/16 sc, 1 run) | 0.47 ± 0.08 (16/16 sc, 5 runs) | 0.41 ± 0.09 (16/16 sc, 5 runs) | not run | 0.50 ± - (4/16 sc, 1 run) | 0.69 ± 0.07 (16/16 sc, 5 runs) | 0.68 ± 0.04 (16/16 sc, 5 runs) | 0.67 ± 0.05 (16/16 sc, 5 runs) | 0.56 ± 0.12 (16/16 sc, 5 runs) | 0.63 ± 0.07 (16/16 sc, 5 runs) | 1.00 ± - (1/16 sc, 1 run) | 0.00 ± - (16/16 sc, 1 run) | 0.00 ± - (16/16 sc, 1 run) | 0.19 ± - (16/16 sc, 1 run) | 0.31 ± - (16/16 sc, 1 run) |
+| easy | 0.67 ± - (3/3 sc, 1 run) | 0.93 ± 0.15 (3/3 sc, 5 runs) | 0.67 ± 0.00 (3/3 sc, 5 runs) | not run | 1.00 ± - (1/3 sc, 1 run) | 1.00 ± 0.00 (3/3 sc, 5 runs) | 0.87 ± 0.18 (3/3 sc, 5 runs) | 0.93 ± 0.15 (3/3 sc, 5 runs) | 0.87 ± 0.18 (3/3 sc, 5 runs) | 0.87 ± 0.18 (3/3 sc, 5 runs) | 1.00 ± 0.00 (3/3 sc, 2 runs) | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.33 ± - (3/3 sc, 1 run) |
+| hard-cross-service | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± 0.00 (3/3 sc, 5 runs) | 0.07 ± 0.15 (3/3 sc, 5 runs) | not run | - | 0.67 ± 0.24 (3/3 sc, 5 runs) | 0.33 ± 0.24 (3/3 sc, 5 runs) | 0.27 ± 0.15 (3/3 sc, 5 runs) | 0.27 ± 0.28 (3/3 sc, 5 runs) | 0.33 ± 0.24 (3/3 sc, 5 runs) | 0.50 ± - (3/3 sc, 1-2 runs) | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) |
+| hard-silent | 0.83 ± - (6/6 sc, 1 run) | 0.47 ± 0.14 (6/6 sc, 5 runs) | 0.47 ± 0.22 (6/6 sc, 5 runs) | not run | 0.33 ± - (3/6 sc, 1 run) | 0.63 ± 0.14 (6/6 sc, 5 runs) | 0.80 ± 0.14 (6/6 sc, 5 runs) | 0.73 ± 0.15 (6/6 sc, 5 runs) | 0.57 ± 0.09 (6/6 sc, 5 runs) | 0.63 ± 0.07 (6/6 sc, 5 runs) | 0.50 ± 0.00 (6/6 sc, 2 runs) | 0.00 ± - (6/6 sc, 1 run) | 0.00 ± - (6/6 sc, 1 run) | 0.33 ± - (6/6 sc, 1 run) | 0.50 ± - (6/6 sc, 1 run) |
+| hard-noisy | 0.50 ± - (2/2 sc, 1 run) | 0.70 ± 0.27 (2/2 sc, 5 runs) | 0.60 ± 0.22 (2/2 sc, 5 runs) | not run | - | 0.70 ± 0.27 (2/2 sc, 5 runs) | 0.60 ± 0.22 (2/2 sc, 5 runs) | 0.60 ± 0.22 (2/2 sc, 5 runs) | 0.60 ± 0.22 (2/2 sc, 5 runs) | 0.50 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 2 runs) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.50 ± - (2/2 sc, 1 run) | 0.50 ± - (2/2 sc, 1 run) |
+| hard-two-faults | 0.75 ± - (2/2 sc, 1 run) | 0.25 ± 0.00 (2/2 sc, 5 runs) | 0.20 ± 0.21 (2/2 sc, 5 runs) | not run | - | 0.45 ± 0.11 (2/2 sc, 5 runs) | 0.60 ± 0.29 (2/2 sc, 5 runs) | 0.75 ± 0.18 (2/2 sc, 5 runs) | 0.45 ± 0.11 (2/2 sc, 5 runs) | 0.85 ± 0.22 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 2 runs) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) |
+| control | 0.75 ± - (4/4 sc, 1 run) | 1.00 ± 0.00 (4/4 sc, 5 runs) | 1.00 ± 0.00 (4/4 sc, 5 runs) | not run | 0.75 ± - (4/4 sc, 1 run) | 0.30 ± 0.21 (4/4 sc, 5 runs) | 0.50 ± 0.18 (4/4 sc, 5 runs) | 0.50 ± 0.18 (4/4 sc, 5 runs) | 0.25 ± 0.18 (4/4 sc, 5 runs) | 0.55 ± 0.21 (4/4 sc, 5 runs) | 0.75 ± 0.00 (4/4 sc, 2 runs) | 1.00 ± - (4/4 sc, 1 run) | 1.00 ± - (4/4 sc, 1 run) | 0.00 ± - (4/4 sc, 1 run) | 0.50 ± - (4/4 sc, 1 run) |
+| all fault incidents | 0.59 ± - (16/16 sc, 1 run) | 0.47 ± 0.09 (16/16 sc, 5 runs) | 0.41 ± 0.10 (16/16 sc, 5 runs) | not run | 0.50 ± - (4/16 sc, 1 run) | 0.69 ± 0.08 (16/16 sc, 5 runs) | 0.68 ± 0.05 (16/16 sc, 5 runs) | 0.67 ± 0.06 (16/16 sc, 5 runs) | 0.56 ± 0.13 (16/16 sc, 5 runs) | 0.63 ± 0.08 (16/16 sc, 5 runs) | 0.72 ± - (16/16 sc, 1-2 runs) | 0.00 ± - (16/16 sc, 1 run) | 0.00 ± - (16/16 sc, 1 run) | 0.19 ± - (16/16 sc, 1 run) | 0.31 ± - (16/16 sc, 1 run) |
 
 agent-v1-vague: partial batch (0-1 runs per scenario, 8/60 runs)
 
-agent-v1@gemma-4-26b-a4b-it: partial batch (0-1 runs per scenario, 1/100 runs)
+agent-v1@z-ai-glm-5.3-flash: partial batch (1-2 runs per scenario, 39/100 runs)
 
 ### Split: tune
 
-| category | heuristic | agent-v0 | agent-v1 | agent-v1-nopriors | agent-v1-vague | agent-v0-nemotron | agent-v1-nemotron | agent-v1-nemotron-nopriors | agent-v1-nemotron-vague | agent-v1-nemotron-steps30 | agent-v1@gemma-4-26b-a4b-it | hunch-0.6b | hunch-1.7b | laya-english | laya-multilingual |
+| category | heuristic | agent-v0 | agent-v1 | agent-v1-nopriors | agent-v1-vague | agent-v0-nemotron | agent-v1-nemotron | agent-v1-nemotron-nopriors | agent-v1-nemotron-vague | agent-v1-nemotron-steps30 | agent-v1@z-ai-glm-5.3-flash | hunch-0.6b | hunch-1.7b | laya-english | laya-multilingual |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| easy | 1.00 ± - (2/2 sc, 1 run) | 0.90 ± 0.20 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 5 runs) | not run | 1.00 ± - (1/2 sc, 1 run) | 1.00 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± - (1/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) |
-| hard-cross-service | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± 0.00 (2/2 sc, 5 runs) | 0.00 ± 0.00 (2/2 sc, 5 runs) | not run | - | 0.60 ± 0.20 (2/2 sc, 5 runs) | 0.30 ± 0.24 (2/2 sc, 5 runs) | 0.30 ± 0.24 (2/2 sc, 5 runs) | 0.20 ± 0.24 (2/2 sc, 5 runs) | 0.20 ± 0.24 (2/2 sc, 5 runs) | - | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) |
-| hard-silent | 0.80 ± - (5/5 sc, 1 run) | 0.52 ± 0.16 (5/5 sc, 5 runs) | 0.56 ± 0.23 (5/5 sc, 5 runs) | not run | 0.33 ± - (3/5 sc, 1 run) | 0.60 ± 0.18 (5/5 sc, 5 runs) | 0.76 ± 0.15 (5/5 sc, 5 runs) | 0.68 ± 0.16 (5/5 sc, 5 runs) | 0.48 ± 0.10 (5/5 sc, 5 runs) | 0.68 ± 0.10 (5/5 sc, 5 runs) | - | 0.00 ± - (5/5 sc, 1 run) | 0.00 ± - (5/5 sc, 1 run) | 0.40 ± - (5/5 sc, 1 run) | 0.40 ± - (5/5 sc, 1 run) |
-| hard-noisy | 0.00 ± - (1/1 sc, 1 run) | 0.60 ± 0.49 (1/1 sc, 5 runs) | 0.20 ± 0.40 (1/1 sc, 5 runs) | not run | - | 0.40 ± 0.49 (1/1 sc, 5 runs) | 0.20 ± 0.40 (1/1 sc, 5 runs) | 0.40 ± 0.49 (1/1 sc, 5 runs) | 0.20 ± 0.40 (1/1 sc, 5 runs) | 0.00 ± 0.00 (1/1 sc, 5 runs) | - | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 1.00 ± - (1/1 sc, 1 run) |
-| hard-two-faults | 0.50 ± - (1/1 sc, 1 run) | 0.00 ± 0.00 (1/1 sc, 5 runs) | 0.10 ± 0.20 (1/1 sc, 5 runs) | not run | - | 0.40 ± 0.20 (1/1 sc, 5 runs) | 0.50 ± 0.32 (1/1 sc, 5 runs) | 0.60 ± 0.20 (1/1 sc, 5 runs) | 0.40 ± 0.20 (1/1 sc, 5 runs) | 0.80 ± 0.24 (1/1 sc, 5 runs) | - | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) |
-| control | 0.67 ± - (3/3 sc, 1 run) | 1.00 ± 0.00 (3/3 sc, 5 runs) | 1.00 ± 0.00 (3/3 sc, 5 runs) | not run | 0.67 ± - (3/3 sc, 1 run) | 0.33 ± 0.21 (3/3 sc, 5 runs) | 0.53 ± 0.16 (3/3 sc, 5 runs) | 0.40 ± 0.13 (3/3 sc, 5 runs) | 0.27 ± 0.13 (3/3 sc, 5 runs) | 0.40 ± 0.25 (3/3 sc, 5 runs) | - | 1.00 ± - (3/3 sc, 1 run) | 1.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.67 ± - (3/3 sc, 1 run) |
-| all incidents | 0.59 ± - (11/11 sc, 1 run) | 0.45 ± 0.10 (11/11 sc, 5 runs) | 0.46 ± 0.10 (11/11 sc, 5 runs) | not run | 0.50 ± - (4/11 sc, 1 run) | 0.64 ± 0.08 (11/11 sc, 5 runs) | 0.65 ± 0.05 (11/11 sc, 5 runs) | 0.64 ± 0.08 (11/11 sc, 5 runs) | 0.49 ± 0.11 (11/11 sc, 5 runs) | 0.60 ± 0.05 (11/11 sc, 5 runs) | 1.00 ± - (1/11 sc, 1 run) | 0.00 ± - (11/11 sc, 1 run) | 0.00 ± - (11/11 sc, 1 run) | 0.18 ± - (11/11 sc, 1 run) | 0.27 ± - (11/11 sc, 1 run) |
+| easy | 1.00 ± - (2/2 sc, 1 run) | 0.90 ± 0.22 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 5 runs) | not run | 1.00 ± - (1/2 sc, 1 run) | 1.00 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 5 runs) | 1.00 ± 0.00 (2/2 sc, 2 runs) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) |
+| hard-cross-service | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± 0.00 (2/2 sc, 5 runs) | 0.00 ± 0.00 (2/2 sc, 5 runs) | not run | - | 0.60 ± 0.22 (2/2 sc, 5 runs) | 0.30 ± 0.27 (2/2 sc, 5 runs) | 0.30 ± 0.27 (2/2 sc, 5 runs) | 0.20 ± 0.27 (2/2 sc, 5 runs) | 0.20 ± 0.27 (2/2 sc, 5 runs) | 0.25 ± 0.35 (2/2 sc, 2 runs) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) | 0.00 ± - (2/2 sc, 1 run) |
+| hard-silent | 0.80 ± - (5/5 sc, 1 run) | 0.52 ± 0.18 (5/5 sc, 5 runs) | 0.56 ± 0.26 (5/5 sc, 5 runs) | not run | 0.33 ± - (3/5 sc, 1 run) | 0.60 ± 0.20 (5/5 sc, 5 runs) | 0.76 ± 0.17 (5/5 sc, 5 runs) | 0.68 ± 0.18 (5/5 sc, 5 runs) | 0.48 ± 0.11 (5/5 sc, 5 runs) | 0.68 ± 0.11 (5/5 sc, 5 runs) | 0.40 ± 0.00 (5/5 sc, 2 runs) | 0.00 ± - (5/5 sc, 1 run) | 0.00 ± - (5/5 sc, 1 run) | 0.40 ± - (5/5 sc, 1 run) | 0.40 ± - (5/5 sc, 1 run) |
+| hard-noisy | 0.00 ± - (1/1 sc, 1 run) | 0.60 ± 0.55 (1/1 sc, 5 runs) | 0.20 ± 0.45 (1/1 sc, 5 runs) | not run | - | 0.40 ± 0.55 (1/1 sc, 5 runs) | 0.20 ± 0.45 (1/1 sc, 5 runs) | 0.40 ± 0.55 (1/1 sc, 5 runs) | 0.20 ± 0.45 (1/1 sc, 5 runs) | 0.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 2 runs) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 1.00 ± - (1/1 sc, 1 run) |
+| hard-two-faults | 0.50 ± - (1/1 sc, 1 run) | 0.00 ± 0.00 (1/1 sc, 5 runs) | 0.10 ± 0.22 (1/1 sc, 5 runs) | not run | - | 0.40 ± 0.22 (1/1 sc, 5 runs) | 0.50 ± 0.35 (1/1 sc, 5 runs) | 0.60 ± 0.22 (1/1 sc, 5 runs) | 0.40 ± 0.22 (1/1 sc, 5 runs) | 0.80 ± 0.27 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 2 runs) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) |
+| control | 0.67 ± - (3/3 sc, 1 run) | 1.00 ± 0.00 (3/3 sc, 5 runs) | 1.00 ± 0.00 (3/3 sc, 5 runs) | not run | 0.67 ± - (3/3 sc, 1 run) | 0.33 ± 0.24 (3/3 sc, 5 runs) | 0.53 ± 0.18 (3/3 sc, 5 runs) | 0.40 ± 0.15 (3/3 sc, 5 runs) | 0.27 ± 0.15 (3/3 sc, 5 runs) | 0.40 ± 0.28 (3/3 sc, 5 runs) | 0.67 ± 0.00 (3/3 sc, 2 runs) | 1.00 ± - (3/3 sc, 1 run) | 1.00 ± - (3/3 sc, 1 run) | 0.00 ± - (3/3 sc, 1 run) | 0.67 ± - (3/3 sc, 1 run) |
+| all fault incidents | 0.59 ± - (11/11 sc, 1 run) | 0.45 ± 0.11 (11/11 sc, 5 runs) | 0.46 ± 0.11 (11/11 sc, 5 runs) | not run | 0.50 ± - (4/11 sc, 1 run) | 0.64 ± 0.09 (11/11 sc, 5 runs) | 0.65 ± 0.06 (11/11 sc, 5 runs) | 0.64 ± 0.09 (11/11 sc, 5 runs) | 0.49 ± 0.12 (11/11 sc, 5 runs) | 0.60 ± 0.06 (11/11 sc, 5 runs) | 0.59 ± 0.06 (11/11 sc, 2 runs) | 0.00 ± - (11/11 sc, 1 run) | 0.00 ± - (11/11 sc, 1 run) | 0.18 ± - (11/11 sc, 1 run) | 0.27 ± - (11/11 sc, 1 run) |
 
 agent-v1-vague: partial batch (0-1 runs per scenario, 7/42 runs)
 
-agent-v1@gemma-4-26b-a4b-it: partial batch (0-1 runs per scenario, 1/70 runs)
+agent-v1@z-ai-glm-5.3-flash: partial batch (2 runs per scenario, 28/70 runs)
 
 ### Split: heldout
 
-| category | heuristic | agent-v0 | agent-v1 | agent-v1-nopriors | agent-v1-vague | agent-v0-nemotron | agent-v1-nemotron | agent-v1-nemotron-nopriors | agent-v1-nemotron-vague | agent-v1-nemotron-steps30 | agent-v1@gemma-4-26b-a4b-it | hunch-0.6b | hunch-1.7b | laya-english | laya-multilingual |
+| category | heuristic | agent-v0 | agent-v1 | agent-v1-nopriors | agent-v1-vague | agent-v0-nemotron | agent-v1-nemotron | agent-v1-nemotron-nopriors | agent-v1-nemotron-vague | agent-v1-nemotron-steps30 | agent-v1@z-ai-glm-5.3-flash | hunch-0.6b | hunch-1.7b | laya-english | laya-multilingual |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| easy | 0.00 ± - (1/1 sc, 1 run) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 0.00 ± 0.00 (1/1 sc, 5 runs) | not run | - | 1.00 ± 0.00 (1/1 sc, 5 runs) | 0.60 ± 0.49 (1/1 sc, 5 runs) | 0.80 ± 0.40 (1/1 sc, 5 runs) | 0.60 ± 0.49 (1/1 sc, 5 runs) | 0.60 ± 0.49 (1/1 sc, 5 runs) | not run | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 1.00 ± - (1/1 sc, 1 run) |
-| hard-cross-service | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± 0.00 (1/1 sc, 5 runs) | 0.20 ± 0.40 (1/1 sc, 5 runs) | not run | - | 0.80 ± 0.40 (1/1 sc, 5 runs) | 0.40 ± 0.49 (1/1 sc, 5 runs) | 0.20 ± 0.40 (1/1 sc, 5 runs) | 0.40 ± 0.49 (1/1 sc, 5 runs) | 0.60 ± 0.49 (1/1 sc, 5 runs) | not run | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) |
-| hard-silent | 1.00 ± - (1/1 sc, 1 run) | 0.20 ± 0.40 (1/1 sc, 5 runs) | 0.00 ± 0.00 (1/1 sc, 5 runs) | not run | - | 0.80 ± 0.40 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 0.40 ± 0.49 (1/1 sc, 5 runs) | not run | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 1.00 ± - (1/1 sc, 1 run) |
-| hard-noisy | 1.00 ± - (1/1 sc, 1 run) | 0.80 ± 0.40 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | not run | - | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 0.80 ± 0.40 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | not run | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 1.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) |
-| hard-two-faults | 1.00 ± - (1/1 sc, 1 run) | 0.50 ± 0.00 (1/1 sc, 5 runs) | 0.30 ± 0.24 (1/1 sc, 5 runs) | not run | - | 0.50 ± 0.00 (1/1 sc, 5 runs) | 0.70 ± 0.24 (1/1 sc, 5 runs) | 0.90 ± 0.20 (1/1 sc, 5 runs) | 0.50 ± 0.00 (1/1 sc, 5 runs) | 0.90 ± 0.20 (1/1 sc, 5 runs) | not run | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) |
-| control | 1.00 ± - (1/1 sc, 1 run) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | not run | 1.00 ± - (1/1 sc, 1 run) | 0.20 ± 0.40 (1/1 sc, 5 runs) | 0.40 ± 0.49 (1/1 sc, 5 runs) | 0.80 ± 0.40 (1/1 sc, 5 runs) | 0.20 ± 0.40 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | not run | 1.00 ± - (1/1 sc, 1 run) | 1.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) |
-| all incidents | 0.60 ± - (5/5 sc, 1 run) | 0.50 ± 0.13 (5/5 sc, 5 runs) | 0.30 ± 0.06 (5/5 sc, 5 runs) | not run | - | 0.82 ± 0.10 (5/5 sc, 5 runs) | 0.74 ± 0.14 (5/5 sc, 5 runs) | 0.74 ± 0.15 (5/5 sc, 5 runs) | 0.70 ± 0.18 (5/5 sc, 5 runs) | 0.70 ± 0.24 (5/5 sc, 5 runs) | not run | 0.00 ± - (5/5 sc, 1 run) | 0.00 ± - (5/5 sc, 1 run) | 0.20 ± - (5/5 sc, 1 run) | 0.40 ± - (5/5 sc, 1 run) |
+| easy | 0.00 ± - (1/1 sc, 1 run) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 0.00 ± 0.00 (1/1 sc, 5 runs) | not run | - | 1.00 ± 0.00 (1/1 sc, 5 runs) | 0.60 ± 0.55 (1/1 sc, 5 runs) | 0.80 ± 0.45 (1/1 sc, 5 runs) | 0.60 ± 0.55 (1/1 sc, 5 runs) | 0.60 ± 0.55 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 2 runs) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 1.00 ± - (1/1 sc, 1 run) |
+| hard-cross-service | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± 0.00 (1/1 sc, 5 runs) | 0.20 ± 0.45 (1/1 sc, 5 runs) | not run | - | 0.80 ± 0.45 (1/1 sc, 5 runs) | 0.40 ± 0.55 (1/1 sc, 5 runs) | 0.20 ± 0.45 (1/1 sc, 5 runs) | 0.40 ± 0.55 (1/1 sc, 5 runs) | 0.60 ± 0.55 (1/1 sc, 5 runs) | 1.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) |
+| hard-silent | 1.00 ± - (1/1 sc, 1 run) | 0.20 ± 0.45 (1/1 sc, 5 runs) | 0.00 ± 0.00 (1/1 sc, 5 runs) | not run | - | 0.80 ± 0.45 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 0.40 ± 0.55 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 2 runs) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 1.00 ± - (1/1 sc, 1 run) |
+| hard-noisy | 1.00 ± - (1/1 sc, 1 run) | 0.80 ± 0.45 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | not run | - | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 0.80 ± 0.45 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 2 runs) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 1.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) |
+| hard-two-faults | 1.00 ± - (1/1 sc, 1 run) | 0.50 ± 0.00 (1/1 sc, 5 runs) | 0.30 ± 0.27 (1/1 sc, 5 runs) | not run | - | 0.50 ± 0.00 (1/1 sc, 5 runs) | 0.70 ± 0.27 (1/1 sc, 5 runs) | 0.90 ± 0.22 (1/1 sc, 5 runs) | 0.50 ± 0.00 (1/1 sc, 5 runs) | 0.90 ± 0.22 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 2 runs) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) |
+| control | 1.00 ± - (1/1 sc, 1 run) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | not run | 1.00 ± - (1/1 sc, 1 run) | 0.20 ± 0.45 (1/1 sc, 5 runs) | 0.40 ± 0.55 (1/1 sc, 5 runs) | 0.80 ± 0.45 (1/1 sc, 5 runs) | 0.20 ± 0.45 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 5 runs) | 1.00 ± 0.00 (1/1 sc, 2 runs) | 1.00 ± - (1/1 sc, 1 run) | 1.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) | 0.00 ± - (1/1 sc, 1 run) |
+| all fault incidents | 0.60 ± - (5/5 sc, 1 run) | 0.50 ± 0.14 (5/5 sc, 5 runs) | 0.30 ± 0.07 (5/5 sc, 5 runs) | not run | - | 0.82 ± 0.11 (5/5 sc, 5 runs) | 0.74 ± 0.15 (5/5 sc, 5 runs) | 0.74 ± 0.17 (5/5 sc, 5 runs) | 0.70 ± 0.20 (5/5 sc, 5 runs) | 0.70 ± 0.26 (5/5 sc, 5 runs) | 1.00 ± - (5/5 sc, 1-2 runs) | 0.00 ± - (5/5 sc, 1 run) | 0.00 ± - (5/5 sc, 1 run) | 0.20 ± - (5/5 sc, 1 run) | 0.40 ± - (5/5 sc, 1 run) |
 
 agent-v1-vague: partial batch (0-1 runs per scenario, 1/18 runs)
 
-Held-out categories have one scenario each; read the all-incidents row.
+agent-v1@z-ai-glm-5.3-flash: partial batch (1-2 runs per scenario, 11/30 runs)
+
+Held-out categories have one scenario each; read the all-fault-incidents row.
 
 ![accuracy by category](figures/accuracy_by_category.png)
 
-Bars: accuracy over all scenarios; error bars ± sd across run indices, clipped to 0-1 (none when fewer than two complete runs). A solver with no record in a category has no bar there.
+Bars: accuracy over all scenarios; error bars ± sample sd across complete run indices, clipped to 0-1 (none when fewer than two complete runs). A solver with no record in a category has no bar there.
 
 ## False alarms and abstentions (all split)
 
@@ -72,7 +74,7 @@ False alarm = claiming an incident on a control; abstain = insufficient evidence
 | agent-v1-nemotron-nopriors | 0.35 | 0.03 |
 | agent-v1-nemotron-vague | 0.70 | 0.06 |
 | agent-v1-nemotron-steps30 | 0.40 | 0.00 |
-| agent-v1@gemma-4-26b-a4b-it | - | 0.00 |
+| agent-v1@z-ai-glm-5.3-flash | 0.25 | 0.00 |
 | hunch-0.6b | 0.00 | 0.00 |
 | hunch-1.7b | 0.00 | 0.00 |
 | laya-english | 1.00 | 0.00 |
@@ -80,7 +82,7 @@ False alarm = claiming an incident on a control; abstain = insufficient evidence
 
 ## Evidence (all split, incidents)
 
-Grounded = cited evidence exists in the snapshot; distinctive = it also looks anomalous against the baseline (neither proves that the incident caused it).
+Grounded = cited evidence exists in the snapshot; distinctive = it also looks anomalous against the baseline (neither proves that the incident caused it). The heuristic cites rows of the same change table this check reads, so its 1.00 is by construction.
 
 | solver | grounded | distinctive |
 |---|---|---|
@@ -94,72 +96,73 @@ Grounded = cited evidence exists in the snapshot; distinctive = it also looks an
 | agent-v1-nemotron-nopriors | 0.94 | 0.85 |
 | agent-v1-nemotron-vague | 0.97 | 0.90 |
 | agent-v1-nemotron-steps30 | 0.93 | 0.83 |
-| agent-v1@gemma-4-26b-a4b-it | 1.00 | 1.00 |
+| agent-v1@z-ai-glm-5.3-flash | 0.94 | 0.71 |
 | hunch-0.6b | - | - |
 | hunch-1.7b | - | - |
 | laya-english | - | - |
 | laya-multilingual | - | - |
 
-## Paired comparisons (all split, fault incidents)
+## Paired comparisons (all split, fault incidents; the last three columns add the controls)
 
-Each solver's mean score per incident, compared on the incidents both have run. Wins / ties / losses count incidents where the first solver scored higher / the same / lower, by any margin. A per-incident mean of 0.5 can mean one of two causes found or half of the runs right. The 95% interval is a percentile bootstrap over incidents (10,000 resamples, fixed seed); at this few incidents it is approximate and somewhat too narrow, and it is not given below 5 shared incidents. An interval that includes 0 means this benchmark cannot tell the two apart.
+Each solver's mean score per incident, compared on the incidents both have run. Wins / ties / losses count incidents where the first solver scored higher / the same / lower, by any margin. A per-incident mean of 0.5 can mean one of two causes found or half of the runs right. The 95% interval is a percentile bootstrap over incidents (10,000 resamples, fixed seed); at this few incidents it is approximate and somewhat too narrow, and it is not given below 5 shared incidents. An interval that includes 0 means this benchmark cannot tell the two apart. p is an exact paired permutation test on the fault incidents (every sign flip of the per-incident differences), which does not share the bootstrap's narrowness. About a dozen comparisons are shown with no multiple-comparison correction; an interval that only just excludes 0 is suggestive, not established. Fault-only differences ignore false alarms on the 4 controls; the last three columns include them, over the incidents both solvers have run.
 
-| comparison | incidents | wins / ties / losses | mean difference | 95% interval |
-|---|---|---|---|---|
-| agent-v0 vs heuristic | 16/16 | 3 / 5 / 8 | -0.12 | -0.39 to +0.17 |
-| agent-v1 vs heuristic | 16/16 | 3 / 7 / 6 | -0.18 | -0.40 to +0.02 |
-| agent-v1 vs agent-v0 | 16/16 | 5 / 6 / 5 | -0.06 | -0.23 to +0.10 |
-| agent-v1-vague vs agent-v1 | 4/16 | 0 / 3 / 1 | -0.20 | n/a (too few incidents or no spread) |
-| agent-v0-nemotron vs heuristic | 16/16 | 6 / 4 / 6 | +0.10 | -0.15 to +0.35 |
-| agent-v1-nemotron vs heuristic | 16/16 | 5 / 8 / 3 | +0.08 | -0.05 to +0.23 |
-| agent-v1-nemotron vs agent-v1 | 16/16 | 9 / 5 / 2 | +0.26 | +0.10 to +0.44 |
-| agent-v1-nemotron vs agent-v0-nemotron | 16/16 | 6 / 4 / 6 | -0.02 | -0.14 to +0.11 |
-| agent-v1-nemotron-nopriors vs agent-v1-nemotron | 16/16 | 4 / 8 / 4 | -0.01 | -0.07 to +0.06 |
-| agent-v1-nemotron-vague vs agent-v1-nemotron | 16/16 | 1 / 9 / 6 | -0.12 | -0.25 to -0.01 |
-| agent-v1-nemotron-steps30 vs agent-v1-nemotron | 16/16 | 4 / 7 / 5 | -0.04 | -0.16 to +0.06 |
+| comparison | incidents | wins / ties / losses | mean difference | 95% interval | p (permutation) | incidents (controls incl.) | mean difference (controls incl.) | 95% interval (controls incl.) |
+|---|---|---|---|---|---|---|---|---|
+| agent-v0 vs heuristic | 16/16 | 3 / 5 / 8 | -0.12 | -0.39 to +0.17 | 0.44 | 20/20 | -0.05 | -0.29 to +0.20 |
+| agent-v1 vs heuristic | 16/16 | 3 / 7 / 6 | -0.18 | -0.40 to +0.02 | 0.15 | 20/20 | -0.10 | -0.30 to +0.11 |
+| agent-v1 vs agent-v0 | 16/16 | 5 / 6 / 5 | -0.06 | -0.23 to +0.10 | 0.60 | 20/20 | -0.05 | -0.18 to +0.08 |
+| agent-v1-vague vs agent-v1 | 4/16 | 0 / 3 / 1 | -0.20 | n/a (too few incidents or no spread) | 1.00 | 8/20 | -0.23 | -0.53 to +0.00 |
+| agent-v0-nemotron vs heuristic | 16/16 | 6 / 4 / 6 | +0.10 | -0.15 to +0.35 | 0.49 | 20/20 | -0.01 | -0.24 to +0.23 |
+| agent-v1-nemotron vs heuristic | 16/16 | 5 / 8 / 3 | +0.08 | -0.05 to +0.23 | 0.31 | 20/20 | +0.01 | -0.11 to +0.15 |
+| agent-v1-nemotron vs agent-v1 | 16/16 | 9 / 5 / 2 | +0.26 | +0.10 to +0.44 | 0.01 | 20/20 | +0.11 | -0.09 to +0.31 |
+| agent-v0-nemotron vs agent-v0 | 16/16 | 9 / 4 / 3 | +0.23 | +0.04 to +0.41 | 0.05 | 20/20 | +0.04 | -0.19 to +0.26 |
+| agent-v1-nemotron vs agent-v0-nemotron | 16/16 | 6 / 4 / 6 | -0.02 | -0.14 to +0.11 | 0.86 | 20/20 | +0.03 | -0.09 to +0.14 |
+| agent-v1-nemotron-nopriors vs agent-v1-nemotron | 16/16 | 4 / 8 / 4 | -0.01 | -0.07 to +0.06 | 1.00 | 20/20 | -0.00 | -0.07 to +0.07 |
+| agent-v1-nemotron-vague vs agent-v1-nemotron | 16/16 | 1 / 9 / 6 | -0.12 | -0.25 to -0.01 | 0.09 | 20/20 | -0.15 | -0.26 to -0.05 |
+| agent-v1-nemotron-steps30 vs agent-v1-nemotron | 16/16 | 4 / 7 / 5 | -0.04 | -0.16 to +0.06 | 0.53 | 20/20 | -0.03 | -0.14 to +0.09 |
 
 agent-v1-vague: partial batch (0-1 runs per scenario, 8/60 runs)
 
 ## Failure modes (all split, wrong fault-incident runs)
 
-How each wrong run on a fault incident went wrong. The top-changed service is the one with the largest rise in the incident's change table, usually where the symptom shows; naming it is the heuristic's whole method and its typical mistake.
+How each wrong run on a fault incident went wrong. The top-changed service is the one with the largest rise in the incident's change table, usually where the symptom shows; naming it is the heuristic's whole method. Each wrong run is counted once, in the first matching column, left to right.
 
-| solver | wrong runs | said no incident | named the top-changed service | true cause ranked 2nd or 3rd | found one of two causes | another wrong service | abstained |
+| solver | wrong runs | said no incident | abstained | found one of two causes | true cause ranked 2nd or 3rd | named the top-changed service | another wrong service |
 |---|---|---|---|---|---|---|---|
-| heuristic | 7 | 0 | 3 | 3 | 1 | 0 | 0 |
-| agent-v0 | 45 | 26 | 7 | 7 | 5 | 0 | 0 |
-| agent-v1 | 49 | 34 | 9 | 2 | 4 | 0 | 0 |
+| heuristic | 7 | 0 | 0 | 1 | 3 | 3 | 0 |
+| agent-v0 | 45 | 26 | 0 | 5 | 7 | 7 | 0 |
+| agent-v1 | 49 | 34 | 0 | 4 | 2 | 9 | 0 |
 | agent-v1-vague | 2 | 2 | 0 | 0 | 0 | 0 | 0 |
-| agent-v0-nemotron | 29 | 0 | 5 | 2 | 9 | 10 | 3 |
-| agent-v1-nemotron | 29 | 2 | 8 | 10 | 6 | 2 | 1 |
-| agent-v1-nemotron-nopriors | 29 | 0 | 7 | 13 | 5 | 2 | 2 |
-| agent-v1-nemotron-vague | 40 | 3 | 12 | 5 | 9 | 6 | 5 |
-| agent-v1-nemotron-steps30 | 31 | 2 | 11 | 8 | 3 | 7 | 0 |
-| agent-v1@gemma-4-26b-a4b-it | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| agent-v0-nemotron | 29 | 0 | 3 | 9 | 2 | 5 | 10 |
+| agent-v1-nemotron | 29 | 2 | 1 | 6 | 10 | 8 | 2 |
+| agent-v1-nemotron-nopriors | 29 | 0 | 2 | 5 | 13 | 7 | 2 |
+| agent-v1-nemotron-vague | 40 | 3 | 5 | 9 | 5 | 12 | 6 |
+| agent-v1-nemotron-steps30 | 31 | 2 | 0 | 3 | 8 | 11 | 7 |
+| agent-v1@z-ai-glm-5.3-flash | 9 | 3 | 0 | 0 | 3 | 2 | 1 |
 | hunch-0.6b | 16 | 16 | 0 | 0 | 0 | 0 | 0 |
 | hunch-1.7b | 16 | 16 | 0 | 0 | 0 | 0 | 0 |
-| laya-english | 13 | 0 | 4 | 5 | 0 | 4 | 0 |
-| laya-multilingual | 11 | 10 | 0 | 1 | 0 | 0 | 0 |
+| laya-english | 13 | 0 | 0 | 0 | 5 | 4 | 4 |
+| laya-multilingual | 11 | 10 | 0 | 0 | 1 | 0 | 0 |
 
 ## Step limit (all split, fault runs)
 
-An agent that is still calling tools after 15 model turns is told to give its final answer. This splits each agent's fault runs by whether that happened: how many hit the limit, how many of those then answered "no incident", and the accuracy (mean over runs, not per scenario) with and without hitting it.
+An agent still calling tools when it reaches its step limit (15 model turns; 30 for the 30-step ablation) is told to give its final answer. This splits each agent's fault runs by whether that happened: how many hit the limit, how many of those then answered "no incident", and the accuracy (mean over runs, not per scenario) with and without hitting it.
 
 | solver | fault runs | hit the limit | then said no incident | accuracy when hit | accuracy otherwise |
 |---|---|---|---|---|---|
-| agent-v0 | 80 | 22 (28%) | 5 of 22 | 0.55 | 0.44 |
-| agent-v1 | 80 | 53 (66%) | 28 of 53 | 0.32 | 0.59 |
+| agent-v0 | 80 | 19 (24%) | 5 of 19 | 0.53 | 0.45 |
+| agent-v1 | 80 | 49 (61%) | 27 of 49 | 0.29 | 0.61 |
 | agent-v1-vague | 4 | 4 (100%) | 2 of 4 | 0.50 | - |
-| agent-v0-nemotron | 80 | 77 (96%) | 0 of 77 | 0.69 | 0.67 |
-| agent-v1-nemotron | 80 | 57 (71%) | 2 of 57 | 0.61 | 0.83 |
-| agent-v1-nemotron-nopriors | 80 | 53 (66%) | 0 of 53 | 0.62 | 0.76 |
-| agent-v1-nemotron-vague | 80 | 64 (80%) | 3 of 64 | 0.51 | 0.75 |
-| agent-v1-nemotron-steps30 | 80 | 62 (78%) | 2 of 62 | 0.60 | 0.75 |
-| agent-v1@gemma-4-26b-a4b-it | 1 | 1 (100%) | 0 of 1 | 1.00 | - |
+| agent-v0-nemotron | 80 | 75 (94%) | 0 of 75 | 0.69 | 0.80 |
+| agent-v1-nemotron | 80 | 54 (68%) | 2 of 54 | 0.63 | 0.77 |
+| agent-v1-nemotron-nopriors | 80 | 49 (61%) | 0 of 49 | 0.63 | 0.73 |
+| agent-v1-nemotron-vague | 80 | 62 (78%) | 3 of 62 | 0.49 | 0.78 |
+| agent-v1-nemotron-steps30 | 80 | 12 (15%) | 0 of 12 | 0.46 | 0.66 |
+| agent-v1@z-ai-glm-5.3-flash | 31 | 2 (6%) | 0 of 2 | 0.50 | 0.72 |
 
-## Run-to-run agreement (all incidents)
+## Run-to-run agreement (all scenarios, controls included)
 
-The agents run at temperature 0, yet their runs still differ, so this measures how far a single run can be trusted. A run's top answer is its first cause's service, or its verdict when it names no cause. Pairwise agreement is the share of run pairs on a scenario that give the same top answer, averaged over the scenarios with at least 2 runs; controls included. With fewer runs per scenario every run agrees more easily, so compare complete batches only.
+The built-in agents run at temperature 0, yet their runs still differ, so this measures how far a single run can be trusted. A run's top answer is its first cause's service, or its verdict when it names no cause. Pairwise agreement is the share of run pairs on a scenario that give the same top answer, averaged over the scenarios with at least 2 runs; controls included. With fewer runs per scenario every run agrees more easily, so compare complete batches only.
 
 | solver | scenarios with 2+ runs | every run agrees | pairwise agreement |
 |---|---|---|---|
@@ -170,8 +173,11 @@ The agents run at temperature 0, yet their runs still differ, so this measures h
 | agent-v1-nemotron-nopriors | 20 | 8 of 20 | 0.65 |
 | agent-v1-nemotron-vague | 20 | 9 of 20 | 0.58 |
 | agent-v1-nemotron-steps30 | 20 | 9 of 20 | 0.64 |
+| agent-v1@z-ai-glm-5.3-flash | 19 | 16 of 19 | 0.84 |
 
-## Calibration (all incidents, record-level)
+agent-v1@z-ai-glm-5.3-flash: partial batch (1-2 runs per scenario, 39/100 runs)
+
+## Calibration (all scenarios, controls included, record-level)
 
 A well-calibrated agent's mean stated confidence matches its accuracy. Accuracy here is the mean `correct` over runs, controls included, not the tables' mean over scenarios. ECE (expected calibration error) splits the runs into 5 equal-width confidence bins and sums, over the bins, the bin's share of runs times |mean confidence - accuracy|. Brier is the mean of (confidence - correct)^2. Lower is better for both. Every agent here states a mean confidence above its accuracy: all of them are overconfident.
 
@@ -184,6 +190,9 @@ A well-calibrated agent's mean stated confidence matches its accuracy. Accuracy 
 | agent-v1-nemotron-nopriors | 100 | 0.87 | 0.64 | 0.24 | 0.26 |
 | agent-v1-nemotron-vague | 100 | 0.85 | 0.49 | 0.36 | 0.33 |
 | agent-v1-nemotron-steps30 | 100 | 0.88 | 0.61 | 0.27 | 0.29 |
+| agent-v1@z-ai-glm-5.3-flash | 39 | 0.83 | 0.72 | 0.11 | 0.19 |
+
+agent-v1@z-ai-glm-5.3-flash: partial batch (1-2 runs per scenario, 39/100 runs)
 
 ## Cost
 
@@ -201,7 +210,7 @@ The heuristic makes no model calls, so it has no token usage.
 | agent-v1-nemotron-nopriors | 100 / 100 | 14.85 | 17 | 89252 | 3534 | 146119 |
 | agent-v1-nemotron-vague | 100 / 100 | 15.17 | 17 | 89947 | 3687 | 189160 |
 | agent-v1-nemotron-steps30 | 100 / 100 | 22.39 | 31 | 223879 | 6012 | 373806 |
-| agent-v1@gemma-4-26b-a4b-it | 1 / 1 | 16.00 | 16 | 117918 | 557 | 118475 |
+| agent-v1@z-ai-glm-5.3-flash | 39 / 39 | 10.23 | 16 | 113642 | 6963 | 167987 |
 | hunch-0.6b | 0 / 20 | - | - | - | - | - |
 | hunch-1.7b | 0 / 20 | - | - | - | - | - |
 | laya-english | 0 / 20 | - | - | - | - | - |
@@ -211,28 +220,28 @@ The heuristic makes no model calls, so it has no token usage.
 
 `*` marks held-out scenarios; each cell is the mean over that scenario's runs, with the number of runs.
 
-| scenario | category | heuristic | agent-v0 | agent-v1 | agent-v1-nopriors | agent-v1-vague | agent-v0-nemotron | agent-v1-nemotron | agent-v1-nemotron-nopriors | agent-v1-nemotron-vague | agent-v1-nemotron-steps30 | agent-v1@gemma-4-26b-a4b-it | hunch-0.6b | hunch-1.7b | laya-english | laya-multilingual |
+| scenario | category | heuristic | agent-v0 | agent-v1 | agent-v1-nopriors | agent-v1-vague | agent-v0-nemotron | agent-v1-nemotron | agent-v1-nemotron-nopriors | agent-v1-nemotron-vague | agent-v1-nemotron-steps30 | agent-v1@z-ai-glm-5.3-flash | hunch-0.6b | hunch-1.7b | laya-english | laya-multilingual |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| ad-failure | easy | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
-| ad-high-cpu | hard-silent | 1.00 (1 run) | 0.00 (5 runs) | 0.00 (5 runs) | not run | 0.00 (1 run) | 0.00 (5 runs) | 0.60 (5 runs) | 0.40 (5 runs) | 0.00 (5 runs) | 0.20 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
-| checkout-cpu-throttle | hard-silent | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 1.00 (1 run) | 0.60 (5 runs) | 0.80 (5 runs) | 0.80 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) |
-| control-1 | control | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 1.00 (1 run) | 0.40 (5 runs) | 0.80 (5 runs) | 0.60 (5 runs) | 0.20 (5 runs) | 0.60 (5 runs) | - | 1.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
-| control-2 | control | 0.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 0.00 (1 run) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | - | 1.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
-| control-3 | control | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 1.00 (1 run) | 0.60 (5 runs) | 0.80 (5 runs) | 0.60 (5 runs) | 0.60 (5 runs) | 0.60 (5 runs) | - | 1.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
-| control-4* | control | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 1.00 (1 run) | 0.20 (5 runs) | 0.40 (5 runs) | 0.80 (5 runs) | 0.20 (5 runs) | 1.00 (5 runs) | - | 1.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
-| email-memory-leak | hard-silent | 1.00 (1 run) | 0.20 (5 runs) | 0.80 (5 runs) | not run | 0.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 0.20 (5 runs) | 1.00 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) | 1.00 (1 run) |
-| image-slow-load-and-ad-high-cpu | hard-two-faults | 0.50 (1 run) | 0.00 (5 runs) | 0.10 (5 runs) | not run | - | 0.40 (5 runs) | 0.50 (5 runs) | 0.60 (5 runs) | 0.40 (5 runs) | 0.80 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
-| image-slow-load | hard-silent | 1.00 (1 run) | 0.40 (5 runs) | 0.40 (5 runs) | not run | - | 0.80 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 0.80 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
-| kafka-queue-problems | hard-cross-service | 0.00 (1 run) | 0.00 (5 runs) | 0.00 (5 runs) | not run | - | 0.40 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
-| lock-contention-with-flood | hard-noisy | 0.00 (1 run) | 0.60 (5 runs) | 0.20 (5 runs) | not run | - | 0.40 (5 runs) | 0.20 (5 runs) | 0.40 (5 runs) | 0.20 (5 runs) | 0.00 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
-| payment-failure-50 | easy | 1.00 (1 run) | 0.80 (5 runs) | 1.00 (5 runs) | not run | - | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
-| payment-failure-and-recommendation-leak* | hard-two-faults | 1.00 (1 run) | 0.50 (5 runs) | 0.30 (5 runs) | not run | - | 0.50 (5 runs) | 0.70 (5 runs) | 0.90 (5 runs) | 0.50 (5 runs) | 0.90 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
-| payment-failure-with-flood* | hard-noisy | 1.00 (1 run) | 0.80 (5 runs) | 1.00 (5 runs) | not run | - | 1.00 (5 runs) | 1.00 (5 runs) | 0.80 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) |
-| payment-unreachable | hard-cross-service | 0.00 (1 run) | 0.00 (5 runs) | 0.00 (5 runs) | not run | - | 0.80 (5 runs) | 0.60 (5 runs) | 0.60 (5 runs) | 0.40 (5 runs) | 0.40 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
-| product-catalog-failure* | easy | 0.00 (1 run) | 1.00 (5 runs) | 0.00 (5 runs) | not run | - | 1.00 (5 runs) | 0.60 (5 runs) | 0.80 (5 runs) | 0.60 (5 runs) | 0.60 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
-| product-catalog-lock-contention | hard-silent | 0.00 (1 run) | 1.00 (5 runs) | 0.60 (5 runs) | not run | - | 0.60 (5 runs) | 0.40 (5 runs) | 0.20 (5 runs) | 0.20 (5 runs) | 0.40 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
-| recommendation-cache-leak* | hard-silent | 1.00 (1 run) | 0.20 (5 runs) | 0.00 (5 runs) | not run | - | 0.80 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 0.40 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
-| valkey-cart-paused* | hard-cross-service | 0.00 (1 run) | 0.00 (5 runs) | 0.20 (5 runs) | not run | - | 0.80 (5 runs) | 0.40 (5 runs) | 0.20 (5 runs) | 0.40 (5 runs) | 0.60 (5 runs) | - | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| ad-failure | easy | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| ad-high-cpu | hard-silent | 1.00 (1 run) | 0.00 (5 runs) | 0.00 (5 runs) | not run | 0.00 (1 run) | 0.00 (5 runs) | 0.60 (5 runs) | 0.40 (5 runs) | 0.00 (5 runs) | 0.20 (5 runs) | 0.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| checkout-cpu-throttle | hard-silent | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 1.00 (1 run) | 0.60 (5 runs) | 0.80 (5 runs) | 0.80 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) |
+| control-1 | control | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 1.00 (1 run) | 0.40 (5 runs) | 0.80 (5 runs) | 0.60 (5 runs) | 0.20 (5 runs) | 0.60 (5 runs) | 0.00 (2 runs) | 1.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
+| control-2 | control | 0.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 0.00 (1 run) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | 1.00 (2 runs) | 1.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| control-3 | control | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 1.00 (1 run) | 0.60 (5 runs) | 0.80 (5 runs) | 0.60 (5 runs) | 0.60 (5 runs) | 0.60 (5 runs) | 1.00 (2 runs) | 1.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
+| control-4* | control | 1.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | not run | 1.00 (1 run) | 0.20 (5 runs) | 0.40 (5 runs) | 0.80 (5 runs) | 0.20 (5 runs) | 1.00 (5 runs) | 1.00 (2 runs) | 1.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| email-memory-leak | hard-silent | 1.00 (1 run) | 0.20 (5 runs) | 0.80 (5 runs) | not run | 0.00 (1 run) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 0.20 (5 runs) | 1.00 (5 runs) | 0.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) | 1.00 (1 run) |
+| image-slow-load-and-ad-high-cpu | hard-two-faults | 0.50 (1 run) | 0.00 (5 runs) | 0.10 (5 runs) | not run | - | 0.40 (5 runs) | 0.50 (5 runs) | 0.60 (5 runs) | 0.40 (5 runs) | 0.80 (5 runs) | 1.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| image-slow-load | hard-silent | 1.00 (1 run) | 0.40 (5 runs) | 0.40 (5 runs) | not run | - | 0.80 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 0.80 (5 runs) | 1.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| kafka-queue-problems | hard-cross-service | 0.00 (1 run) | 0.00 (5 runs) | 0.00 (5 runs) | not run | - | 0.40 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (5 runs) | 0.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| lock-contention-with-flood | hard-noisy | 0.00 (1 run) | 0.60 (5 runs) | 0.20 (5 runs) | not run | - | 0.40 (5 runs) | 0.20 (5 runs) | 0.40 (5 runs) | 0.20 (5 runs) | 0.00 (5 runs) | 1.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
+| payment-failure-50 | easy | 1.00 (1 run) | 0.80 (5 runs) | 1.00 (5 runs) | not run | - | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| payment-failure-and-recommendation-leak* | hard-two-faults | 1.00 (1 run) | 0.50 (5 runs) | 0.30 (5 runs) | not run | - | 0.50 (5 runs) | 0.70 (5 runs) | 0.90 (5 runs) | 0.50 (5 runs) | 0.90 (5 runs) | 1.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| payment-failure-with-flood* | hard-noisy | 1.00 (1 run) | 0.80 (5 runs) | 1.00 (5 runs) | not run | - | 1.00 (5 runs) | 1.00 (5 runs) | 0.80 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) | 0.00 (1 run) |
+| payment-unreachable | hard-cross-service | 0.00 (1 run) | 0.00 (5 runs) | 0.00 (5 runs) | not run | - | 0.80 (5 runs) | 0.60 (5 runs) | 0.60 (5 runs) | 0.40 (5 runs) | 0.40 (5 runs) | 0.50 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
+| product-catalog-failure* | easy | 0.00 (1 run) | 1.00 (5 runs) | 0.00 (5 runs) | not run | - | 1.00 (5 runs) | 0.60 (5 runs) | 0.80 (5 runs) | 0.60 (5 runs) | 0.60 (5 runs) | 1.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
+| product-catalog-lock-contention | hard-silent | 0.00 (1 run) | 1.00 (5 runs) | 0.60 (5 runs) | not run | - | 0.60 (5 runs) | 0.40 (5 runs) | 0.20 (5 runs) | 0.20 (5 runs) | 0.40 (5 runs) | 0.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
+| recommendation-cache-leak* | hard-silent | 1.00 (1 run) | 0.20 (5 runs) | 0.00 (5 runs) | not run | - | 0.80 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 1.00 (5 runs) | 0.40 (5 runs) | 1.00 (2 runs) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 1.00 (1 run) |
+| valkey-cart-paused* | hard-cross-service | 0.00 (1 run) | 0.00 (5 runs) | 0.20 (5 runs) | not run | - | 0.80 (5 runs) | 0.40 (5 runs) | 0.20 (5 runs) | 0.40 (5 runs) | 0.60 (5 runs) | 1.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) | 0.00 (1 run) |
 
 ## Accuracy vs coverage (all split, record-level)
 
@@ -244,8 +253,6 @@ agent-v0: accuracy 0.69 at 66% coverage (the curve point nearest 50%, confidence
 
 agent-v1: accuracy 0.66 at 50% coverage (the curve point nearest 50%, confidence >= 0.95).
 
-agent-v1-vague: accuracy 1.00 at 38% coverage (the curve point nearest 50%, confidence >= 0.95). Partial batch (0-1 runs per scenario, 8/60 runs): treat with caution.
-
 agent-v0-nemotron: accuracy 0.73 at 49% coverage (the curve point nearest 50%, confidence >= 0.90).
 
 agent-v1-nemotron: accuracy 0.67 at 70% coverage (the curve point nearest 50%, confidence >= 0.90).
@@ -256,7 +263,7 @@ agent-v1-nemotron-vague: accuracy 0.54 at 68% coverage (the curve point nearest 
 
 agent-v1-nemotron-steps30: accuracy 0.72 at 25% coverage (the curve point nearest 50%, confidence >= 0.95).
 
-agent-v1@gemma-4-26b-a4b-it: accuracy 1.00 at 100% coverage (the curve point nearest 50%, confidence >= 1.00). Partial batch (0-1 runs per scenario, 1/100 runs): treat with caution.
+agent-v1@z-ai-glm-5.3-flash: accuracy 0.85 at 51% coverage (the curve point nearest 50%, confidence >= 0.85). Partial batch (1-2 runs per scenario, 39/100 runs): treat with caution.
 
 ## Provenance
 
@@ -272,7 +279,7 @@ Code versions (git short sha) of the records behind each solver:
 - agent-v1-nemotron-nopriors: dc26375
 - agent-v1-nemotron-vague: dc26375
 - agent-v1-nemotron-steps30: 2a14eb4
-- agent-v1@gemma-4-26b-a4b-it: 4f2ca2f
+- agent-v1@z-ai-glm-5.3-flash: a71b551
 - hunch-0.6b: dc26375
 - hunch-1.7b: dc26375
 - laya-english: 4ca5a14
@@ -284,4 +291,4 @@ During agent-v1 development, v1 tool output was viewed on one held-out incident 
 
 Solvers with no recorded runs: agent-v1-nopriors.
 
-A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run takes about 12-15 requests (up to 17), so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparison is instead agent-v1-nemotron: agent v1 unchanged (prompt, tools, step limit) on `nvidia/nemotron-3-super-120b-a12b` through NVIDIA's free trial endpoint.
+A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run takes about 12-15 requests (up to 17), so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparison is instead agent-v0-nemotron and agent-v1-nemotron: agents v0 and v1 unchanged (prompt, tools, step limit) on `nvidia/nemotron-3-super-120b-a12b` through NVIDIA's free trial endpoint.
