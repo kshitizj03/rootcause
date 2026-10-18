@@ -1,17 +1,38 @@
 # RootCause
 
-An LLM agent that investigates microservice incidents. Given a symptom ("customers report orders failing at checkout"), it queries OpenTelemetry metrics, traces and logs through tools and names the service and fault type behind it, citing evidence that is checked against the telemetry.
+RootCause is an LLM agent that investigates microservice incidents over OpenTelemetry metrics, traces and logs, and a benchmark that asks whether it beats a simple rule. Every answer is scored against ground truth on 20 recorded [OpenTelemetry Demo](https://github.com/open-telemetry/opentelemetry-demo) incidents (16 faults, 4 no-fault controls), against a 28-line heuristic that names the service whose fault signal rose most.
 
-RootCause is mainly a **benchmark**: is an LLM agent actually better than a simple rule, and where? Every answer is scored against ground truth on 20 recorded incidents. The scoring rules were fixed before the first run, there are no-fault controls, each agent batch is planned for 5 runs per incident (3 for the Gemini ablations), and a held-out split is kept out of tuning (one exception, disclosed under Provenance in the report).
+**The result, honestly:**
+- **No agent is clearly better than the heuristic.** Every paired 95% interval against it includes 0.
+- **The model matters more than the tools on fault incidents.** With the same prompt and tools, agent v1 on Nemotron 3 Super scores +0.26 higher than on Gemini 3.5 Flash-Lite (95% interval +0.10 to +0.44).
+- **Counting the 4 no-fault controls, that gap shrinks to +0.11 and its interval includes 0** (-0.09 to +0.31), because Nemotron raises far more false alarms.
+- **The change-aware tools change nothing measurable** on either model.
 
-> **Status, as of 2026-10-17.** Everything is built, and every main batch is complete.
-> - **Complete:** the heuristic; agents v0 and v1 on Gemini and on Nemotron (100 runs each); on Nemotron, the no-priors, vague-alert and 30-step ablations.
-> - **Running:** the Gemini vague-alert and no-priors ablations (the free tier allows about 40 runs a day).
-> - **Headline:** the model matters more than the tools. With the same tools, Nemotron beats Gemini Flash-Lite by 0.26 on fault incidents (95% interval +0.10 to +0.44), while the change-aware tools change nothing measurable on either model, and no agent is clearly better than the simple heuristic.
->
-> The numbers are in [`docs/results/report.md`](docs/results/report.md), which marks partial batches as partial; what they show (model vs tools vs alert vs prompt) is in [`docs/results/agents.md`](docs/results/agents.md). Two small decision models, Laya and Hunch, both scored below the heuristic zero-shot, so no small-model-then-agent cascade was built ([`laya.md`](docs/results/laya.md), [`hunch.md`](docs/results/hunch.md)).
+The tables behind every number are in [`docs/results/report.md`](docs/results/report.md), what they mean is in [`docs/results/agents.md`](docs/results/agents.md), and the threats to validity are in the [methodology FAQ](docs/faq.md).
+
+## Quick start
+
+Python 3.11. In a virtual environment (create it with `python -m venv .venv`, then activate it: `.venv\Scripts\activate` on Windows, `source .venv/bin/activate` on macOS/Linux):
+
+```
+pip install -e .
+rootcause fetch-data
+rootcause eval heuristic
+```
+
+- `pip install -e .` installs the package and the `rootcause` command. It must be editable (`-e`), because the package reads `scenarios/` and `data/` from this checkout.
+- `rootcause fetch-data` downloads the data release (the 20 recorded snapshots and every run record behind the report), checks its SHA-256 and unpacks it into `data/`. It works once the `data-v1` release is published on GitHub; until then, or offline, pass a local copy of the archive with `rootcause fetch-data --from rootcause-data-v1.zip`.
+- `rootcause eval heuristic` scores the heuristic and prints its summary. Batches are resumable, so with the released records in place it adds no runs; delete `data/runs/heuristic` to score it from scratch. The agents need an API key (see [Score the solvers](#score-the-solvers)).
+
+## Status
+
+> - **Complete:** the heuristic; agents v0 and v1 on Gemini 3.5 Flash-Lite and on Nemotron 3 Super (5 runs on each of the 20 incidents); on Nemotron, the no-priors, vague-alert and 30-step ablations.
+> - **Running:** the Gemini vague-alert and no-priors ablations (quota-bound on the free tier) and agent v1 on GLM 5.3 Flash. [`report.md`](docs/results/report.md) marks them as partial; no conclusions are drawn from them yet. Other models that were tried and not run (timeouts) are listed under [Models tried](docs/results/agents.md#models-tried).
+> - Two small decision models, Laya and Hunch, both scored below the heuristic zero-shot, so no small-model-then-agent cascade was built ([`laya.md`](docs/results/laya.md), [`hunch.md`](docs/results/hunch.md)).
 
 ## How it works
+
+The scoring rules were fixed before the first run, there are no-fault controls, each agent batch is planned for 5 runs per incident (3 for the Gemini ablations), and a held-out split is kept out of tuning (one exception, disclosed under Provenance in the report).
 
 ```
  OpenTelemetry Demo (28 services, Docker)
@@ -45,7 +66,7 @@ The automated leak scan checks every snapshot's metrics, spans and logs, which c
 - **Heuristic:** ranks every service's error ratio, p95 latency, peak memory, CPU and restarts by how much each rose compared with a 15-minute baseline. It names the top one. Its threshold was fixed in advance.
 - **Agent v0:** a model tool loop with naive tools (raw metric series, trace and log search).
 - **Agent v1:** the same loop with change-aware tools (`top_changes`, `service_health`, `service_map`) and structured, checkable evidence.
-- **Ablations of agent v1,** each changing one thing: *no priors* drops the two generic sentences from the prompt ("the service the alert mentions is often NOT the cause", "it is possible that nothing is actually wrong"), and *vague alert* gives every incident the same alert, "Users report that something is wrong with the shop." Both are implemented: on Nemotron, no-priors is complete and vague-alert is running; the Gemini runs are queued.
+- **Ablations of agent v1,** each changing one thing: *no priors* drops the two generic sentences from the prompt ("the service the alert mentions is often NOT the cause", "it is possible that nothing is actually wrong"), and *vague alert* gives every incident the same alert, "Users report that something is wrong with the shop." On Nemotron both are complete, plus a third ablation with a 30-step limit instead of 15; on Gemini both are in progress.
 
 The agents run on two model families, both at temperature 0: Gemini 3.5 Flash-Lite (free tier) and Nemotron 3 Super (`nvidia/nemotron-3-super-120b-a12b`, NVIDIA's free trial endpoint). One model is pinned per batch, so results never mix models.
 
@@ -76,8 +97,9 @@ A static site replays every recorded run, failures included:
 *(Screenshots from 2026-10-15: the Gemini batches are still partial; empty tiles are runs not done yet.)*
 
 ```bash
-python -m rootcause report && python -m rootcause site   # regenerate figures and site/data from data/runs (see Data below)
-python -m http.server 8000 -d site                       # then open http://localhost:8000
+python -m rootcause report    # rewrites docs/results/ from your data/runs; `git checkout docs/results` restores the published results
+python -m rootcause site      # builds site/data from data/runs and copies the charts from docs/results/figures
+python -m http.server 8000 -d site   # then open http://localhost:8000
 ```
 
 The site is plain HTML, CSS and JS with no build step, and every URL is relative, so it can be served from any sub-path. To publish it on GitHub Pages, copy the built `site/` (including the generated, git-ignored `site/data/` and `site/figures/`) into a `gh-pages` branch:
@@ -91,54 +113,59 @@ git -C ../rootcause-pages add -A && git -C ../rootcause-pages commit -m "Publish
 
 The site shows ground truth, so it is built after scoring and is never given to the agent or the MCP server.
 
-## Quick start
+## Running it
 
-Requirements: Windows, macOS or Linux, Python 3.11, Docker (about 4 GB RAM for the demo), and, for agent runs only, a free [Gemini API key](https://aistudio.google.com/) and/or a free [NVIDIA API key](https://build.nvidia.com/).
+Requirements: Windows, macOS or Linux, Python 3.11; Docker (about 4 GB RAM for the demo) only to record new incidents; and, for agent runs only, a free [Gemini API key](https://aistudio.google.com/) and/or a free [NVIDIA API key](https://build.nvidia.com/). For the exact dependency versions CI uses, `pip install -r requirements-lock.txt` before `pip install -e .`. The offline test suite runs with `pip install -e ".[dev]"`, then `python -m pytest -q`.
 
-```bash
-python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt   # (bin/python on macOS/Linux)
-.venv/Scripts/python -m pip install -e .                                            # optional: adds the `rootcause` command (must be editable, -e)
-.venv/Scripts/python -m pytest -q                                                   # offline test suite
-```
+Every `rootcause <command>` below can also be run as `python -m rootcause <command>`. Either way, `data/`, `scenarios/` and `docs/results/` are the ones in this checkout, whatever the current directory.
 
-After `pip install -e .`, every `python -m rootcause <command>` below can also be run as `rootcause <command>` (with the venv active). The install must be editable (`-e`): the package reads `scenarios/` and `data/` from this repository, so a regular `pip install .` would not find them. Either way, `data/`, `scenarios/` and `docs/results/` are the ones in this checkout, whatever the current directory.
+**Data.** The recorded snapshots and run records are not in this repository; they come with the data release (`rootcause fetch-data`, see the quick start). The commands that read `data/` (`eval`, `eval-custom`, `summary`, `report`, `site` and `mcp`) need it, or incidents you recorded yourself (below).
 
-**Data.** The recorded snapshots (16 MB) and run records (15 MB) are not in this repository. The commands that read `data/` (`eval`, `eval-custom`, `summary`, `report`, `site` and `mcp`) need incidents recorded first with `python -m rootcause record` (below).
+### Score the solvers
 
-**Score the solvers on the recorded snapshots.** Put the keys in `.env`: `GEMINI_API_KEY=...` for the Gemini solvers, and `NVIDIA_API_KEY=...` for the `*-nemotron` solvers.
+Put the keys in `.env` (copy `.env.example`): `GEMINI_API_KEY=...` for the Gemini solvers, and `NVIDIA_API_KEY=...` for the `*-nemotron` solvers.
 
 ```bash
-python -m rootcause eval heuristic
-python -m rootcause eval agent-v1 --runs 5          # resumable; stops cleanly on the daily free-tier quota
-python -m rootcause eval agent-v1-nemotron --runs 5
-python -m rootcause summary agent-v1 --split heldout
+rootcause eval heuristic
+rootcause eval agent-v1 --runs 5          # resumable; stops cleanly on the daily free-tier quota
+rootcause eval agent-v1-nemotron --runs 5 --trace file   # --trace file also writes OpenTelemetry spans of each run to data/agent_traces.jsonl
+rootcause summary agent-v1 --split heldout
 ```
 
-**Record new incidents** with the demo checked out under `vendor/opentelemetry-demo`, at the commit the recordings used:
+### Record new incidents
+
+With the demo checked out under `vendor/opentelemetry-demo`, at the commit the recordings used:
 
 ```bash
-git clone https://github.com/open-telemetry/opentelemetry-demo vendor/opentelemetry-demo && git -C vendor/opentelemetry-demo checkout cbaf761
-python -m rootcause up && python -m rootcause record --all   # ~24 min per scenario (cool-down + fault + capture)
-python -m rootcause leak-check
+git clone https://github.com/open-telemetry/opentelemetry-demo vendor/opentelemetry-demo
+git -C vendor/opentelemetry-demo checkout cbaf761
+rootcause up                 # start the demo's 28 containers
+rootcause record --all       # ~24 min per scenario (cool-down + fault + capture)
+rootcause leak-check
+rootcause down               # stop the demo
 ```
 
-**Serve the tools over MCP** (any MCP client). This serves one snapshot's v1 tools over stdio, with the incident's alert as the server instructions:
+If a recording is interrupted (Ctrl+C, a crash), run `rootcause reset-flags` before the next one: it restores the feature flags, undoes Docker pauses and CPU limits, and restarts the cool-down.
+
+### Serve the tools over MCP
+
+Any MCP client works. This serves one snapshot's v1 tools over stdio, with the incident's alert as the server instructions:
 
 ```bash
-python -m rootcause mcp data/snapshots/incident__<stamp>
+rootcause mcp data/snapshots/incident__<stamp>
 ```
 
-In a client config, use absolute paths, with the venv's python as `command` and `["-m", "rootcause.mcp_server", "<abs snapshot dir>"]` as `args`. Set `cwd` to the repository root. Don't point an interactive session at a held-out snapshot (`config.HELDOUT`), because that contaminates the held-out split.
+In a client config, use absolute paths, with the venv's python as `command` and `["-m", "rootcause.mcp_server", "<abs snapshot dir>"]` as `args`. Set `cwd` to the repository root. Don't point an interactive session at a held-out snapshot (the scenarios in `config.HELDOUT`; find their directories in `data/snapshots/index.jsonl`), because that contaminates the held-out split.
 
 ## Benchmark your own model or agent
 
-Both commands need recorded incidents (see **Data** above): the snapshots are not in this repository yet.
+Both commands need the data release or your own recorded incidents (see **Data** above).
 
 ```bash
 # a built-in agent on any OpenAI-compatible endpoint with tool calling; records go to data/runs/agent-v1@<model>/
-python -m rootcause eval agent-v1 --model <model> --base-url <endpoint URL> --key-env <VAR holding the key> --runs 5
+rootcause eval agent-v1 --model <model> --base-url <endpoint URL> --key-env <VAR holding the key> --runs 5
 # your own solver: a function that takes a snapshot and returns (report, info)
-python -m rootcause eval-custom examples.my_agent:solve --name my-agent
+rootcause eval-custom examples.my_agent:solve --name my-agent
 ```
 
 Both are scored by the same rules as the built-in solvers, and `summary`, `report` and `site` pick their records up. [`docs/benchmark.md`](docs/benchmark.md) describes what a snapshot holds, what a solver may read, the report schema, the scoring rules, the splits and the rules for honest use. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers adding scenarios and built-in solvers.
@@ -162,10 +189,17 @@ Both are scored by the same rules as the built-in solvers, and `summary`, `repor
 | `examples/my_agent.py`, `docs/benchmark.md` | a small custom solver for `eval-custom`, and how to benchmark your own model or agent |
 | `experiments/laya/`, `experiments/hunch/` | decision-model entry tests: can a small model beat the heuristic? |
 | `infra/` | Compose override that pins the observability backends to fixed host ports |
+| `docs/faq.md`, `docs/prompts.md` | methodology FAQ and threats to validity; the agents' prompts and tool schemas, generated by `rootcause prompts` |
 | `docs/results/` | results: `report.md` and its figures, `agents.md` (what helps the agent), the Laya and Hunch entry tests, the interim heuristic-vs-agent-v0 write-up |
 
 ## Honest limits
 
 - **Twenty incidents from one demo app on one laptop.** This is a small benchmark, not a general claim.
-- **Every solver gets the exact fault onset** (t=0 is the injection time), and several alerts hint at the culprit's functional area. The vague-alert ablation is meant to measure how much that helps (running on Nemotron, queued on Gemini).
-- **Two free models only:** Gemini 3.5 Flash-Lite (free tier) and Nemotron 3 Super (NVIDIA's free trial endpoint), both at temperature 0. The spread across runs measures API nondeterminism, not sampling, and two models say little about how others would do.
+- **Every solver gets the exact fault onset** (t=0 is the injection time), and several alerts hint at the culprit's functional area. On Nemotron, one generic alert for every incident lowers fault accuracy by 0.12 (interval -0.25 to -0.01, borderline) and doubles false alarms (35% to 70%); the same ablation on Gemini is running.
+- **Two completed models so far:** Gemini 3.5 Flash-Lite (free tier) and Nemotron 3 Super (NVIDIA's free trial endpoint), both at temperature 0. The spread across runs measures API nondeterminism, not sampling, and two models say little about how others would do.
+
+The [methodology FAQ](docs/faq.md) covers these and the other threats to validity: one author for the scenarios, heuristic, tools and scoring; no multiple-comparison correction; the public demo code; and more.
+
+## License
+
+Apache-2.0: see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). The data release is under the same license. The OpenTelemetry Demo, which the scenarios run on and which is checked out under `vendor/`, is also Apache-2.0. To cite RootCause, see [`CITATION.cff`](CITATION.cff).
