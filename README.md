@@ -12,7 +12,7 @@ The tables behind every number are in [`docs/results/report.md`](docs/results/re
 
 ## Quick start
 
-Python 3.11. In a virtual environment (create it with `python -m venv .venv`, then activate it: `.venv\Scripts\activate` on Windows, `source .venv/bin/activate` on macOS/Linux):
+Python 3.11. In a virtual environment (create it with `python -m venv .venv`, or `python3 -m venv .venv` where `python` is not Python 3, then activate it: `.venv\Scripts\activate` on Windows, `source .venv/bin/activate` on macOS/Linux):
 
 ```
 pip install -e .
@@ -21,13 +21,13 @@ rootcause eval heuristic
 ```
 
 - `pip install -e .` installs the package and the `rootcause` command. It must be editable (`-e`), because the package reads `scenarios/` and `data/` from this checkout.
-- `rootcause fetch-data` downloads the data release (the 20 recorded snapshots and every run record behind the report), checks its SHA-256 and unpacks it into `data/`. It works once the `data-v1` release is published on GitHub; until then, or offline, pass a local copy of the archive with `rootcause fetch-data --from rootcause-data-v1.zip`.
+- `rootcause fetch-data` downloads the data release (the 20 recorded snapshots and every run record behind the report), checks its SHA-256 and unpacks it into `data/`. It works once the `data-v1` release is published on GitHub (the archive's checksum is pinned in `rootcause/config.py`); offline, pass a downloaded copy of that archive with `rootcause fetch-data --from rootcause-data-v1.zip`.
 - `rootcause eval heuristic` scores the heuristic and prints its summary. Batches are resumable, so with the released records in place it adds no runs; delete `data/runs/heuristic` to score it from scratch. The agents need an API key (see [Score the solvers](#score-the-solvers)).
 
 ## Status
 
 > - **Complete:** the heuristic; agents v0 and v1 on Gemini 3.5 Flash-Lite and on Nemotron 3 Super (5 runs on each of the 20 incidents); on Nemotron, the no-priors, vague-alert and 30-step ablations.
-> - **Running:** the Gemini vague-alert and no-priors ablations (quota-bound on the free tier) and agent v1 on GLM 5.3 Flash. [`report.md`](docs/results/report.md) marks them as partial; no conclusions are drawn from them yet. Other models that were tried and not run (timeouts) are listed under [Models tried](docs/results/agents.md#models-tried).
+> - **Running:** the Gemini vague-alert ablation (quota-bound on the free tier; the Gemini no-priors ablation is queued after it) and agent v1 on GLM 5.3 Flash. [`report.md`](docs/results/report.md) marks them as partial; no conclusions are drawn from them yet. Other models that were tried and not run (timeouts) are listed under [Models tried](docs/results/agents.md#models-tried).
 > - Two small decision models, Laya and Hunch, both scored below the heuristic zero-shot, so no small-model-then-agent cascade was built ([`laya.md`](docs/results/laya.md), [`hunch.md`](docs/results/hunch.md)).
 
 ## How it works

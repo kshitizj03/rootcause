@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RootCause scoreboard</title>
-<meta name="description" content="An LLM agent on two models (Gemini 3.5 Flash-Lite and Nemotron 3 Super) and a simple heuristic, scored against ground truth on 20 recorded microservice incidents. Every run is shown, failures included.">
+<meta name="description" content="An LLM agent on two models (Gemini 3.5 Flash-Lite and Nemotron 3 Super; a GLM 5.3 Flash batch is in progress) and a simple heuristic, scored against ground truth on 20 recorded microservice incidents. Every run is shown, failures included.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
@@ -51,7 +51,7 @@
     <ol class="steps">
       <li>A fault is injected into the OpenTelemetry Demo, a shop made of 28 services, and its metrics, traces and logs are recorded as a snapshot. The ground truth is stored separately.</li>
       <li>Every channel that could name the fault, such as feature-flag events, log wording or delay markers, is stripped, and an automated scan checks each snapshot for leaks.</li>
-      <li>Each solver gets the same snapshot and, except in the vague-alert ablations, the same alert. The heuristic names the service whose fault signal rose most. Agent v0 reads raw metric series, traces and logs; agent v1 adds a ranking of what changed, per-service health and a service map. Both run as a tool loop on Gemini 3.5 Flash-Lite or Nemotron 3 Super.</li>
+      <li>Each solver gets the same snapshot and, except in the vague-alert ablations, the same alert. The heuristic names the service whose fault signal rose most. Agent v0 reads raw metric series, traces and logs; agent v1 adds a ranking of what changed, per-service health and a service map. Both run as a tool loop on Gemini 3.5 Flash-Lite or Nemotron 3 Super (a GLM 5.3 Flash batch of agent v1 is in progress).</li>
       <li>Answers are scored by rules fixed before the first run. On single-fault incidents the top-ranked cause must be in the accepted set; on two-fault incidents each true cause named anywhere in the ranked list earns half. A control is only right with “no incident”, and abstaining counts as wrong.</li>
       <li>The agent’s cited evidence is checked against the telemetry: does it exist (grounded), and does it point at something anomalous (distinctive)?</li>
     </ol>
@@ -61,7 +61,7 @@
     <h2 id="limits-title">Honest limits</h2>
     <ul class="limits">
       <li><strong>Twenty incidents from one demo app on one laptop.</strong> This is a small benchmark, not a general claim.</li>
-      <li><strong>Every solver gets the exact fault onset</strong> (t=0 is the injection time), and several alerts hint at the culprit’s functional area. The vague-alert ablation gives agent v1 one generic alert for every incident: on Nemotron it doubles false alarms on the controls and lowers fault accuracy by a borderline 12 points, so the alerts’ hints do help. The same ablation on Gemini is running.</li>
+      <li><strong>Every solver gets the exact fault onset</strong> (t=0 is the injection time), and several alerts hint at the culprit’s functional area. The vague-alert ablation gives agent v1 one generic alert for every incident: on Nemotron it doubles false alarms on the controls and lowers fault accuracy by a borderline 12 points, so the alerts’ hints probably help. The same ablation on Gemini is running.</li>
       <li><strong>Free models only:</strong> Gemini 3.5 Flash-Lite on its free tier and Nemotron 3 Super on NVIDIA’s free trial endpoint, both at temperature 0. The spread across runs measures API nondeterminism, not sampling.</li>
     </ul>
   </section>

@@ -10,9 +10,9 @@ labels: result
 
 **Runs:** runs per incident, and whether every one of the 20 incidents was run.
 
-**Results:** the `rootcause summary <solver>` output, and the paired comparison against the heuristic from `rootcause report`.
+**Results:** the `rootcause summary <solver>` output, and your per-incident mean scores (the report's paired table covers the built-in solvers only).
 
-**Rules followed** (see [docs/benchmark.md](../../docs/benchmark.md)):
+**Rules followed** (see [docs/benchmark.md](https://github.com/kshitizj03/rootcause/blob/main/docs/benchmark.md)):
 - [ ] every run is reported, failures included
 - [ ] the solver read only what a solver may read (no truth.json, validation.json or index.jsonl)
 - [ ] nothing was tuned on the held-out incidents
