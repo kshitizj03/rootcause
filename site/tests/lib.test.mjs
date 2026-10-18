@@ -18,8 +18,9 @@ test("names: known solvers and categories, unknown ones by their record name", (
 });
 
 test("names: a built-in agent on another model names that model, not Gemini", () => {
-  assert.equal(solverName("agent-v1@z-ai-glm-5.3-flash"), "V1 on z-ai-glm-5.3-flash");
-  assert.equal(solverSub("agent-v1@z-ai-glm-5.3-flash"), "change-aware tools, another model");
+  assert.equal(solverName("agent-v1@qwen-9b"), "V1 on qwen-9b");
+  assert.equal(solverSub("agent-v1@qwen-9b"), "change-aware tools, another model");
+  assert.equal(solverName("agent-v1@z-ai-glm-5.3-flash"), "V1 on GLM");  // a planned batch gets its own label
   assert.equal(solverName("agent-v1-vague@m"), "V1 on m (vague alerts)");
   assert.equal(solverSub("my-agent@m"), "custom");   // not a built-in base
 });

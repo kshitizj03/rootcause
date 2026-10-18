@@ -21,6 +21,7 @@ export const SOLVERS = {
   "agent-v1-nemotron-nopriors": ["V1 on Nemotron (no priors)", "ablation: two prompt sentences removed"],
   "agent-v1-nemotron-vague": ["V1 on Nemotron (vague alerts)", "ablation: one generic alert"],
   "agent-v1-nemotron-steps30": ["V1 on Nemotron (30 steps)", "ablation: twice the step limit"],
+  "agent-v1@z-ai-glm-5.3-flash": ["V1 on GLM", "change-aware tools, GLM 5.3 Flash"],
 };
 
 const GEMINI = "Gemini 3.5 Flash-Lite";

@@ -94,7 +94,7 @@ A static site replays every recorded run, failures included:
 
 ![Replay of a held-out incident agent v1 on Nemotron got wrong: it ranked the symptom service, cart, above the paused valkey-cart](docs/images/replay.png)
 
-*(Screenshots from 2026-10-15: the Gemini batches are still partial; empty tiles are runs not done yet.)*
+*(Screenshots from 2026-10-18: the GLM batch and the Gemini ablations are still partial; empty tiles are runs not done yet.)*
 
 ```bash
 python -m rootcause report    # rewrites docs/results/ from your data/runs; `git checkout docs/results` restores the published results
