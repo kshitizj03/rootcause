@@ -2,8 +2,9 @@
 // Shared helpers come first; each page's renderer follows. The pure logic (names, marks, sentences, geometry) is in lib.js.
 
 import {
-  CATEGORIES, SOLVERS, solverName, solverSub, categoryName, pct, plural, isObj, num, minutes, counted, isTrueCause, mark,
-  stripSlots, strip, answerText, pairedText, alertFor, sparkGeometry, logsLine, trimNotes, argText, evidenceText,
+  CATEGORIES, SOLVERS, solverName, solverSub, categoryName, pct, signed, plural, isObj, num, minutes, counted, isTrueCause,
+  mark, stripSlots, strip, answerText, alertFor, sparkGeometry, logsLine, trimNotes, argText, evidenceText,
+  modelOf, toolsOf, isPartial, mainSolvers, vsRuleRows, findingRows, forestDomain, at,
 } from "./lib.js";
 
 const REPO = "https://github.com/kshitizj03/rootcause";
@@ -66,17 +67,120 @@ function legend() {
     h("li", {}, h("span", { class: "heldout" }, "held out"), "not used while developing the agents (one disclosed exception)"));
 }
 
-/** The headline sentence over complete batches, a note for each partial batch (lib.answerText), the paired result
- * (lib.pairedText), and what the ± figures are. */
-function answer(data, overall) {
-  const text = answerText(data, overall);
-  if (!text) return null;
-  const paired = pairedText(data, text.complete);
-  return [h("p", { class: "answer" }, `${text.headline} `, text.partial),
-    paired ? h("p", { class: "answer" }, paired) : null,
-    h("p", { class: "note" }, "Accuracy is the mean over incidents of each incident’s mean score across its runs. The ± figure under it is ",
-      "the standard deviation of that accuracy across complete runs, not a confidence interval. The paired intervals and ",
-      "the rest of the statistics are in the ", h("a", { href: REPORT }, "full report"), ".")];
+/** A solver's chart mark: its model's colour, filled for change-aware tools (v1), hollow for naive ones (v0). */
+const swatch = (s, extra = "") => h("span", { class: `dot m-${modelOf(s)} t-${toolsOf(s) ?? "rule"} ${extra}`, "aria-hidden": "true" });
+
+/** Axis ticks every 0.1 under a forest plot, as signed accuracy points. */
+function forestAxis(domain) {
+  const ticks = [];
+  for (let v = domain[0]; v <= domain[1] + 1e-9; v += 0.1) ticks.push(Math.round(v * 10) / 10);
+  return h("div", { class: "f-axis", "aria-hidden": "true" },
+    h("span", { class: "f-axis-pad" }),
+    h("div", { class: "f-track" }, ticks.map((v) =>
+      h("span", { class: v === 0 ? "f-tick zero" : "f-tick", style: `left:${at(v, domain)}` }, v === 0 ? "0" : `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`))));
+}
+
+/** One interval on a forest row: a bar from ci[0] to ci[1] and a dot at the mean, coloured by solver. */
+function interval(s, mean, ci, domain, cls = "") {
+  return h("span", { class: `f-int ${cls}` },
+    h("span", { class: `f-bar m-${modelOf(s)}`, style: `left:${at(ci[0], domain)};right:calc(100% - ${at(ci[1], domain)})` }),
+    h("span", { class: `dot m-${modelOf(s)} t-${toolsOf(s) ?? "rule"} f-dot`, style: `left:${at(mean, domain)}` }));
+}
+
+const diffText = (mean, ci) => `${signed(mean)} (95% interval ${signed(ci[0])} to ${signed(ci[1])})`;
+
+/** The hero: each complete agent's accuracy minus the rule's, with its 95% interval, around a zero line. */
+function vsRulePlot(data, rows, overall) {
+  const domain = forestDomain(rows);
+  const rule = overall.heuristic;
+  return h("figure", { class: "forest hero-plot" },
+    h("div", { class: "f-scale", "aria-hidden": "true" },
+      h("span", { class: "f-axis-pad" }),
+      h("div", { class: "f-ends" }, h("span", {}, "worse than the rule"), h("span", {}, "better than the rule"))),
+    h("ul", { class: "f-rows", role: "list" }, rows.map((r) =>
+      h("li", { class: "f-row" },
+        h("span", { class: "f-label" }, swatch(r.s), h("span", { class: "f-name" }, solverName(r.s)),
+          h("span", { class: "f-sub" }, `${pct(overall[r.s].accuracy_mean)} of ${r.n} fault incidents`)),
+        h("div", { class: "f-track", role: "img", "aria-label": `${solverName(r.s)} minus the rule: ${diffText(r.mean, r.ci)}` },
+          h("span", { class: "f-zero" }), interval(r.s, r.mean, r.ci, domain))))),
+    forestAxis(domain),
+    h("figcaption", {}, `Each agent’s accuracy minus the simple rule’s (${rule ? pct(rule.accuracy_mean) : "n/a"}) on the same `,
+      `${rows[0]?.n ?? 16} fault incidents, with a 95% bootstrap interval over incidents. `,
+      rows.every((r) => r.ci[0] <= 0) ? "Every interval crosses zero: none is clearly better." : "An interval wholly right of zero is clearly better."));
+}
+
+/** What moved accuracy: the paired comparisons that change one thing, fault-only and with the controls counted. */
+function findingsPlot(rows) {
+  const domain = forestDomain(rows);
+  let group = null;
+  const items = [];
+  for (const r of rows) {
+    if (r.group !== group) {
+      group = r.group;
+      items.push(h("li", { class: "f-group" }, { Model: "Change the model", Tools: "Change the tools", Ablation: "Change one input",
+        Other: "Other comparisons" }[group]));
+    }
+    items.push(h("li", { class: "f-row" },
+      h("span", { class: "f-label" }, swatch(r.s), h("span", { class: "f-name" }, r.change), h("span", { class: "f-sub" }, r.fixed)),
+      h("div", { class: "f-track double", role: "img",
+        "aria-label": `${r.change}, ${r.fixed}: ${diffText(r.mean, r.ci)} on the fault incidents` +
+          (r.controls ? `; ${diffText(r.controls.mean, r.controls.ci)} with the controls counted` : "") },
+      h("span", { class: "f-zero" }), interval(r.s, r.mean, r.ci, domain),
+      r.controls ? interval(r.s, r.controls.mean, r.controls.ci, domain, "ctl") : null)));
+  }
+  return h("figure", { class: "forest" },
+    h("ul", { class: "f-rows", role: "list" }, items),
+    forestAxis(domain),
+    h("figcaption", {},
+      h("span", { class: "keys" },
+        h("span", { class: "key" }, h("span", { class: "key-bar" }), "fault incidents only"),
+        h("span", { class: "key" }, h("span", { class: "key-bar ctl" }), "with the 4 no-fault controls counted, so false alarms cost")),
+      "Change in accuracy, with a 95% interval. About a dozen comparisons are shown without correction, so one that only just clears zero is suggestive."));
+}
+
+/** Accuracy by incident type: one row per category, a dot per main batch on a 0-100% track. */
+function categoryPlot(data, solvers, summary) {
+  const cats = [...data.categories, "all incidents"];
+  const label = (c) => (c === "all incidents" ? "All fault incidents" : categoryName(c));
+  const domain = [0, 1];
+  return h("figure", { class: "dotplot" },
+    h("ul", { class: "f-rows", role: "list" }, cats.map((c) => {
+      const pts = solvers.filter((s) => summary[s][c]);
+      return h("li", { class: c === "all incidents" ? "f-row total" : "f-row" },
+        h("span", { class: "f-label" }, h("span", { class: "f-name" }, label(c)),
+          CATEGORIES[c] ? h("span", { class: "f-sub" }, CATEGORIES[c][1]) : null),
+        h("div", { class: "f-track", role: "img",
+          "aria-label": `${label(c)}: ${pts.map((s) => `${solverName(s)} ${pct(summary[s][c].accuracy_mean)}`).join(", ")}` },
+          [0.25, 0.5, 0.75].map((v) => h("span", { class: "f-grid", style: `left:${at(v, domain)}` })),
+          pts.map((s, i) => h("span", { class: `dot m-${modelOf(s)} t-${toolsOf(s) ?? "rule"} f-dot lane-${i}`,
+            style: `left:${at(summary[s][c].accuracy_mean, domain)}`, title: `${solverName(s)}: ${pct(summary[s][c].accuracy_mean)}` }))));
+    })),
+    h("div", { class: "f-axis", "aria-hidden": "true" }, h("span", { class: "f-axis-pad" }),
+      h("div", { class: "f-track" }, [0, 0.25, 0.5, 0.75, 1].map((v) => h("span", { class: "f-tick", style: `left:${at(v, domain)}` }, pct(v))))),
+    h("figcaption", {}, h("span", { class: "keys" }, solvers.map((s) => h("span", { class: "key" }, swatch(s), solverName(s)))),
+      "Accuracy is the mean over incidents of each incident’s mean score across its runs; on controls it is the share answered “no incident”."));
+}
+
+/** Accuracy vs coverage as the confidence threshold rises, one line per main agent, as an SVG in theme colours. */
+function coveragePlot(data, solvers) {
+  const W = 560, H = 300, L = 44, R = 12, T = 12, B = 34;
+  const x = (c) => L + c * (W - L - R), y = (a) => T + (1 - a) * (H - T - B);
+  const agents = solvers.filter((s) => data.coverage?.[s]?.length && s !== "heuristic");
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "cov", role: "img",
+    "aria-label": `Accuracy against coverage for ${agents.map(solverName).join(", ")}: answering fewer runs by raising the confidence threshold does not raise accuracy consistently.` },
+    ...[0, 0.25, 0.5, 0.75, 1].flatMap((v) => [
+      svgEl("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "cov-grid" }),
+      svgEl("text", { x: L - 8, y: y(v) + 4, class: "cov-tick", "text-anchor": "end" }, document.createTextNode(pct(v))),
+      svgEl("text", { x: x(v), y: H - 12, class: "cov-tick", "text-anchor": "middle" }, document.createTextNode(pct(v)))]),
+    ...agents.flatMap((s) => {
+      const pts = data.coverage[s].map((p) => [x(p.coverage), y(p.accuracy)]);
+      return [svgEl("polyline", { points: pts.map((p) => p.join(",")).join(" "), class: `cov-line m-${modelOf(s)}` }),
+        ...pts.map(([cx, cy]) => svgEl("circle", { cx, cy, r: 4, class: `cov-pt m-${modelOf(s)} t-${toolsOf(s)}` }))];
+    }));
+  return h("figure", { class: "coverage" }, svg,
+    h("figcaption", {}, h("span", { class: "keys" }, agents.map((s) => h("span", { class: "key" }, swatch(s), solverName(s)))),
+      "Across: the share of runs answered at or above a confidence threshold. Up: accuracy of those runs, counted per run over all 20 incidents. ",
+      "If stated confidence meant something, the lines would rise to the left; they mostly do not."));
 }
 
 async function renderIndex() {
@@ -94,10 +198,43 @@ async function renderIndex() {
       command("python -m rootcause site"), "."));
     return;
   }
-  const solvers = data.solvers;
-  const slots = stripSlots(data);
-  const summary = Object.fromEntries(solvers.map((s) =>
+  const summary = Object.fromEntries(data.solvers.map((s) =>
     [s, Object.fromEntries((data.summary[s] || []).map((r) => [r.category, r]))]));
+  const overall = Object.fromEntries(data.solvers.map((s) => [s, summary[s]["all incidents"]]));
+  const main = mainSolvers(data, overall);
+  const complete = data.solvers.filter((s) => overall[s] && !isPartial(data, s, overall));
+
+  const rows = vsRuleRows(data, main);
+  if (rows.length) {
+    const yes = rows.some((r) => r.ci[0] > 0);
+    document.getElementById("answer").textContent = yes ? "Yes, by more than the noise." : "Not clearly.";
+    document.getElementById("hero-plot").replaceChildren(vsRulePlot(data, rows, overall));
+  }
+  const findings = findingRows(data, complete);
+  if (findings.length) document.getElementById("findings-plot").replaceChildren(findingsPlot(findings));
+  document.getElementById("category-plot").replaceChildren(categoryPlot(data, main, summary));
+  document.getElementById("coverage-plot").replaceChildren(coveragePlot(data, main));
+
+  const text = answerText(data, overall);
+  const partialNote = text?.partial ? h("p", { class: "note partial-note" }, text.partial) : null;
+  const toggle = h("div", { class: "seg", role: "group", "aria-label": "Batches shown" },
+    h("button", { type: "button", "aria-pressed": "true", "data-set": "main" }, "Main batches"),
+    h("button", { type: "button", "aria-pressed": "false", "data-set": "all" }, "All batches, ablations and partial runs"));
+  const board = h("div", {});
+  const draw = (set) => {
+    toggle.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.set === set)));
+    board.replaceChildren(set === "main" ? "" : partialNote ?? "", scoreboard(data, set === "main" ? main : data.solvers, summary));
+  };
+  toggle.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) draw(b.dataset.set); });
+  root.replaceChildren(h("div", { class: "board-tools" }, toggle, legend()), board);
+  draw("main");
+  document.getElementById("generated").replaceChildren(
+    `Results generated ${data.generated} from the run records with `, command("python -m rootcause site"), ".");
+}
+
+/** The scoreboard table: one run strip per incident and solver, accuracy per category, for the solvers shown. */
+function scoreboard(data, solvers, summary) {
+  const slots = stripSlots(data);
   const width = solvers.length + 2;
 
   const head = h("thead", {}, h("tr", {},
@@ -135,27 +272,11 @@ async function renderIndex() {
     h("td", {}),
     solvers.map((s) => accuracyCell(overall[s])))) : null;
 
-  const table = h("table", { class: solvers.length > 4 ? "scoreboard dense" : "scoreboard" },
+  const table = h("table", { class: solvers.length > 6 ? "scoreboard dense" : "scoreboard" },
     h("caption", { class: "visually-hidden" },
       "Scoreboard: one mark per recorded run, for each incident and solver, with accuracy by category"),
     head, groups, foot);
-
-  root.replaceChildren(
-    ...(answer(data, overall) || []),
-    legend(),
-    h("div", { class: "table-scroll", tabindex: "0", role: "region", "aria-label": "Scoreboard" }, table));
-  document.getElementById("generated").replaceChildren(
-    `Results generated ${data.generated} from the run records with `, command("python -m rootcause site"), ".");
-}
-
-/** A figure whose PNG is missing says how to make it instead of showing a broken image. */
-function guardFigures() {
-  for (const img of document.querySelectorAll(".figures img")) {
-    const missing = () => img.replaceWith(h("p", { class: "status" }, "This chart has not been copied yet. Run ",
-      command("python -m rootcause site"), " (it copies the charts from docs/results/figures)."));
-    if (img.complete && !img.naturalWidth) missing();
-    else img.addEventListener("error", missing, { once: true });
-  }
+  return h("div", { class: "table-scroll", tabindex: "0", role: "region", "aria-label": "Scoreboard" }, table);
 }
 
 // ---------------------------------------------------------------- incident page
@@ -453,7 +574,7 @@ async function renderIncident() {
 // ---------------------------------------------------------------- dispatch
 
 const pages = {
-  index: () => { guardFigures(); return renderIndex(); },
+  index: renderIndex,
   incident: renderIncident,
 };
 Promise.resolve(pages[document.body.dataset.page]?.()).catch((err) => {  // malformed data must not leave "Loading" up

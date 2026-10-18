@@ -73,6 +73,9 @@ def test_build_writes_index_and_incidents_without_private_fields(tmp_path, monke
     assert a["truth"] == [{"accept": ["ad"], "fault_type": "errors"}]
     assert index["summary"]["agent-v1"][0]["category"] == "easy"
     assert index["planned_runs"] == {"heuristic": 1, "agent-v1": 5}  # solvers with records only
+    curve = index["coverage"]["agent-v1"]  # accuracy vs coverage as the confidence threshold rises
+    assert [p["threshold"] for p in curve] == sorted((p["threshold"] for p in curve), reverse=True)
+    assert curve[-1]["coverage"] == 1.0 and all(set(p) == {"threshold", "coverage", "accuracy"} for p in curve)
 
     inc = json.loads((out / "data" / "incidents" / "a.json").read_text(encoding="utf-8"))
     run0, run1 = inc["runs"]["agent-v1"]

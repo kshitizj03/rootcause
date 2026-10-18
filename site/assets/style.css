@@ -12,6 +12,10 @@
   --trace: #C47A12;
   --hairline: #C5CED7;   /* row separators: navy ink thinned against the paper */
   --wash: #F7F9FA;       /* row hover: lighter than the paper, so muted text keeps AA contrast */
+  /* chart series: hue is the model (the rule is ink); fill is the toolset (v1 filled, v0 hollow) */
+  --gemini: #B5620E;
+  --nemotron: #6A4BC4;
+  --glm: #1E7F84;
 
   --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
   --body: "Atkinson Hyperlegible", system-ui, sans-serif;
@@ -22,8 +26,8 @@
   color-scheme: light;
 }
 
-/* Dark: the same navy-and-paper scheme inverted. Text colours lighten for contrast on the dark paper; tile fills keep
-   their depth so the white glyphs stay readable. The charts are light images and keep their own background. */
+/* Dark: the same navy-and-paper scheme inverted. Text and series colours lighten for contrast on the dark paper; tile
+   fills keep their depth so the white glyphs stay readable. */
 @media (prefers-color-scheme: dark) {
   :root {
     --paper: #111A24;
@@ -37,6 +41,9 @@
     --trace: #E8A23A;
     --hairline: #2C3A4A;
     --wash: #1A2532;
+    --gemini: #F0A04B;
+    --nemotron: #B4A0FF;
+    --glm: #5CCDD1;
     color-scheme: dark;
   }
 }
@@ -74,49 +81,151 @@ h1, h2, h3 { font-family: var(--display); font-weight: 700; margin: 0; }
   padding-inline: var(--gutter);
 }
 
-.masthead { padding-block: 1.25rem 0; }
-.wordmark { margin: 0; font: 800 1.125rem/1 var(--display); font-stretch: 75%; letter-spacing: 0.01em; }
-.wordmark a { text-decoration: none; }
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: var(--gutter); top: 0.75rem; z-index: 10; padding: 0.5rem 0.75rem; background: var(--ink); color: var(--paper); }
 
-.intro { padding-block: clamp(2.5rem, 7vw, 5rem) clamp(1.25rem, 3vw, 2rem); }
-.intro h1 {
-  font-size: clamp(2.1rem, 1.2rem + 4vw, 3.2rem);
-  line-height: 1.04;
-  letter-spacing: -0.015em;
-  font-stretch: 92%;
-  max-width: 19em;
-  text-wrap: balance;
+.masthead {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem 1.5rem;
+  padding-block: 1.1rem 0.9rem;
 }
-.lede { max-width: 62ch; margin: 1.25rem 0 0; font-size: 1.1875rem; line-height: 1.5; }
+.wordmark { font: 800 1.125rem/1 var(--display); font-stretch: 75%; letter-spacing: 0.01em; text-decoration: none; }
+.masthead nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; font-size: 0.9375rem; }
+.masthead nav a { color: var(--muted); text-decoration: none; }
+.masthead nav a:hover { color: var(--ink); text-decoration: underline; }
 
-main > section + section { margin-top: clamp(3.5rem, 8vw, 5.5rem); }
-main > .intro + .board { margin-top: 0.5rem; }
-main > section:not(.intro):not(.board) h2 {
-  border-top: 1px solid var(--ink);
+.hero { padding-block: clamp(2.5rem, 7vw, 5rem) 0; }
+.hero h1 {
+  font-size: clamp(1.6rem, 1rem + 2.4vw, 2.4rem);
+  line-height: 1.1; letter-spacing: -0.01em; font-stretch: 92%; font-weight: 650;
+  max-width: 24em; text-wrap: balance;
+}
+/* the answer is the loudest type on the site: the question asked, then this */
+.answer-line {
+  margin: 0.4rem 0 0;
+  font: 800 clamp(2.75rem, 1.5rem + 5.5vw, 5rem)/0.95 var(--display); font-stretch: 72%; letter-spacing: -0.015em;
+}
+.lede { max-width: 62ch; margin: 1.5rem 0 0; font-size: 1.125rem; line-height: 1.55; }
+#hero-plot { margin-top: 2.25rem; max-width: 64rem; }
+#findings-plot { margin-top: 1.75rem; max-width: 64rem; }
+
+main > section + section { margin-top: clamp(4rem, 9vw, 6.5rem); }
+main > section:not(.hero) > h2 {
+  border-top: 3px solid var(--ink);
   padding-top: 0.75rem;
-  margin-bottom: 1.25rem;
-  font-size: 1.5rem;
-  line-height: 1.2;
+  font-size: clamp(1.5rem, 1.2rem + 1vw, 1.875rem); line-height: 1.15; font-stretch: 90%;
 }
+.section-lede { max-width: 62ch; margin: 0.6rem 0 0; color: var(--muted); }
 
-.prose { max-width: var(--measure); }
 .prose li + li { margin-top: 0.75rem; }
-.steps { padding-left: 1.75rem; }
+.two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem clamp(2rem, 5vw, 4rem); margin-top: 1.25rem; }
+.two-col > div { max-width: 60ch; }
+.two-col h3 { font-size: 1.125rem; line-height: 1.3; }
+.steps { padding-left: 1.75rem; margin: 0.75rem 0 0; }
 .steps li { padding-left: 0.25rem; }
 .steps li::marker { font: 700 1rem var(--display); }
-.limits { padding-left: 1.25rem; }
+.limits { padding-left: 1.25rem; margin: 0.75rem 0 0; }
 .limits li::marker { color: var(--muted); }
 
-.figure-row {
-  display: grid;
-  /* column widths follow the two PNGs' aspect ratios, so the charts stand at the same height */
-  grid-template-columns: 1.54fr 1.33fr;
-  gap: 2rem;
-  align-items: start;
+.commands {
+  margin: 1.25rem 0 0; padding: 0.9rem 1.1rem; max-width: 36rem; overflow-x: auto;
+  background: var(--wash); border-left: 3px solid var(--ink);
+  font: 0.9375rem/1.65 ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
+
 figure { margin: 0; }
-figure img { display: block; width: 100%; height: auto; border: 1px solid var(--hairline); }
-figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.9375rem; line-height: 1.45; max-width: 60ch; }
+figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; line-height: 1.5; max-width: 66ch; }
+
+/* ---------------------------------------------------------------- charts
+
+   Forest and dot plots are HTML rows: a label column and a track where marks sit at percentage positions, so they stay
+   crisp and readable at any width. The coverage chart is an SVG that scales as a whole. */
+
+.dot {
+  display: inline-block; flex: none; width: 0.85rem; height: 0.85rem; border-radius: 50%;
+  border: 2px solid currentColor; background: currentColor;
+}
+.dot.t-v0 { background: var(--paper); }                 /* naive tools: hollow */
+.dot.t-rule { border-radius: 2px; }                      /* the rule: a square */
+.m-rule { color: var(--ink); }
+.m-gemini { color: var(--gemini); }
+.m-nemotron { color: var(--nemotron); }
+.m-glm { color: var(--glm); }
+.m-other { color: var(--muted); }
+
+.f-rows { list-style: none; margin: 0; padding: 0; }
+.f-row, .f-axis, .f-scale {
+  display: grid; grid-template-columns: minmax(10rem, 19rem) minmax(0, 1fr); column-gap: clamp(1rem, 3vw, 2rem);
+  align-items: center;
+}
+.f-row { padding-block: 0.6rem; border-bottom: 1px solid var(--hairline); }
+.f-label { position: relative; padding-left: 1.5rem; min-width: 0; }
+.f-label > .dot { position: absolute; left: 0; top: 0.3rem; }
+.f-name { display: block; font: 700 1.0625rem/1.25 var(--display); font-stretch: 90%; }
+.f-sub { display: block; color: var(--muted); font-size: 0.875rem; line-height: 1.35; }
+
+.f-track { position: relative; height: 1.75rem; }
+.f-zero { position: absolute; top: -0.6rem; bottom: -0.6rem; left: 50%; border-left: 2px solid var(--ink); }
+.f-int { position: absolute; inset: 0; }
+.f-bar { position: absolute; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 2px; background: currentColor; }
+.f-dot { position: absolute; top: 50%; transform: translate(-50%, -50%); }
+
+.f-track.double { height: 2.6rem; }
+.f-track.double .f-int { bottom: 50%; }
+.f-track.double .f-int.ctl { top: 50%; bottom: 0; }
+.f-int.ctl .f-bar { height: 2px; opacity: 0.6; }
+.f-int.ctl .f-dot { width: 0.6rem; height: 0.6rem; border-width: 1.5px; }
+
+.f-axis { margin-top: 0.35rem; }
+.f-axis .f-track { height: 1.25rem; }
+.f-tick {
+  position: absolute; top: 0; transform: translateX(-50%);
+  font: 0.8125rem/1 var(--display); font-stretch: 85%; font-variant-numeric: tabular-nums; color: var(--muted);
+}
+.f-tick.zero { color: var(--ink); font-weight: 700; }
+.f-scale { margin-bottom: 0.25rem; }
+.f-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.875rem; }
+
+.f-group {
+  padding: 1.5rem 0 0.4rem; border-bottom: 1px solid var(--ink);
+  font: 700 1rem/1.2 var(--display); font-stretch: 90%;
+}
+.f-group:first-child { padding-top: 0.5rem; }
+
+/* the hero plot is the one place the site raises its voice: thicker marks, larger names */
+.hero-plot .f-row { padding-block: 0.85rem; }
+.hero-plot .f-name { font-size: 1.25rem; }
+.hero-plot .f-track { height: 2.25rem; }
+.hero-plot .f-bar { height: 6px; border-radius: 3px; }
+.hero-plot .f-dot { width: 1.15rem; height: 1.15rem; border-width: 3px; }
+.hero-plot .f-label > .dot { top: 0.4rem; }
+
+.key { display: inline-flex; align-items: center; gap: 0.4rem; margin: 0 1.1rem 0.35rem 0; color: var(--ink); }
+.key-bar { display: inline-block; width: 1.5rem; height: 4px; border-radius: 2px; background: var(--muted); }
+.key-bar.ctl { height: 2px; opacity: 0.6; }
+.keys { display: flex; flex-wrap: wrap; margin-bottom: 0.35rem; }
+
+.dotplot .f-row, .dotplot .f-axis { grid-template-columns: minmax(8rem, 15rem) minmax(0, 1fr); }
+.dotplot .f-label { padding-left: 0; }
+.dotplot .f-track { height: 2.4rem; }
+.dotplot .f-dot.lane-0 { top: 18%; }
+.dotplot .f-dot.lane-1 { top: 34%; }
+.dotplot .f-dot.lane-2 { top: 50%; }
+.dotplot .f-dot.lane-3 { top: 66%; }
+.dotplot .f-dot.lane-4 { top: 82%; }
+.dotplot .f-dot.lane-5 { top: 50%; }
+.f-grid { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--hairline); }
+.dotplot .f-row.total { border-top: 2px solid var(--ink); }
+.dotplot .f-row.total .f-name { font-size: 1.125rem; }
+
+.chart-pair { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 2rem clamp(2rem, 5vw, 4rem); margin-top: 1.25rem; align-items: start; }
+.chart-title { font-size: 1.0625rem; line-height: 1.3; margin-bottom: 0.5rem; }
+
+.cov { display: block; width: 100%; height: auto; }
+.cov-grid { stroke: var(--hairline); stroke-width: 1; }
+.cov-tick { fill: var(--muted); font: 13px var(--display); font-stretch: 85%; }
+.cov-line { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linejoin: round; }
+.cov-pt { fill: currentColor; stroke: currentColor; stroke-width: 2; }
+.cov-pt.t-v0 { fill: var(--paper); }
 
 .status { color: var(--ink); max-width: var(--measure); }
 
@@ -130,11 +239,19 @@ figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.9375rem; line
 
 /* ---------------------------------------------------------------- scoreboard */
 
-.answer { max-width: var(--measure); margin: 0 0 1rem; font-size: 1.125rem; }
+.board-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 2rem; margin: 1.25rem 0 0.75rem; }
+.seg { display: inline-flex; border: 1px solid var(--ink); border-radius: 6px; overflow: hidden; }
+.seg button {
+  font: 700 0.9375rem/1.2 var(--display); font-stretch: 90%;
+  padding: 0.5rem 0.85rem; border: 0; background: transparent; color: var(--ink); cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.partial-note { max-width: 70ch; margin: 0 0 1rem; }
 
 .legend {
   display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem;
-  margin: 0 0 1.25rem; padding: 0; list-style: none;
+  margin: 0; padding: 0; list-style: none;
   color: var(--muted); font-size: 0.9375rem;
 }
 .legend li { display: inline-flex; align-items: center; gap: 0.4rem; }
@@ -236,12 +353,15 @@ tfoot .total .acc { font-size: 1.75rem; }
 /* ---------------------------------------------------------------- narrow screens */
 
 @media (max-width: 800px) {
-  .figure-row { grid-template-columns: 1fr; }
+  .chart-pair, .two-col { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 600px) {
-  .intro h1 br { display: none; }   /* the comma break only pays at desktop width */
   .lede { font-size: 1.0625rem; }
+  /* forest rows stack: the label over its track */
+  .f-row, .f-axis, .f-scale, .dotplot .f-row, .dotplot .f-axis { grid-template-columns: minmax(0, 1fr); row-gap: 0.35rem; }
+  .f-axis .f-axis-pad, .f-scale .f-axis-pad { display: none; }
+  .masthead nav { gap: 0.25rem 0.9rem; font-size: 0.875rem; }
   .scoreboard th, .scoreboard td { padding-right: 0.75rem; }
   .scoreboard th.incident { min-width: 0; width: 9.5rem; max-width: 9.5rem; padding-right: 0.6rem; border-right: 1px solid var(--hairline); }
   .incident-row th.incident { font-size: 0.9375rem; }

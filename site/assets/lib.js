@@ -112,6 +112,88 @@ export function answerText(data, overall) {
 
 export const MODEL_PAIR = ["agent-v1-nemotron", "agent-v1"];   // the same agent on two models
 
+// ---------------------------------------------------------------- charts
+
+/** The model a solver runs on, for its chart colour: rule (the heuristic), gemini, nemotron, glm, or other. */
+export function modelOf(s) {
+  if (s === "heuristic") return "rule";
+  const [base, model = ""] = s.split("@");
+  if (/glm/i.test(model)) return "glm";
+  if (model) return "other";
+  if (!base.startsWith("agent")) return "other";
+  return base.includes("nemotron") ? "nemotron" : "gemini";
+}
+
+/** "v0" (naive tools, drawn hollow), "v1" (change-aware tools, drawn filled), or null for the heuristic and others. */
+export const toolsOf = (s) => (/^agent-v0/.test(s) ? "v0" : /^agent-v1/.test(s) ? "v1" : null);
+
+const ABLATION = /-(nopriors|vague|steps30)(@|$)/;
+export const isAblation = (s) => ABLATION.test(s);
+
+/** Whether a solver's batch is partial: fewer than its planned runs on some incident, or incidents missing. */
+export function isPartial(data, s, overall) {
+  const counts = data.incidents.map((i) => (i.results[s] || []).length);
+  const planned = data.planned_runs?.[s];
+  const n = overall[s]?.expected ?? overall[s]?.scenarios;
+  return Boolean((planned && Math.min(...counts) < planned) || !overall[s] || overall[s].scenarios < n);
+}
+
+/** The complete, non-ablation batches: the heuristic and each agent on each model. */
+export const mainSolvers = (data, overall) =>
+  data.solvers.filter((s) => overall[s] && !isAblation(s) && !isPartial(data, s, overall));
+
+/** Each complete agent against the heuristic on the fault incidents, best first: {s, mean, ci, n}. Pairs without an
+ * interval are left out. */
+export function vsRuleRows(data, complete) {
+  return (data.paired || [])
+    .filter((p) => p.b === "heuristic" && p.ci && complete.includes(p.a))
+    .map((p) => ({ s: p.a, mean: p.mean_diff, ci: p.ci, n: p.n }))
+    .sort((x, y) => y.mean - x.mean);
+}
+
+/** What one paired comparison changes, in plain words: [group, change, held fixed]. */
+export function changeOf(a, b) {
+  const model = (s) => (modelOf(s) === "nemotron" ? "Nemotron" : modelOf(s) === "glm" ? "GLM" : "Gemini");
+  const tools = (s) => (toolsOf(s) === "v0" ? "naive tools" : "change-aware tools");
+  if (toolsOf(a) === toolsOf(b) && modelOf(a) !== modelOf(b) && !isAblation(a) && !isAblation(b)) {
+    return ["Model", `${model(a)} instead of ${model(b)}`, `same agent: v${toolsOf(a).slice(1)}, ${tools(a)}`];
+  }
+  if (modelOf(a) === modelOf(b) && toolsOf(a) === "v1" && toolsOf(b) === "v0" && !isAblation(a) && !isAblation(b)) {
+    return ["Tools", "Change-aware tools, not naive", `same model: ${model(a)}`];
+  }
+  if (b === a.replace(ABLATION, "$2")) {
+    const what = { nopriors: "Two prompt sentences removed", vague: "One generic alert for every incident",
+      steps30: "Twice the step budget" }[a.match(ABLATION)[1]];
+    return ["Ablation", what, `agent v1 on ${model(a)}`];
+  }
+  return ["Other", `${solverName(a)} instead of ${solverName(b)}`, ""];
+}
+
+/** The paired comparisons that are not against the heuristic, between complete batches, grouped Model, Tools,
+ * Ablation: {s: a, b, group, change, fixed, mean, ci, controls: {mean, ci} | null}. */
+export function findingRows(data, completeAll) {
+  const order = ["Model", "Tools", "Ablation", "Other"];
+  return (data.paired || [])
+    .filter((p) => p.b !== "heuristic" && p.ci && completeAll.includes(p.a) && completeAll.includes(p.b))
+    .map((p) => {
+      const [group, change, fixed] = changeOf(p.a, p.b);
+      const c = p.with_controls;
+      return { s: p.a, b: p.b, group, change, fixed, mean: p.mean_diff, ci: p.ci,
+        controls: c?.ci ? { mean: c.mean_diff, ci: c.ci } : null };
+    })
+    .sort((x, y) => order.indexOf(x.group) - order.indexOf(y.group));
+}
+
+/** A symmetric axis around 0 that holds every interval, in steps of 0.1: [-m, m]. */
+export function forestDomain(rows) {
+  const ends = rows.flatMap((r) => [...r.ci, ...(r.controls ? r.controls.ci : [])].map(Math.abs));
+  const m = Math.ceil(Math.max(0.1, ...ends) * 10 + 0.5) / 10;
+  return [-m, m];
+}
+
+/** Percentage position of value v on [lo, hi], clamped to the track. */
+export const at = (v, [lo, hi]) => `${(Math.min(1, Math.max(0, (v - lo) / (hi - lo))) * 100).toFixed(2)}%`;
+
 /** The paired comparisons (site.py, from report.PAIRS) as sentences, between complete solvers only: whether any agent
  * is clearly better or worse than the heuristic (its 95% interval wholly above or below 0), then the model pair with
  * and without the controls. null when no agent-vs-heuristic comparison has an interval. */

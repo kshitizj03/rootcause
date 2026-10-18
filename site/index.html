@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RootCause scoreboard</title>
-<meta name="description" content="An LLM agent on two models (Gemini 3.5 Flash-Lite and Nemotron 3 Super; a GLM 5.3 Flash batch is in progress) and a simple heuristic, scored against ground truth on 20 recorded microservice incidents. Every run is shown, failures included.">
+<title>RootCause: an LLM agent vs a simple rule</title>
+<meta name="description" content="An LLM agent that names the broken service from an incident's metrics, traces and logs, scored against a 28-line rule on 20 recorded microservice incidents. Every run is shown, failures included.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
@@ -12,64 +12,89 @@
 <script type="module" src="assets/app.js"></script>
 </head>
 <body data-page="index">
+<a class="skip" href="#results">Skip to the results</a>
 <header class="masthead">
-  <p class="wordmark"><a href="./">RootCause</a></p>
+  <a class="wordmark" href="./">RootCause</a>
+  <nav aria-label="Sections">
+    <a href="#results">Result</a>
+    <a href="#findings">What moved it</a>
+    <a href="#every-run">Every run</a>
+    <a href="#method">Method</a>
+    <a href="#reproduce">Reproduce</a>
+    <a href="https://github.com/kshitizj03/rootcause">GitHub</a>
+  </nav>
 </header>
 
 <main>
-  <section class="intro" aria-labelledby="headline">
-    <h1 id="headline">Can an LLM agent find what broke,<br> better than a simple rule?</h1>
-    <p class="lede">RootCause is an LLM agent that reads an incident’s metrics, traces and logs to name the service that broke. Here it is scored against a simple heuristic on 20 recorded incidents, with every run shown, failures included.</p>
+  <section class="hero" id="results" aria-labelledby="headline">
+    <h1 id="headline">Can an LLM agent find what broke, better than a simple rule?</h1>
+    <p class="answer-line" id="answer" aria-live="polite">Loading the result.</p>
+    <p class="lede">RootCause is an LLM agent that reads an incident’s metrics, traces and logs and names the service that broke. It is scored against a 28-line rule that names the service whose fault signal rose most, on incidents recorded from a 28-service demo shop, with every run shown, failures included.</p>
+    <div id="hero-plot"><noscript><p class="status">This page needs JavaScript to draw the results.</p></noscript></div>
   </section>
 
-  <section class="board" aria-labelledby="board-title">
-    <h2 id="board-title" class="visually-hidden">Scoreboard</h2>
+  <section class="band" id="findings" aria-labelledby="findings-title">
+    <h2 id="findings-title">What moved accuracy</h2>
+    <p class="section-lede">Each row changes one thing and keeps the rest. Swapping the model moves accuracy most, until the false alarms on no-fault controls are counted. The tools barely matter.</p>
+    <div id="findings-plot"></div>
+  </section>
+
+  <section class="board" id="every-run" aria-labelledby="board-title">
+    <h2 id="board-title">Every run</h2>
+    <p class="section-lede">One mark per run, for every incident. Open an incident to replay what the agent looked at and why it answered as it did.</p>
     <div id="scoreboard" data-root>
       <p class="status">Loading results.</p>
-      <noscript><p class="status">This page needs JavaScript to load the results.</p></noscript>
     </div>
   </section>
 
-  <section class="figures" aria-labelledby="figures-title">
-    <h2 id="figures-title">Main batches, charted</h2>
-    <div class="figure-row">
-      <figure>
-        <img src="figures/accuracy_by_category.png" width="1153" height="749" loading="lazy"
-             alt="Grouped bar chart of accuracy by incident category for the heuristic and agents v0 and v1 on Gemini and Nemotron (ablations are in the scoreboard only): easy, cross-service, silent, noisy, two-fault, control, and all fault incidents, which is the scoreboard's all-fault-incidents row.">
-        <figcaption>Accuracy by incident category. Error bars show the spread across runs, when at least two complete runs exist; a solver with no runs in a category has no bar there.</figcaption>
-      </figure>
-      <figure>
-        <img src="figures/coverage.png" width="862" height="646" loading="lazy"
-             alt="Line chart of accuracy against coverage as the confidence threshold rises, for agents v0 and v1 on Gemini and Nemotron; accuracy does not rise consistently as coverage falls, so stated confidence is a weak signal.">
-        <figcaption>Accuracy against coverage. Raising the confidence threshold leaves fewer runs answered; accuracy here counts answered runs only. Counted per run over all 20 incidents, controls included, so it differs from the scoreboard.</figcaption>
-      </figure>
+  <section class="band" id="by-type" aria-labelledby="by-type-title">
+    <h2 id="by-type-title">By incident type</h2>
+    <div class="chart-pair">
+      <div id="category-plot"></div>
+      <div>
+        <h3 class="chart-title">Does stated confidence help?</h3>
+        <div id="coverage-plot"></div>
+      </div>
     </div>
   </section>
 
-  <section class="prose" aria-labelledby="how-title">
-    <h2 id="how-title">How it works</h2>
-    <ol class="steps">
-      <li>A fault is injected into the OpenTelemetry Demo, a shop made of 28 services, and its metrics, traces and logs are recorded as a snapshot. The ground truth is stored separately.</li>
-      <li>Every channel that could name the fault, such as feature-flag events, log wording or delay markers, is stripped, and an automated scan checks each snapshot for leaks.</li>
-      <li>Each solver gets the same snapshot and, except in the vague-alert ablations, the same alert. The heuristic names the service whose fault signal rose most. Agent v0 reads raw metric series, traces and logs; agent v1 adds a ranking of what changed, per-service health and a service map. Both run as a tool loop on Gemini 3.5 Flash-Lite or Nemotron 3 Super (a GLM 5.3 Flash batch of agent v1 is in progress).</li>
-      <li>Answers are scored by rules fixed before the first run. On single-fault incidents the top-ranked cause must be in the accepted set; on two-fault incidents each true cause named anywhere in the ranked list earns half. A control is only right with “no incident”, and abstaining counts as wrong.</li>
-      <li>The agent’s cited evidence is checked against the telemetry: does it exist (grounded), and does it point at something anomalous (distinctive)?</li>
-    </ol>
+  <section class="prose" id="method" aria-labelledby="method-title">
+    <h2 id="method-title">Method</h2>
+    <div class="two-col">
+      <div>
+        <h3>How an incident is scored</h3>
+        <ol class="steps">
+          <li>A fault is injected into the OpenTelemetry Demo, a shop made of 28 services, and its metrics, traces and logs are recorded. The true cause is stored separately.</li>
+          <li>Anything that could give the fault away, such as feature-flag events, log wording or delay markers, is stripped, and a scan checks every recording for leaks.</li>
+          <li>Each solver gets the same recording and the same alert. The rule names the service whose fault signal rose most. Agent v0 reads raw metric series, traces and logs; agent v1 adds a ranking of what changed, per-service health and a service map.</li>
+          <li>Answers are scored by rules fixed before the first run. The top-ranked cause must be right; on two-fault incidents each cause found earns half. A no-fault control is right only with “no incident”.</li>
+          <li>The agent’s cited evidence is checked against the telemetry: does it exist, and does it point at something unusual?</li>
+        </ol>
+      </div>
+      <div>
+        <h3>Honest limits</h3>
+        <ul class="limits">
+          <li><strong>Small.</strong> Twenty incidents from one demo app, recorded on one laptop. Category results rest on two to six incidents each.</li>
+          <li><strong>Generous inputs.</strong> Every solver is told when the fault began, and several alerts hint at the area of the cause. With one generic alert instead, false alarms double.</li>
+          <li><strong>Free models.</strong> Gemini 3.5 Flash-Lite and Nemotron 3 Super on free tiers, at temperature 0. The spread across runs is API nondeterminism, not sampling.</li>
+          <li><strong>One author.</strong> The same person built the incidents, the rule, the agent and the scoring. The <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/faq.md">methodology FAQ</a> lists every known threat to validity.</li>
+        </ul>
+      </div>
+    </div>
   </section>
 
-  <section class="prose" aria-labelledby="limits-title">
-    <h2 id="limits-title">Honest limits</h2>
-    <ul class="limits">
-      <li><strong>Twenty incidents from one demo app on one laptop.</strong> This is a small benchmark, not a general claim.</li>
-      <li><strong>Every solver gets the exact fault onset</strong> (t=0 is the injection time), and several alerts hint at the culprit’s functional area. The vague-alert ablation gives agent v1 one generic alert for every incident: on Nemotron it doubles false alarms on the controls and lowers fault accuracy by a borderline 12 points, so the alerts’ hints probably help. The same ablation on Gemini is running.</li>
-      <li><strong>Free models only:</strong> Gemini 3.5 Flash-Lite on its free tier and Nemotron 3 Super on NVIDIA’s free trial endpoint, both at temperature 0. The spread across runs measures API nondeterminism, not sampling.</li>
-    </ul>
+  <section class="band" id="reproduce" aria-labelledby="reproduce-title">
+    <h2 id="reproduce-title">Reproduce it</h2>
+    <p class="section-lede">The recorded incidents and every run behind this page are in the <a href="https://github.com/kshitizj03/rootcause/releases/tag/data-v1">data release</a>. Three commands rescore the rule from the raw telemetry; the agents need a free API key.</p>
+    <pre class="commands" tabindex="0"><code>pip install -e .
+rootcause fetch-data
+rootcause eval heuristic</code></pre>
   </section>
 </main>
 
 <footer class="colophon">
   <p id="generated">Results are regenerated from the run records with <code>python -m rootcause site</code>.</p>
-  <p><a href="https://github.com/kshitizj03/rootcause">Source code</a> · <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/results/report.md">full report</a> (paired intervals, provenance) · <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/benchmark.md">scoring rules</a> · <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/faq.md">threats to validity</a> · <a href="https://github.com/kshitizj03/rootcause/blob/main/LICENSE">Apache-2.0</a></p>
+  <p><a href="https://github.com/kshitizj03/rootcause">Source code</a>, <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/results/report.md">full report</a>, <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/results/agents.md">findings write-up</a>, <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/benchmark.md">scoring rules</a>. Apache-2.0.</p>
 </footer>
 </body>
 </html>

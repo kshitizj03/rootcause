@@ -138,7 +138,11 @@ def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=None
              "planned_runs": {n: evaluate.planned_runs(n) for n in records},
              "categories": [c for c in evaluate.ORDER if c in {s.category for s in lib}],
              "summary": {n: evaluate.summarise(n, runs_dir, expected=expected, split="all") for n in records},
-             "paired": [_pair(*r) for r in report.paired_results(records)]}
+             "paired": [_pair(*r) for r in report.paired_results(records)],
+             # accuracy vs coverage as the confidence threshold rises (evaluate.coverage_curve), for solvers that state one
+             "coverage": {n: [{k: round(p[k], 4) for k in ("threshold", "coverage", "accuracy")}
+                              for p in evaluate.coverage_curve(rs)] for n, rs in records.items()
+                          if any(evaluate.confidence(r) is not None for r in rs)}}
     _dump(out_dir / "data" / "index.json", index)
     for png in sorted((config.ROOT / "docs" / "results" / "figures").glob("*.png")):
         (out_dir / "figures").mkdir(parents=True, exist_ok=True)

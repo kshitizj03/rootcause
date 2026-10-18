@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   solverName, solverSub, categoryName, pct, signed, plural, num, minutes, counted, mark,
   stripSlots, strip, answerText, pairedText, alertFor, sparkGeometry, logsLine, trimNotes, argText, evidenceText,
+  modelOf, toolsOf, isAblation, isPartial, mainSolvers, vsRuleRows, changeOf, findingRows, forestDomain, at,
 } from "../assets/lib.js";
 
 // ---------------------------------------------------------------- names and numbers
@@ -263,4 +264,66 @@ test("evidenceText: each kind, and anything else as JSON", () => {
   assert.equal(evidenceText({ kind: "text", text: 7 }), "7");
   assert.equal(evidenceText({ kind: "other" }), '{"kind":"other"}');
   assert.equal(evidenceText(3), "3");
+});
+
+// ---------------------------------------------------------------- charts
+
+test("chart encoding: hue is the model, fill is the toolset", () => {
+  assert.equal(modelOf("heuristic"), "rule");
+  assert.equal(modelOf("agent-v1"), "gemini");
+  assert.equal(modelOf("agent-v0-nemotron"), "nemotron");
+  assert.equal(modelOf("agent-v1@z-ai-glm-5.3-flash"), "glm");
+  assert.equal(modelOf("agent-v1@qwen-9b"), "other");
+  assert.equal(modelOf("my-agent"), "other");
+  assert.equal(toolsOf("agent-v0-nemotron"), "v0");
+  assert.equal(toolsOf("agent-v1-nemotron-vague"), "v1");
+  assert.equal(toolsOf("heuristic"), null);
+  assert.ok(isAblation("agent-v1-nemotron-steps30") && isAblation("agent-v1-vague@m") && !isAblation("agent-v1-nemotron"));
+});
+
+const chartData = () => ({
+  solvers: ["heuristic", "agent-v1", "agent-v1-nemotron", "agent-v1-nemotron-vague", "agent-v1@z-ai-glm-5.3-flash"],
+  planned_runs: { heuristic: 1, "agent-v1": 5, "agent-v1-nemotron": 5, "agent-v1-nemotron-vague": 5, "agent-v1@z-ai-glm-5.3-flash": 5 },
+  incidents: [{ results: { heuristic: [1], "agent-v1": [1, 1, 1, 1, 1], "agent-v1-nemotron": [1, 1, 1, 1, 1],
+    "agent-v1-nemotron-vague": [1, 1, 1, 1, 1], "agent-v1@z-ai-glm-5.3-flash": [1, 1] } }],
+  paired: [
+    { a: "agent-v1", b: "heuristic", mean_diff: -0.18, ci: [-0.4, 0.02], n: 16 },
+    { a: "agent-v1-nemotron", b: "heuristic", mean_diff: 0.08, ci: [-0.05, 0.23], n: 16 },
+    { a: "agent-v1@z-ai-glm-5.3-flash", b: "heuristic", mean_diff: 0.2, ci: [0.1, 0.3], n: 16 },
+    { a: "agent-v1-nemotron-vague", b: "agent-v1-nemotron", mean_diff: -0.12, ci: [-0.25, -0.01], n: 16,
+      with_controls: { mean_diff: -0.15, ci: [-0.26, -0.05], n: 20 } },
+    { a: "agent-v1-nemotron", b: "agent-v1", mean_diff: 0.26, ci: [0.1, 0.44], n: 16,
+      with_controls: { mean_diff: 0.11, ci: [-0.09, 0.31], n: 20 } },
+  ],
+});
+const fullRow = { scenarios: 1, expected: 1, accuracy_mean: 0.5 };
+const overallOf = (d) => Object.fromEntries(d.solvers.map((s) => [s, fullRow]));
+
+test("main batches: complete and not ablations; a partial batch is left out", () => {
+  const d = chartData();
+  assert.ok(isPartial(d, "agent-v1@z-ai-glm-5.3-flash", overallOf(d)));
+  assert.deepEqual(mainSolvers(d, overallOf(d)), ["heuristic", "agent-v1", "agent-v1-nemotron"]);
+});
+
+test("vs the rule: complete agents only, best first", () => {
+  const d = chartData();
+  assert.deepEqual(vsRuleRows(d, mainSolvers(d, overallOf(d))).map((r) => r.s), ["agent-v1-nemotron", "agent-v1"]);
+});
+
+test("findings: what each comparison changes, model first, with the controls interval", () => {
+  const d = chartData();
+  const complete = d.solvers.filter((s) => !isPartial(d, s, overallOf(d)));
+  const rows = findingRows(d, complete);
+  assert.deepEqual(rows.map((r) => r.group), ["Model", "Ablation"]);
+  assert.equal(rows[0].change, "Nemotron instead of Gemini");
+  assert.deepEqual(rows[0].controls, { mean: 0.11, ci: [-0.09, 0.31] });
+  assert.equal(rows[1].change, "One generic alert for every incident");
+  assert.deepEqual(changeOf("agent-v1", "agent-v0"), ["Tools", "Change-aware tools, not naive", "same model: Gemini"]);
+});
+
+test("forest axis: symmetric around 0, holds every interval, positions clamp to the track", () => {
+  assert.deepEqual(forestDomain([{ ci: [-0.4, 0.02] }, { ci: [0.1, 0.44] }]), [-0.5, 0.5]);
+  assert.deepEqual(forestDomain([{ ci: [-0.05, 0.03], controls: { ci: [-0.3, 0.1] } }]), [-0.4, 0.4]);
+  assert.equal(at(0, [-0.5, 0.5]), "50.00%");
+  assert.equal(at(0.9, [-0.5, 0.5]), "100.00%");
 });
