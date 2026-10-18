@@ -102,14 +102,7 @@ python -m rootcause site      # builds site/data from data/runs and copies the c
 python -m http.server 8000 -d site   # then open http://localhost:8000
 ```
 
-The site is plain HTML, CSS and JS with no build step, and every URL is relative, so it can be served from any sub-path. To publish it on GitHub Pages, copy the built `site/` (including the generated, git-ignored `site/data/` and `site/figures/`) into a `gh-pages` branch:
-
-```bash
-git worktree add --orphan -b gh-pages ../rootcause-pages     # first time only (git 2.42+)
-git -C ../rootcause-pages rm -rq --ignore-unmatch .            # drop files from the last publish
-cp -r site/. ../rootcause-pages/ && touch ../rootcause-pages/.nojekyll
-git -C ../rootcause-pages add -A && git -C ../rootcause-pages commit -m "Publish replay site" && git -C ../rootcause-pages push origin gh-pages
-```
+The site is plain HTML, CSS and JS with no build step, and every URL is relative, so it can be served from any sub-path. The `site` workflow (`.github/workflows/site.yml`) publishes it to GitHub Pages on every push to `main`: it fetches the data release, runs `rootcause site` and deploys `site/`. In a fork, enable Pages with "GitHub Actions" as the source.
 
 The site shows ground truth, so it is built after scoring and is never given to the agent or the MCP server.
 
