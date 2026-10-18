@@ -24,9 +24,10 @@ def flag_words(name):
     return re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+", name)
 
 
-# A flag name must start a word: after a non-alphanumeric, or at a camelCase hump (isAdFailure), never inside a word
-# ("readFailure", "upload_failure" hold "adfailure" but name no flag). Case-sensitive, inside the case-blind pattern.
-_WORD_START = r"(?-i:(?<![A-Za-z0-9])|(?<=[a-z0-9])(?=[A-Z]))"
+# A flag name must start a word: after a non-alphanumeric, a digit (the "22" of an escaped quote "), a %XX
+# escape (flag%3DadFailure), or at a camelCase hump (isAdFailure); never inside a word ("readFailure",
+# "upload_failure" hold "adfailure" but name no flag). Case-sensitive, inside the case-blind pattern.
+_WORD_START = r"(?-i:(?<![A-Za-z])|(?<=%[0-9A-Fa-f]{2})|(?<=[a-z0-9])(?=[A-Z]))"
 
 
 def leak_pattern(names):

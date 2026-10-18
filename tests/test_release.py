@@ -59,7 +59,8 @@ def test_pack_refuses_private_content_naming_the_member_and_writes_nothing(data,
 
 @pytest.mark.parametrize("text, found", [
     ("see " + "/home" + "/alice/x", "local path"), ("mail bob" + "@corp.io", "email address"), ("key AIza" + "x" * 35, "Google API key"),
-    ("GET http://frontend:8080/api", None), (json.dumps("their t:\n1."), None), (json.dumps("at D:\\lab"), "local path"), ("bot noreply@github.com", None), ("demo user@example.com", None)])
+    ("GET http://frontend:8080/api", None), (json.dumps("their t:\n1."), None), (json.dumps("at D:\\lab"), "local path"),
+    (json.dumps("Traceback:\nC:\\lab"), "local path"), (json.dumps("x\tD:/lab"), "local path"), ("bot noreply@github.com", None), ("demo user@example.com", None)])
 def test_private_findings(text, found):
     assert (release.private(text) or "").startswith(found or "") and bool(release.private(text)) == bool(found)
 

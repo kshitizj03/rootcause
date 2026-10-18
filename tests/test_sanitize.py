@@ -96,7 +96,8 @@ def test_scan_snapshot_raises_filenotfound_for_missing_files(tmp_path):
 def test_a_flag_name_inside_another_word_is_not_a_leak_but_a_camelcase_hump_is():
     for ok in ("readFailure", "upload_failure", "UPLOAD_FAILURE", "thread.failure", "loadHighCpu"):
         assert sanitize.find_leaks(ok, NAMES) == [], ok
-    for leak in ("isAdFailureEnabled", "flag=adFailure", "ad_failure", "AD-HIGH-CPU", "x.adManualGc"):
+    for leak in ("isAdFailureEnabled", "flag=adFailure", "ad_failure", "AD-HIGH-CPU", "x.adManualGc",
+                 "q=flag%3DadFailure", "%22adHighCpu%22", "key=0adFailure", "body \\u0022adFailure"):
         assert sanitize.find_leaks(leak, NAMES), leak
     logs = [{"service": "ad", "body": "readFailure retried"}, {"service": "ad", "body": "adFailure on"}]
     assert [l["body"] for l in sanitize.sanitize_logs(logs, NAMES)] == ["readFailure retried"]

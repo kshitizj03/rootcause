@@ -22,8 +22,9 @@ STAMP = (2026, 1, 1, 0, 0, 0)  # every entry's timestamp, so the same data alway
 
 # What must never be published, as the repository's own pre-push check looks for it (copied, since that check is local)
 PRIVATE = [
-    # a drive letter, not the "p:/" of "http://"; members are JSON, where a real backslash is escaped, so "t:\n" is text
-    (re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:(?:\\\\|/)"), "local path"),
+    # a drive letter, not the "p:/" of "http://"; members are JSON, where a real backslash is escaped, so "t:\n" is
+    # text, and a path can follow an escape ("Traceback:\nC:\\Users")
+    (re.compile(r"(?:(?<![A-Za-z0-9])|(?<=\\[nrt])|(?<=\\u[0-9A-Fa-f]{4}))[A-Za-z]:(?:\\\\|/)"), "local path"),
     (re.compile(r"/Users/|/home/"), "local path"),
     (re.compile(r"AIza[0-9A-Za-z_\-]{30,}"), "Google API key"),
     (re.compile(r"nvapi-[0-9A-Za-z_\-]{20,}"), "NVIDIA API key"),
