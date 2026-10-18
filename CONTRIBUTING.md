@@ -13,15 +13,16 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt 
 
 If you install the package, install it editable (`pip install -e .`, or `pip install -e ".[dev]"` to add pytest): it reads `scenarios/` and `data/` from the repository, so a regular install would not find them.
 
-Keys go in `.env` in the repository root (`GEMINI_API_KEY`, `NVIDIA_API_KEY`). It is git-ignored, and so are `data/`, `vendor/` and the generated `site/data/` and `site/figures/`. Never commit any of them.
+Keys go in `.env` in the repository root (`GEMINI_API_KEY`, `NVIDIA_API_KEY`; copy `.env.example`). It is git-ignored, and so are `data/`, `vendor/` and the generated `site/data/` and `site/figures/`. Never commit any of them.
 
 ## Running the tests
 
 ```bash
 .venv/Scripts/python -m pytest -q
+node --test "site/tests/*.test.mjs"   # Node 22; for changes under site/
 ```
 
-The suite is offline: no Docker, no API key and no recorded data. Tests build what they need in temporary directories. One test is skipped unless the demo is checked out under `vendor/opentelemetry-demo`. CI runs the same command on Python 3.11.
+The Python suite is offline: no Docker, no API key and no recorded data. Tests build what they need in temporary directories. One test is skipped unless the demo is checked out under `vendor/opentelemetry-demo`. The Node tests cover the site's page logic in `site/assets/lib.js`. CI runs both, on Python 3.11 and Node 22, on Ubuntu and Windows, with the pinned versions in `requirements-lock.txt`.
 
 Every change in behaviour comes with a test that fails without it.
 
@@ -60,7 +61,7 @@ Then:
 
 1. Write a factory in `rootcause/cli.py` that returns `(record name, solve, stop_on)` and add it to `SOLVERS`. `solve(snap)` takes what `snapshot.load` returns and gives back `(score.Report, info dict)`. `stop_on` lists the exceptions that should stop a batch cleanly (for a model client: `agent.QuotaExhausted`).
 2. An agent variant takes the optional `model` override, as the existing factories do (`_pick`), so `eval --model` works with it.
-3. Add the name to `evaluate.SOLVER_ORDER` (a test checks the two lists match). If its batch is planned for other than 5 runs per incident, add it to `evaluate.PLANNED_RUNS`. Give it a label in `SOLVERS` in `site/assets/app.js`. If it should be compared with another solver, add the pair to `report.PAIRS`.
+3. Add the name to `evaluate.SOLVER_ORDER` (a test checks the two lists match). If its batch is planned for other than 5 runs per incident, add it to `evaluate.PLANNED_RUNS`. Give it a label in `SOLVERS` in `site/assets/lib.js`. If it should be compared with another solver, add the pair to `report.PAIRS`.
 4. An ablation changes exactly one thing. Add a test, like those in `tests/test_ablations.py`, showing that every other `Agent` argument matches the solver it is compared with.
 
 To try a solver without changing the code, use `eval-custom` ([`docs/benchmark.md`](docs/benchmark.md)).

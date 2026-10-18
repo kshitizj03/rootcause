@@ -2,7 +2,7 @@
 
 This page is for anyone who wants to score their own model, or their own diagnosis agent, on the RootCause incidents. It describes what a solver is given, what it must return, how the answer is scored, and the rules that keep the numbers honest.
 
-**You need recorded incidents.** The snapshots are not in this repository yet. Record them with the demo first (see the README's Quick start: `python -m rootcause up`, then `record --all`, then `leak-check`). Every command below reads `data/snapshots/`.
+**You need recorded incidents.** The snapshots are not in this repository. Get them with `rootcause fetch-data` (the data release; see the README's Quick start), or record your own with the demo (`rootcause up`, then `record --all`, then `leak-check`). Every command below reads `data/snapshots/`.
 
 ## What a snapshot contains
 
