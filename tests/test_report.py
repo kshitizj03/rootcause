@@ -139,8 +139,23 @@ def test_report_has_a_paired_section_for_solver_pairs_with_records(tmp_path, mon
     md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["heuristic", "agent-v0", "agent-v1"]).read_text(encoding="utf-8")
     sec = md.split("## Paired comparisons")[1].split("\n## ")[0]
     na = "n/a (too few incidents or no spread)"  # fault-only columns first, then the same pair with the control
-    assert f"| agent-v1 vs heuristic | 2/2 | 1 / 1 / 0 | +0.50 | {na} | 1.00 | +0.00 | {na} |" in sec
+    assert f"| agent-v1 vs heuristic | 2/2 | 1 / 1 / 0 | +0.50 | {na} | 1.00 | 3/3 | +0.00 | {na} |" in sec
     assert "agent-v0" not in sec  # no records, no row
+
+
+def test_paired_controls_columns_count_only_the_shared_incidents(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "HELDOUT", ())
+    monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario(s, "easy", "x", {}, {}, []) for s in "ab"]
+                        + [scenarios.Scenario(c, "control", "x", {}, {}, []) for c in ("c", "d")])
+    runs = tmp_path / "runs"
+    for sid, cat in (("a", "easy"), ("b", "easy"), ("c", "control"), ("d", "control")):
+        write(runs, "agent-v1", sid, cat, 0, 1.0)
+    write(runs, "agent-v1-vague", "a", "easy", 0, 0.0)  # a partial batch: one fault incident, one control
+    write(runs, "agent-v1-vague", "c", "control", 0, 1.0)
+    md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["agent-v1", "agent-v1-vague"]).read_text(encoding="utf-8")
+    sec = md.split("## Paired comparisons")[1].split("\n## ")[0]
+    assert "| agent-v1-vague vs agent-v1 | 1/2 | 0 / 0 / 1 | -1.00 |" in sec and "| 2/4 | -0.50 |" in sec
+    assert "all 4" not in sec
 
 
 def test_step_limit_section_counts_runs_told_the_limit_was_reached_not_turn_counts(tmp_path, monkeypatch):

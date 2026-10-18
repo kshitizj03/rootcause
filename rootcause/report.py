@@ -182,9 +182,9 @@ def _paired_section(data, solvers):
             if p:
                 every = paired({k: v for k, v in ma.items() if k in lib}, {k: v for k, v in mb.items() if k in lib})
                 rows.append([f"{a} vs {b}", f"{p['n']}/{len(faults)}", f"{p['wins']} / {p['ties']} / {p['losses']}",
-                             f"{p['mean_diff']:+.2f}", _ci(p), f"{p['p']:.2f}", f"{every['mean_diff']:+.2f}", _ci(every)])
+                             f"{p['mean_diff']:+.2f}", _ci(p), f"{p['p']:.2f}", f"{every['n']}/{len(lib)}", f"{every['mean_diff']:+.2f}", _ci(every)])
                 partial.update({s: note for s in (a, b) if (note := _partial(data, s, "all"))})
-    return ["## Paired comparisons (all split, fault incidents; the last two columns add the controls)",
+    return ["## Paired comparisons (all split, fault incidents; the last three columns add the controls)",
             "Each solver's mean score per incident, compared on the incidents both have run. Wins / ties / losses count "
             "incidents where the first solver scored higher / the same / lower, by any margin. A per-incident mean of 0.5 "
             "can mean one of two causes found or half of the runs right. The 95% interval is a percentile bootstrap over "
@@ -193,9 +193,9 @@ def _paired_section(data, solvers):
             "tell the two apart. p is an exact paired permutation test on the fault incidents (every sign flip of the "
             "per-incident differences), which does not share the bootstrap's narrowness. About a dozen comparisons are shown with no multiple-comparison correction; an interval "
             "that only just excludes 0 is suggestive, not established. Fault-only differences ignore false alarms on the "
-            f"{len(lib - faults)} controls; the last two columns include them.",
+            f"{len(lib - faults)} controls; the last three columns include them, over the incidents both solvers have run.",
             _table(["comparison", "incidents", "wins / ties / losses", "mean difference", "95% interval", "p (permutation)",
-                    f"mean difference (all {len(lib)}, controls incl.)", f"95% interval (all {len(lib)})"], rows)
+                    "incidents (controls incl.)", "mean difference (controls incl.)", "95% interval (controls incl.)"], rows)
             if rows else "No pair of solvers has run a shared fault incident yet.",
             *(f"{s}: partial batch ({note})" for s, note in partial.items())]
 
