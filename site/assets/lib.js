@@ -12,22 +12,40 @@ export const CATEGORIES = {
 
 export const SOLVERS = {
   heuristic: ["Heuristic", "the simple rule"],
-  "agent-v0": ["Agent v0", "naive tools"],
-  "agent-v1": ["Agent v1", "change-aware tools"],
-  "agent-v1-nopriors": ["V1 without priors", "ablation of agent v1"],
-  "agent-v1-vague": ["V1 with vague alerts", "ablation of agent v1"],
-  "agent-v0-nemotron": ["V0 on Nemotron", "naive tools, another model"],
-  "agent-v1-nemotron": ["V1 on Nemotron", "agent v1, another model"],
+  "agent-v0": ["V0 on Gemini", "naive tools, Gemini 3.5 Flash-Lite"],
+  "agent-v1": ["V1 on Gemini", "change-aware tools, Gemini 3.5 Flash-Lite"],
+  "agent-v1-nopriors": ["V1 on Gemini (no priors)", "ablation: two prompt sentences removed"],
+  "agent-v1-vague": ["V1 on Gemini (vague alerts)", "ablation: one generic alert"],
+  "agent-v0-nemotron": ["V0 on Nemotron", "naive tools, Nemotron 3 Super"],
+  "agent-v1-nemotron": ["V1 on Nemotron", "change-aware tools, Nemotron 3 Super"],
   "agent-v1-nemotron-nopriors": ["V1 on Nemotron (no priors)", "ablation: two prompt sentences removed"],
   "agent-v1-nemotron-vague": ["V1 on Nemotron (vague alerts)", "ablation: one generic alert"],
   "agent-v1-nemotron-steps30": ["V1 on Nemotron (30 steps)", "ablation: twice the step limit"],
 };
 
-// a solver missing from SOLVERS (your own agent, or a built-in one on another model) shows its record name
-export const solverName = (s) => (SOLVERS[s] || [s])[0];
-export const solverSub = (s) => (SOLVERS[s] || [s, "custom"])[1];
+const GEMINI = "Gemini 3.5 Flash-Lite";
+
+/** [name, subtitle]: a built-in solver's label; a built-in one run on another model (eval --model, records named
+ * base@model, where the base is always a Gemini solver) with that model in place of Gemini; anything else (your own
+ * agent) by its record name, as custom. */
+function label(s) {
+  if (SOLVERS[s]) return SOLVERS[s];
+  const [base, model] = s.split("@");
+  if (model && SOLVERS[base]) {
+    const [name, sub] = SOLVERS[base];
+    return [name.includes(" on Gemini") ? name.replace(" on Gemini", ` on ${model}`) : `${name} on ${model}`,
+      sub.replace(GEMINI, "another model")];
+  }
+  return [s, "custom"];
+}
+export const solverName = (s) => label(s)[0];
+export const solverSub = (s) => label(s)[1];
 export const categoryName = (c) => (CATEGORIES[c] || [c])[0];
 export const pct = (x) => `${Math.round(x * 100)}%`;
+/** +0.26 / −0.12, with a true minus sign; a value that rounds to zero is +0.00. */
+export const signed = (x) => { const t = Math.abs(x).toFixed(2); return `${x < 0 && t !== "0.00" ? "−" : "+"}${t}`; };
+const capitalise = (s) => s[0].toUpperCase() + s.slice(1);
+const and = (items) => new Intl.ListFormat("en", { type: "conjunction" }).format(items);
 export const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 export const isObj = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
 export const num = (x) => (x === null || x === undefined ? "" : String(x));   // tool values already carry 4 significant digits
@@ -64,42 +82,85 @@ export function strip(solver, results, slots) {
   return { label, tiles: [...results.map(mark), ...Array(Math.max(0, missing)).fill(null)] };
 }
 
-/** {headline: "Accuracy on the 16 fault incidents: heuristic 59% and agent v0 41%.", partial: "..."}, with a note in
- * partial for each partial batch: one with fewer than its planned runs on some incident, or with incidents missing.
- * null when no solver has an overall row. */
+/** {headline, partial, complete}. headline: "Accuracy on the 16 fault incidents: heuristic 59% and v0 on Gemini 47%.",
+ * over complete batches only. partial: a note for each partial batch (fewer than its planned runs on some incident, or
+ * incidents missing), whose accuracy is not comparable yet. complete: the complete solvers. null when no solver has an
+ * overall row. */
 export function answerText(data, overall) {
   const shown = data.solvers.filter((s) => overall[s]);
   if (!shown.length) return null;
   const n = overall[shown[0]].expected ?? overall[shown[0]].scenarios;
   const planned = data.planned_runs || {};   // absent in an older index.json: then only missing incidents count as partial
   const lowerFirst = (s) => s[0].toLowerCase() + s.slice(1);   // "V1 on Nemotron" -> "v1 on Nemotron"
-  const parts = shown.map((s) => `${lowerFirst(solverName(s))} ${pct(overall[s].accuracy_mean)}`);
-  const list = new Intl.ListFormat("en", { type: "conjunction" }).format(parts);
   const counts = (s) => data.incidents.map((i) => (i.results[s] || []).length);   // controls included
   const short = (s) => planned[s] && Math.min(...counts(s)) < planned[s];
-  const partial = shown.filter((s) => short(s) || overall[s].scenarios < n).map((s) => {
+  const isPartial = (s) => short(s) || overall[s].scenarios < n;
+  const complete = shown.filter((s) => !isPartial(s));
+  const list = and(complete.map((s) => `${lowerFirst(solverName(s))} ${pct(overall[s].accuracy_mean)}`));
+  const partial = shown.filter(isPartial).map((s) => {
     const lo = Math.min(...counts(s)), hi = Math.max(...counts(s));
     const clauses = [];
     if (overall[s].scenarios < n) clauses.push(`${overall[s].scenarios} of ${n} incidents`);
     if (short(s)) clauses.push(`${lo === hi ? lo : `${lo}–${hi}`} of ${plural(planned[s], "planned run")} per incident`);
-    return `${solverName(s)} is a partial batch so far (${clauses.join(", ")}).`;
+    return `${capitalise(solverName(s))} is a partial batch so far (${clauses.join(", ")}); ` +
+      `its ${pct(overall[s].accuracy_mean)} is not comparable yet.`;
   });
-  return { headline: `Accuracy on the ${n} fault incidents: ${list}.`, partial: partial.join(" ") };
+  return { headline: complete.length ? `Accuracy on the ${n} fault incidents: ${list}.` : "No batch is complete yet.",
+    partial: partial.join(" "), complete };
+}
+
+export const MODEL_PAIR = ["agent-v1-nemotron", "agent-v1"];   // the same agent on two models
+
+/** The paired comparisons (site.py, from report.PAIRS) as sentences, between complete solvers only: whether any agent
+ * is clearly better or worse than the heuristic (its 95% interval wholly above or below 0), then the model pair with
+ * and without the controls. null when no agent-vs-heuristic comparison has an interval. */
+export function pairedText(data, complete) {
+  const ok = (data.paired || []).filter((p) => complete.includes(p.a) && complete.includes(p.b));
+  const vsRule = ok.filter((p) => p.b === "heuristic" && p.ci);
+  if (!vsRule.length) return null;
+  const diff = (p) => `${signed(p.mean_diff)} (95% interval ${signed(p.ci[0])} to ${signed(p.ci[1])})`;
+  const names = (ps) => and(ps.map((p) => solverName(p.a)));
+  const better = vsRule.filter((p) => p.ci[0] > 0), worse = vsRule.filter((p) => p.ci[1] < 0);
+  const best = vsRule.reduce((x, y) => (y.mean_diff > x.mean_diff ? y : x));
+  const out = [better.length
+    ? `${names(better)} ${better.length === 1 ? "is" : "are"} clearly better than the heuristic on the ${best.n} fault ` +
+      `incidents: ${better.map((p) => `${solverName(p.a)} ${diff(p)}`).join(", ")}.`
+    : `No agent is clearly better than the heuristic: on the ${best.n} fault incidents, no paired 95% interval against ` +
+      `it lies above 0 (the best, ${solverName(best.a)}, ${diff(best)}).`];
+  if (worse.length) out.push(`${names(worse)} ${worse.length === 1 ? "is" : "are"} clearly worse than it.`);
+  const m = ok.find((p) => p.a === MODEL_PAIR[0] && p.b === MODEL_PAIR[1]);
+  if (m?.ci && m.with_controls?.ci) {
+    out.push(`The same agent on two models: ${solverName(m.a)} vs ${solverName(m.b)} ${diff(m)} on the fault ` +
+      `incidents, and ${diff(m.with_controls)} with the controls counted, where false alarms count too.`);
+  }
+  return out.join(" ");
 }
 
 // ---------------------------------------------------------------- incident page
 
-/** get_metric's sparkline in a W x H box, or null with fewer than two finite points. The axis runs to the end of what
- * was asked for (args.until, capped at windowEndS, the seconds from the alert to the snapshot's end), so a series that
- * stops early (a paused service) visibly stops. */
-export function sparkGeometry(o, args, windowEndS) {
+/** The alert to show on an incident page for one solver, and its caption: the alert that solver was given (its
+ * alerts_shown entry from site.py, else the scenario's), and which solvers were given another one. */
+export function alertFor(data, solver) {
+  const others = Object.keys(data.alerts_shown || {});
+  if (others.includes(solver)) {
+    return { alert: data.alerts_shown[solver],
+      caption: `The generic alert ${solverName(solver)} was given instead of this incident’s. The other solvers saw: “${data.alert}”` };
+  }
+  return { alert: data.alert, caption: others.length
+    ? `The alert given to every solver except ${and(others.map(solverName))}, which ${others.length === 1 ? "was" : "were"} given a generic one.`
+    : "The alert every solver was given." };
+}
+
+/** get_metric's sparkline in a W x H box, or null with fewer than two finite points. The axis runs at least to
+ * windowEndS (the seconds from the alert to the snapshot's end), so a series that stops early (a paused service)
+ * visibly stops. */
+export function sparkGeometry(o, windowEndS) {
   const pts = (o.points || []).filter((p) => Number.isFinite(p?.[0]) && Number.isFinite(p?.[1]));
   if (pts.length < 2) return null;
   const W = 300, H = 48, PAD = 4;
   const ts = pts.map((p) => p[0]), vs = pts.map((p) => p[1]);
   const last = Math.max(...ts), lo = Math.min(...vs), hi = Math.max(...vs);
-  const asked = Number.isFinite(args.until) ? Math.min(args.until, windowEndS) : windowEndS;
-  const t0 = Math.min(...ts), t1 = Math.max(last, asked);
+  const t0 = Math.min(...ts), t1 = Math.max(last, windowEndS);
   const stopped = t1 - last >= 120 ? `No points after ${minutes(last)}.` : null;
   const x = (t) => ((t - t0) / (t1 - t0 || 1)) * W;
   const y = (v) => (hi === lo ? H / 2 : PAD + (1 - (v - lo) / (hi - lo)) * (H - 2 * PAD));

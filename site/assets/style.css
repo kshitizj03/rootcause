@@ -89,7 +89,7 @@ main > section:not(.intro):not(.board) h2 {
 .figure-row {
   display: grid;
   /* column widths follow the two PNGs' aspect ratios, so the charts stand at the same height */
-  grid-template-columns: 1.6fr 1.33fr;
+  grid-template-columns: 1.54fr 1.33fr;
   gap: 2rem;
   align-items: start;
 }

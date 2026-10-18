@@ -3,8 +3,11 @@
 
 import {
   CATEGORIES, SOLVERS, solverName, solverSub, categoryName, pct, plural, isObj, num, minutes, counted, isTrueCause, mark,
-  stripSlots, strip, answerText, sparkGeometry, logsLine, trimNotes, argText, evidenceText,
+  stripSlots, strip, answerText, pairedText, alertFor, sparkGeometry, logsLine, trimNotes, argText, evidenceText,
 } from "./lib.js";
+
+const REPO = "https://github.com/kshitizj03/rootcause";
+const REPORT = `${REPO}/blob/main/docs/results/report.md`;
 
 /** h("a", {href, class}, ...children): build an element; strings become text nodes, so data is never parsed as HTML. */
 function h(tag, attrs = {}, ...kids) {
@@ -59,21 +62,36 @@ function legend() {
   const item = (cls, glyph, text) => h("li", {}, h("span", { class: `tile ${cls}`, "aria-hidden": "true" }, glyph), text);
   return h("ul", { class: "legend", "aria-label": "Key" },
     item("hit", "✓", "correct"), item("miss", "✗", "wrong"),
-    item("part", "½", "partly correct (one of two causes)"), item("empty", "", "not run yet"));
+    item("part", "½", "partly correct (one of two causes)"), item("empty", "", "not run yet"),
+    h("li", {}, h("span", { class: "heldout" }, "held out"), "not used while developing the agents (one disclosed exception)"));
 }
 
-/** The headline sentence, with a note for each partial batch (lib.answerText). */
+/** The headline sentence over complete batches, a note for each partial batch (lib.answerText), the paired result
+ * (lib.pairedText), and what the ± figures are. */
 function answer(data, overall) {
   const text = answerText(data, overall);
-  return text && h("p", { class: "answer" }, `${text.headline} `, text.partial);
+  if (!text) return null;
+  const paired = pairedText(data, text.complete);
+  return [h("p", { class: "answer" }, `${text.headline} `, text.partial),
+    paired ? h("p", { class: "answer" }, paired) : null,
+    h("p", { class: "note" }, "Accuracy is the mean over incidents of each incident’s mean score across its runs. The ± figure under it is ",
+      "the standard deviation of that accuracy across complete runs, not a confidence interval. The paired intervals and ",
+      "the rest of the statistics are in the ", h("a", { href: REPORT }, "full report"), ".")];
 }
 
 async function renderIndex() {
   const root = document.getElementById("scoreboard");
   const data = await loadJSON("data/index.json");
-  if (!data || !data.solvers?.length) {
+  if (!data) {
     root.replaceChildren(h("p", { class: "status" },
-      "No results yet. Run ", command("python -m rootcause site"), " to generate them."));
+      "No results built yet. Run ", command("python -m rootcause site"), "."));
+    return;
+  }
+  if (!data.solvers?.length) {
+    root.replaceChildren(h("p", { class: "status" },
+      "No run records yet. Results come from data/runs, which is not in the repository: get the data release with ",
+      command("python -m rootcause fetch-data"), " (or record incidents and run solvers), then run ",
+      command("python -m rootcause site"), "."));
     return;
   }
   const solvers = data.solvers;
@@ -123,7 +141,7 @@ async function renderIndex() {
     head, groups, foot);
 
   root.replaceChildren(
-    answer(data, overall) || "",
+    ...(answer(data, overall) || []),
     legend(),
     h("div", { class: "table-scroll", tabindex: "0", role: "region", "aria-label": "Scoreboard" }, table));
   document.getElementById("generated").replaceChildren(
@@ -133,8 +151,8 @@ async function renderIndex() {
 /** A figure whose PNG is missing says how to make it instead of showing a broken image. */
 function guardFigures() {
   for (const img of document.querySelectorAll(".figures img")) {
-    const missing = () => img.replaceWith(h("p", { class: "status" }, "This chart has not been generated yet. Run ",
-      command("python -m rootcause report"), ", then ", command("python -m rootcause site"), "."));
+    const missing = () => img.replaceWith(h("p", { class: "status" }, "This chart has not been copied yet. Run ",
+      command("python -m rootcause site"), " (it copies the charts from docs/results/figures)."));
     if (img.complete && !img.naturalWidth) missing();
     else img.addEventListener("error", missing, { once: true });
   }
@@ -172,8 +190,8 @@ function changesTable(rows, label, text) {
 /** get_metric as a sparkline: the alert (t=0) is a vertical rule and everything after it is tinted. */
 let windowEndS = 300;  // seconds from the alert to the snapshot's end: the incident JSON's window_end_s (the scenario's settle_s)
 
-function sparkline(o, args = {}) {
-  const g = sparkGeometry(o, args, windowEndS);
+function sparkline(o) {
+  const g = sparkGeometry(o, windowEndS);
   if (!g) return rawOutput({ output: o, truncated: false });
   const { W, H, at } = g;
   const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", class: "spark", role: "img", "aria-label": g.label },
@@ -232,7 +250,7 @@ function renderOutput(step) {
   if (!isObj(o) || "error" in o || !RENDER[step.tool]) return rawOutput(step);
   const notes = trimNotes(o);
   try {
-    return [RENDER[step.tool](o, isObj(step.args) ? step.args : {}), note(notes.tool), note(notes.site)];
+    return [RENDER[step.tool](o), note(notes.tool), note(notes.site)];
   } catch {
     return rawOutput(step);   // a shape the renderer does not expect is still shown, as text
   }
@@ -342,16 +360,20 @@ async function renderIncident() {
   const status = h("p", { class: "replay-status", role: "status" });
   const body = h("div", { class: "replay-body" });
   const category = CATEGORIES[data.category];
+  const alertQuote = h("blockquote", {}, h("p", {}));
+  const alertCaption = h("figcaption", {});
+  const heldout = !data.heldout ? null : data.heldout_viewed
+    ? h("span", { class: "heldout" }, "Held out. Agent v1’s tool output on this incident was viewed once during development; see the ",
+      h("a", { href: `${REPORT}#provenance` }, "disclosure in the report"), ".")
+    : h("span", { class: "heldout" }, "Held out: not used while developing the agents.");
 
   root.replaceChildren(
     h("header", { class: "incident-head" },
       h("h1", {}, data.id),
       h("p", { class: "incident-meta" },
         category ? `${category[0]}: ${category[1]}.` : `${categoryName(data.category)}.`,
-        data.heldout ? h("span", { class: "heldout" }, "Held out from tuning (one exception is disclosed in the report).") : null),
-      h("figure", { class: "alert-quote" },
-        h("blockquote", {}, h("p", {}, data.alert)),
-        h("figcaption", {}, "The alert every solver was given."))),
+        heldout),
+      h("figure", { class: "alert-quote" }, alertQuote, alertCaption)),
     h("div", { class: "controls" },
       h("div", { class: "pick" }, h("label", { for: "pick-solver" }, "Solver"), solverPick),
       h("div", { class: "pick" }, h("label", { for: "pick-run" }, "Run"), runPick),
@@ -392,6 +414,9 @@ async function renderIncident() {
   function draw() {
     stop();
     status.textContent = "";
+    const shown = alertFor(data, state.solver);   // the vague-alert ablations were given another alert
+    alertQuote.firstChild.textContent = shown.alert;
+    alertCaption.textContent = shown.caption;
     const list = Object.hasOwn(runs, state.solver) ? runs[state.solver] : [];
     const run = list.find((r) => r.run + 1 === state.run) || list[0];
     runPick.replaceChildren(...(list.length

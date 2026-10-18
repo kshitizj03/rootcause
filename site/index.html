@@ -31,17 +31,17 @@
   </section>
 
   <section class="figures" aria-labelledby="figures-title">
-    <h2 id="figures-title">The same results, charted</h2>
+    <h2 id="figures-title">Main batches, charted</h2>
     <div class="figure-row">
       <figure>
-        <img src="figures/accuracy_by_category.png" width="1153" height="723" loading="lazy"
-             alt="Grouped bar chart of accuracy by incident category for each solver: easy, cross-service, silent, noisy, two-fault, control, and all incidents. The numbers are the ones in the scoreboard's accuracy rows.">
+        <img src="figures/accuracy_by_category.png" width="1153" height="749" loading="lazy"
+             alt="Grouped bar chart of accuracy by incident category for the heuristic and agents v0 and v1 on Gemini and Nemotron (ablations are in the scoreboard only): easy, cross-service, silent, noisy, two-fault, control, and all fault incidents, which is the scoreboard's all-fault-incidents row.">
         <figcaption>Accuracy by incident category. Error bars show the spread across runs, when at least two complete runs exist; a solver with no runs in a category has no bar there.</figcaption>
       </figure>
       <figure>
         <img src="figures/coverage.png" width="862" height="646" loading="lazy"
-             alt="Line chart of accuracy against coverage as the confidence threshold rises, for each agent; accuracy barely rises as coverage falls, so stated confidence is a weak signal.">
-        <figcaption>Accuracy against coverage. Raising the confidence threshold leaves fewer runs answered; accuracy here counts answered runs only.</figcaption>
+             alt="Line chart of accuracy against coverage as the confidence threshold rises, for agents v0 and v1 on Gemini and Nemotron; accuracy does not rise consistently as coverage falls, so stated confidence is a weak signal.">
+        <figcaption>Accuracy against coverage. Raising the confidence threshold leaves fewer runs answered; accuracy here counts answered runs only. Counted per run over all 20 incidents, controls included, so it differs from the scoreboard.</figcaption>
       </figure>
     </div>
   </section>
@@ -51,8 +51,8 @@
     <ol class="steps">
       <li>A fault is injected into the OpenTelemetry Demo, a shop made of 28 services, and its metrics, traces and logs are recorded as a snapshot. The ground truth is stored separately.</li>
       <li>Every channel that could name the fault, such as feature-flag events, log wording or delay markers, is stripped, and an automated scan checks each snapshot for leaks.</li>
-      <li>Each solver gets the same alert and snapshot. The heuristic names the service whose fault signal rose most; the agent, a tool loop on Gemini 3.5 Flash-Lite or Nemotron 3 Super, investigates through queries for changes, health, the service map, traces and logs.</li>
-      <li>Answers are scored by rules fixed before the first run. The top-ranked cause must be in the accepted set, a control is only right with “no incident”, and abstaining counts as wrong.</li>
+      <li>Each solver gets the same snapshot and, except in the vague-alert ablations, the same alert. The heuristic names the service whose fault signal rose most. Agent v0 reads raw metric series, traces and logs; agent v1 adds a ranking of what changed, per-service health and a service map. Both run as a tool loop on Gemini 3.5 Flash-Lite or Nemotron 3 Super.</li>
+      <li>Answers are scored by rules fixed before the first run. On single-fault incidents the top-ranked cause must be in the accepted set; on two-fault incidents each true cause named anywhere in the ranked list earns half. A control is only right with “no incident”, and abstaining counts as wrong.</li>
       <li>The agent’s cited evidence is checked against the telemetry: does it exist (grounded), and does it point at something anomalous (distinctive)?</li>
     </ol>
   </section>
@@ -61,7 +61,7 @@
     <h2 id="limits-title">Honest limits</h2>
     <ul class="limits">
       <li><strong>Twenty incidents from one demo app on one laptop.</strong> This is a small benchmark, not a general claim.</li>
-      <li><strong>Every solver gets the exact fault onset</strong> (t=0 is the injection time), and several alerts hint at the culprit’s functional area. The vague-alert ablation, which gives agent v1 one generic alert for every incident, is meant to measure how much that helps.</li>
+      <li><strong>Every solver gets the exact fault onset</strong> (t=0 is the injection time), and several alerts hint at the culprit’s functional area. The vague-alert ablation gives agent v1 one generic alert for every incident: on Nemotron it doubles false alarms on the controls and lowers fault accuracy by a borderline 12 points, so the alerts’ hints do help. The same ablation on Gemini is running.</li>
       <li><strong>Free models only:</strong> Gemini 3.5 Flash-Lite on its free tier and Nemotron 3 Super on NVIDIA’s free trial endpoint, both at temperature 0. The spread across runs measures API nondeterminism, not sampling.</li>
     </ul>
   </section>
@@ -69,6 +69,7 @@
 
 <footer class="colophon">
   <p id="generated">Results are regenerated from the run records with <code>python -m rootcause site</code>.</p>
+  <p><a href="https://github.com/kshitizj03/rootcause">Source code</a> · <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/results/report.md">full report</a> (paired intervals, provenance) · <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/benchmark.md">scoring rules</a> · <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/faq.md">threats to validity</a> · <a href="https://github.com/kshitizj03/rootcause/blob/main/LICENSE">Apache-2.0</a></p>
 </footer>
 </body>
 </html>
