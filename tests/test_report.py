@@ -35,10 +35,14 @@ def test_build_writes_markdown_and_figures_and_marks_missing_solvers(tmp_path, m
     assert (tmp_path / "out" / "figures" / "coverage.png").stat().st_size > 1000
 
 
-def test_build_with_no_records_at_all_still_works(tmp_path, monkeypatch):
+def test_build_with_no_records_at_all_refuses_and_leaves_the_report_alone(tmp_path, monkeypatch):
     monkeypatch.setattr(scenarios, "load_all", lambda: [])
-    path = report.build(out_dir=tmp_path / "out", runs_dir=tmp_path / "runs", solvers=["heuristic"])
-    assert "not run" in path.read_text(encoding="utf-8").lower()
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "report.md").write_text("published", encoding="utf-8")
+    with pytest.raises(report.NoRecords):
+        report.build(out_dir=tmp_path / "out", runs_dir=tmp_path / "runs", solvers=["heuristic"])
+    assert (tmp_path / "out" / "report.md").read_text(encoding="utf-8") == "published"
+    assert not (tmp_path / "out" / "figures").exists()
 
 
 def test_report_content_cells_partial_batches_and_small_n(tmp_path, monkeypatch):
@@ -57,7 +61,7 @@ def test_report_content_cells_partial_batches_and_small_n(tmp_path, monkeypatch)
     # accuracy cells carry scenario count and runs per scenario
     assert "| easy | 0.50 ± - (2/2 sc, 1 run) | 0.75 ± - (2/2 sc, 1-2 runs) | not run |" in md
     assert "| control | 1.00 ± - (1/1 sc, 1 run) | 1.00 ± 0.00 (1/1 sc, 2 runs) | not run |" in md  # held-out table, n per cell
-    assert "held-out categories have one scenario each; read the all-incidents row" in md.lower()
+    assert "held-out categories have one scenario each; read the all-fault-incidents row" in md.lower()
     # partial-batch note against the planned runs (agent-v1: 5, heuristic: 1), not for the complete heuristic batch
     assert "agent-v1: partial batch (1-2 runs per scenario, 5/15 runs)" in md
     assert "agent-v1: partial batch (1-2 runs per scenario, 3/10 runs)" in md
@@ -117,6 +121,13 @@ def test_paired_counts_wins_ties_losses_and_bootstraps_a_ci_over_incidents():
     assert report.paired({}, {"x": 1.0}) is None
 
 
+def test_sign_flip_p_by_hand():
+    # nonzero differences 1, 1, 0.5: of the 8 sign assignments only +++ and --- reach |sum| 2.5
+    assert report.sign_flip_p([1.0, 1.0, 0.5, 0.0, 0.0]) == 0.25
+    assert report.sign_flip_p([1.0, -1.0]) == 1.0 and report.sign_flip_p([0.0, 0.0]) == 1.0
+    assert report.paired({"x": 1.0, "y": 0.0}, {"x": 0.0, "y": 0.0})["p"] == 1.0  # one flip of one difference
+
+
 def test_report_has_a_paired_section_for_solver_pairs_with_records(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "HELDOUT", ())
     monkeypatch.setattr(scenarios, "load_all", lambda: [scenarios.Scenario(s, "easy", "x", {}, {}, []) for s in "ab"]
@@ -128,7 +139,7 @@ def test_report_has_a_paired_section_for_solver_pairs_with_records(tmp_path, mon
     md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["heuristic", "agent-v0", "agent-v1"]).read_text(encoding="utf-8")
     sec = md.split("## Paired comparisons")[1].split("\n## ")[0]
     na = "n/a (too few incidents or no spread)"  # fault-only columns first, then the same pair with the control
-    assert f"| agent-v1 vs heuristic | 2/2 | 1 / 1 / 0 | +0.50 | {na} | +0.00 | {na} |" in sec
+    assert f"| agent-v1 vs heuristic | 2/2 | 1 / 1 / 0 | +0.50 | {na} | 1.00 | +0.00 | {na} |" in sec
     assert "agent-v0" not in sec  # no records, no row
 
 
@@ -235,9 +246,9 @@ def test_agreement_and_calibration_sections_cover_agents_with_repeated_runs(tmp_
         write_record(runs / "heuristic", sid, "easy", 0, 1.0, report=_top_rec(sid, "payment", 0.5, 1.0)["report"])
     md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["heuristic", "agent-v0", "agent-v1"]).read_text(encoding="utf-8")
     assert md.index("## Step limit") < md.index("## Run-to-run agreement") < md.index("## Calibration") < md.index("## Cost")
-    agree = md.split("## Run-to-run agreement (all incidents)")[1].split("\n## ")[0]
+    agree = md.split("## Run-to-run agreement (all scenarios, controls included)")[1].split("\n## ")[0]
     assert "| agent-v0 | 1 | 1 of 1 | 1.00 |" in agree and "| agent-v1 | 2 | 1 of 2 | 0.67 |" in agree
-    cal = md.split("## Calibration (all incidents, record-level)")[1].split("\n## ")[0]
+    cal = md.split("## Calibration (all scenarios, controls included, record-level)")[1].split("\n## ")[0]
     assert "| agent-v0 | 2 | 0.90 | 0.00 | 0.90 | 0.81 |" in cal and "| agent-v1 | 5 | 0.58 | 0.60 | 0.18 | 0.04 |" in cal
     assert "overconfident) for agent-v0, and not for agent-v1." in cal
     assert "Runs without a numeric confidence are skipped: agent-v1: 1." in cal
@@ -272,4 +283,5 @@ def test_failure_modes_section_names_the_top_changed_service_from_the_recorded_s
     md = report.build(out_dir=tmp_path / "out", runs_dir=runs, solvers=["agent-v1"]).read_text(encoding="utf-8")
     section = md.split("## Failure modes")[1].split("\n## ")[0]
     assert "Recorded snapshots not found" not in section
-    assert "| agent-v1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 |" in section  # the one wrong run named the symptom service
+    assert "| agent-v1 | 1 | 0 | 0 | 0 | 0 | 1 | 0 |" in section  # the one wrong run named the symptom service
+    assert "first matching column, left to right" in section

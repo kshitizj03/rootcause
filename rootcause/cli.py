@@ -572,8 +572,11 @@ def _dispatch(args):
         else:
             raise _Usage(f"no solver and no records called {args.solver!r}; built-in solvers: {', '.join(SOLVERS)}")
     elif args.cmd == "report":
-        from rootcause import report
-        print(report.build())
+        from rootcause import report  # matplotlib: imported only for this command
+        try:
+            print(report.build())
+        except report.NoRecords as e:
+            raise _Usage(e) from None
     elif args.cmd == "site":
         from rootcause import site
         print(site.build())

@@ -87,6 +87,11 @@ def _categories(rows):
     return [c for c in evaluate.ORDER + ["all incidents"] if any(c in r for r in rows.values())]
 
 
+def _cat_label(c):
+    """The summaries' "all incidents" row covers fault incidents only (controls excluded): say so where it is shown."""
+    return "all fault incidents" if c == "all incidents" else c
+
+
 def _accuracy_tables(data, solvers):
     out = ["## Accuracy by category",
            "Accuracy is the mean over scenarios of each scenario's mean; ± is the sample sd across complete run indices "
@@ -95,11 +100,11 @@ def _accuracy_tables(data, solvers):
     for split in SPLITS:
         rows = _rows(data, split, solvers)
         cats = _categories(rows)
-        body = [[c] + [NOT_RUN if not rows[s] else _acc(rows[s].get(c)) for s in solvers] for c in cats]
+        body = [[_cat_label(c)] + [NOT_RUN if not rows[s] else _acc(rows[s].get(c)) for s in solvers] for c in cats]
         out += [f"### Split: {split}", _table(["category"] + solvers, body) if cats else f"No records in the {split} split."]
         out += [f"{s}: partial batch ({p})" for s in solvers if (p := _partial(data, s, split))]
         if split == "heldout":
-            out.append("Held-out categories have one scenario each; read the all-incidents row.")
+            out.append("Held-out categories have one scenario each; read the all-fault-incidents row.")
     return out
 
 
@@ -148,7 +153,18 @@ def paired(a, b, draws=10000, seed=0):
         boot = sorted(sum(rng.choices(d, k=n)) / n for _ in range(draws))
         ci = (boot[int(0.025 * draws)], boot[int(0.975 * draws) - 1])
     return {"n": n, "wins": sum(x > 0 for x in d), "ties": sum(x == 0 for x in d), "losses": sum(x < 0 for x in d),
-            "mean_diff": sum(d) / n, "ci": ci}
+            "mean_diff": sum(d) / n, "ci": ci, "p": sign_flip_p(d)}
+
+
+def sign_flip_p(d):
+    """Exact two-sided paired permutation (sign-flip) p-value for the mean of the differences d: the share of the 2^k
+    sign assignments of the k nonzero differences whose |sum| is at least the observed one."""
+    # enumerates 2^k sums, fine for k <= ~20 incidents; switch to sampled sign flips for larger libraries
+    nz, sums = [x for x in d if x], [0.0]
+    for x in nz:
+        sums = [s + x for s in sums] + [s - x for s in sums]
+    obs = abs(sum(nz))
+    return sum(abs(s) >= obs - 1e-9 for s in sums) / len(sums)
 
 
 def _ci(p):
@@ -166,7 +182,7 @@ def _paired_section(data, solvers):
             if p:
                 every = paired({k: v for k, v in ma.items() if k in lib}, {k: v for k, v in mb.items() if k in lib})
                 rows.append([f"{a} vs {b}", f"{p['n']}/{len(faults)}", f"{p['wins']} / {p['ties']} / {p['losses']}",
-                             f"{p['mean_diff']:+.2f}", _ci(p), f"{every['mean_diff']:+.2f}", _ci(every)])
+                             f"{p['mean_diff']:+.2f}", _ci(p), f"{p['p']:.2f}", f"{every['mean_diff']:+.2f}", _ci(every)])
                 partial.update({s: note for s in (a, b) if (note := _partial(data, s, "all"))})
     return ["## Paired comparisons (all split, fault incidents; the last two columns add the controls)",
             "Each solver's mean score per incident, compared on the incidents both have run. Wins / ties / losses count "
@@ -174,17 +190,19 @@ def _paired_section(data, solvers):
             "can mean one of two causes found or half of the runs right. The 95% interval is a percentile bootstrap over "
             "incidents (10,000 resamples, fixed seed); at this few incidents it is approximate and somewhat too narrow, and "
             f"it is not given below {MIN_PAIRED} shared incidents. An interval that includes 0 means this benchmark cannot "
-            "tell the two apart. About a dozen comparisons are shown with no multiple-comparison correction; an interval "
+            "tell the two apart. p is an exact paired permutation test on the fault incidents (every sign flip of the "
+            "per-incident differences), which does not share the bootstrap's narrowness. About a dozen comparisons are shown with no multiple-comparison correction; an interval "
             "that only just excludes 0 is suggestive, not established. Fault-only differences ignore false alarms on the "
             f"{len(lib - faults)} controls; the last two columns include them.",
-            _table(["comparison", "incidents", "wins / ties / losses", "mean difference", "95% interval",
+            _table(["comparison", "incidents", "wins / ties / losses", "mean difference", "95% interval", "p (permutation)",
                     f"mean difference (all {len(lib)}, controls incl.)", f"95% interval (all {len(lib)})"], rows)
             if rows else "No pair of solvers has run a shared fault incident yet.",
             *(f"{s}: partial batch ({note})" for s, note in partial.items())]
 
 
-FAILURE_MODES = ("said no incident", "named the top-changed service", "true cause ranked 2nd or 3rd",
-                 "found one of two causes", "another wrong service", "abstained")
+# in the order failure_modes tests them: a wrong run is counted once, in the first that matches
+FAILURE_MODES = ("said no incident", "abstained", "found one of two causes", "true cause ranked 2nd or 3rd",
+                 "named the top-changed service", "another wrong service")
 
 
 def failure_modes(records, accept, top):
@@ -237,8 +255,8 @@ def _failure_section(data, solvers):
             rows.append([s, str(sum(modes.values()))] + [str(modes.get(m, 0)) for m in FAILURE_MODES])
     return ["## Failure modes (all split, wrong fault-incident runs)",
             "How each wrong run on a fault incident went wrong. The top-changed service is the one with the largest rise "
-            "in the incident's change table, usually where the symptom shows; naming it is the heuristic's whole method and "
-            "its typical mistake." + ("" if top else " (Recorded snapshots not found, so that column is folded into "
+            "in the incident's change table, usually where the symptom shows; naming it is the heuristic's whole method. "
+            "Each wrong run is counted once, in the first matching column, left to right." + ("" if top else " (Recorded snapshots not found, so that column is folded into "
                                                      "'another wrong service'.)"),
             _table(["solver", "wrong runs", *FAILURE_MODES], rows) if rows else "No runs yet."]
 
@@ -322,7 +340,7 @@ def _agreement_section(data, solvers):
     for s in agents:
         if a := agreement(data["records"][s]):
             rows.append([s, str(a[0]), f"{a[1]} of {a[0]}", fmt2(a[2])])
-    return ["## Run-to-run agreement (all incidents)",
+    return ["## Run-to-run agreement (all scenarios, controls included)",
             "The built-in agents run at temperature 0, yet their runs still differ, so this measures how far a single run can be "
             "trusted. A run's top answer is its first cause's service, or its verdict when it names no cause. Pairwise "
             "agreement is the share of run pairs on a scenario that give the same top answer, averaged over the "
@@ -349,7 +367,7 @@ def _calibration_section(data, solvers):
     else:
         verdict = "No agent here states a mean confidence above its accuracy."
     skipped = [f"{s}: {c['skipped']}" for s, c in cal.items() if c["skipped"]]
-    return ["## Calibration (all incidents, record-level)",
+    return ["## Calibration (all scenarios, controls included, record-level)",
             "A well-calibrated agent's mean stated confidence matches its accuracy. Accuracy here is the mean `correct` "
             "over runs, controls included, not the tables' mean over scenarios. ECE (expected calibration error) splits "
             "the runs into 5 equal-width confidence bins and sums, over the bins, the bin's share of runs times "
@@ -455,7 +473,7 @@ def _bars(data, solvers):
                    ecolor=MUTED, capsize=2)
             for x, v, h in zip(xs, vals, hi):
                 ax.text(x, v + (0 if h != h else h) + 0.015, f"{v:.2f}", ha="center", va="bottom", rotation=90, fontsize=7, color=INK)
-        ax.set_xticks(range(len(cats)), cats, fontsize=8)
+        ax.set_xticks(range(len(cats)), [_cat_label(c) for c in cats], fontsize=8)
         return bool(shown)
     return draw
 
@@ -474,12 +492,19 @@ def _lines(data, solvers):
     return draw
 
 
+class NoRecords(ValueError):
+    """No listed solver has a run record: building would overwrite the published report with an empty one."""
+
+
 def build(out_dir=config.ROOT / "docs" / "results", runs_dir=evaluate.RUNS_DIR, solvers=None):
     """Write out_dir/report.md and out_dir/figures/*.png from the records under runs_dir; return the report path.
     solvers: default evaluate.listed_solvers (the built-in ones, then any other with records)."""
     out_dir, solvers = Path(out_dir), list(evaluate.listed_solvers(runs_dir) if solvers is None else solvers)
+    records = {s: evaluate.load_records(s, runs_dir) for s in solvers}
+    if not any(records.values()):
+        raise NoRecords(f"no run records under {runs_dir}; nothing to report (docs/results is left as it is)")
     (out_dir / "figures").mkdir(parents=True, exist_ok=True)
-    data = {"records": {s: evaluate.load_records(s, runs_dir) for s in solvers},
+    data = {"records": records,
             "summaries": {sp: {s: evaluate.summarise(s, runs_dir, evaluate.expected_counts(sp), sp) for s in solvers} for sp in SPLITS}}
     _chart((9, 4.5), "Accuracy by incident category (all scenarios)", "incident category",
            "accuracy (fraction correct)", _bars(data, solvers), out_dir / "figures" / "accuracy_by_category.png")
