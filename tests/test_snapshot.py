@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 from helpers import FLAGS, SCENARIO, T_END, T_INJECT, fake_fetch, flat_log, flat_span, otlp_payload

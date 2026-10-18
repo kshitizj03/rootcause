@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: System :: Monitoring",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-# requirements.txt has these plus pytest; requirements-lock.txt pins that tree and is what CI installs
+# requirements-lock.txt pins these (with the dev extra) and is what CI installs
 dependencies = [
     "requests>=2.31",
     "pyyaml>=6.0",

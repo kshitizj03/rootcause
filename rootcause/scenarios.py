@@ -24,6 +24,8 @@ class Scenario:
 
 
 def load_all(directory=config.SCENARIOS_DIR):
+    if not Path(directory).is_dir():  # a non-editable install resolves ROOT inside site-packages: fail loudly, not "0 new runs"
+        raise RuntimeError(f"no scenario library at {directory}: install from a checkout with `pip install -e .`")
     out = []
     for path in sorted(Path(directory).glob("*.yaml")):
         try:

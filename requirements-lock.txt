@@ -1,8 +1,9 @@
-# Pinned versions of requirements.txt and everything it pulls in, from the project venv (Python 3.11).
-# Generated with: python -m pip freeze --exclude-editable, filtered to the dependency tree of requirements.txt
-# (each package's installed requirements, followed from requirements.txt); a package needed only on some platforms
-# keeps its environment marker. CI installs this file; pyproject.toml keeps the >= ranges.
-# Regenerate after upgrading the venv:  python -m pip install -U -r requirements.txt
+# Pinned versions of the dependencies in pyproject.toml (with the dev extra) and everything they pull in, from the
+# project venv (Python 3.11).
+# Generated with: python -m pip freeze --exclude-editable, filtered to the dependency tree of pyproject.toml's
+# dependencies; a package needed only on some platforms keeps its environment marker. CI installs this file;
+# pyproject.toml keeps the >= ranges.
+# Regenerate after upgrading the venv:  python -m pip install -U -e ".[dev]"
 annotated-types==0.8.0
 anyio==4.15.1
 attrs==26.1.0

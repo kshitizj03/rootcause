@@ -22,4 +22,4 @@ The first public version: the benchmark, its two agents and the results so far.
 - A static replay site of every run (`rootcause site`): the result as a forest plot of each agent against the rule, what moved accuracy, every run, charts drawn in the page, and light and dark themes.
 - `rootcause pack-data` and `rootcause fetch-data` for the data release (`rootcause-data-v1.zip`, SHA-256 checked); `rootcause prompts` writes `docs/prompts.md` from the code.
 - Methodology FAQ and threats to validity (`docs/faq.md`).
-- Apache-2.0 license, NOTICE, CITATION.cff, pinned dependencies (`requirements-lock.txt`), CI on Ubuntu and Windows, and a workflow that publishes the replay site to GitHub Pages from the data release.
+- Apache-2.0 license, NOTICE, CITATION.cff, pinned dependencies (`requirements-lock.txt`), CI on Ubuntu and Windows with a check that the published report and the rule's scores reproduce from the data release, and a workflow that publishes the replay site from that release once the tests pass.

@@ -7,7 +7,7 @@ Fixes, new scenarios and new solvers are welcome. The one rule above the others:
 Python 3.11. Docker is needed only to record new incidents.
 
 ```bash
-python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt   # (bin/python on macOS/Linux)
+python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-lock.txt -e ".[dev]"   # (bin/python on macOS/Linux)
 .venv/Scripts/python -m pip install -e .                                            # optional: the `rootcause` command
 ```
 
@@ -64,7 +64,7 @@ Then:
 3. Add the name to `evaluate.SOLVER_ORDER` (a test checks the two lists match). If its batch is planned for other than 5 runs per incident, add it to `evaluate.PLANNED_RUNS`. Give it a label in `SOLVERS` in `site/assets/lib.js`. If it should be compared with another solver, add the pair to `report.PAIRS`.
 4. An ablation changes exactly one thing. Add a test, like those in `tests/test_ablations.py`, showing that every other `Agent` argument matches the solver it is compared with.
 
-To try a solver without changing the code, use `eval-custom` ([`docs/benchmark.md`](docs/benchmark.md)).
+To try a solver without changing the code, use `eval-custom` ([`docs/benchmark.md`](docs/benchmark.md)). It imports and runs the module you name, so running someone else's solver means running their code: read it first.
 
 ## Code style
 

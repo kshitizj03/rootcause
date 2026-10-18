@@ -439,7 +439,7 @@ def _load_target(target):
     try:
         fn = getattr(importlib.import_module(module), func)
     except (ImportError, AttributeError) as e:
-        raise _Usage(f"cannot load {target}: {type(e).__name__}: {e}")
+        raise _Usage(f"cannot load {target}: {type(e).__name__}: {e}") from e
     if not callable(fn):
         raise _Usage(f"{target} is not a function")
     return fn

@@ -116,3 +116,9 @@ def test_unsupported_targeting_is_reported_for_injected_flags_only():
     bad = {"paymentFailure": "targeting is not a simple if/then/else"}
     assert any("targeting" in e for e in scenarios.validate(make(), VARIANTS, bad))
     assert scenarios.validate(make(), VARIANTS, {"adHighCpu": "x"}) == []
+
+
+def test_a_missing_scenario_library_fails_loudly_with_the_install_fix(tmp_path):
+    # a non-editable install resolves the library inside site-packages; scoring 0 runs there would look like success
+    with pytest.raises(RuntimeError, match=r"pip install -e \."):
+        scenarios.load_all(tmp_path / "no-library")

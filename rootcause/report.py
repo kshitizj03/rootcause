@@ -482,7 +482,7 @@ def _bars(data, solvers):
             ax.bar(xs, vals, width, yerr=[lo, hi], color=COLOURS.get(s, "#8a8a85"), edgecolor=SURFACE, linewidth=1, label=_label(data, s),
                    ecolor=MUTED, capsize=2)
             for x, v, h in zip(xs, vals, hi):
-                ax.text(x, v + (0 if h != h else h) + 0.015, f"{v:.2f}", ha="center", va="bottom", rotation=90, fontsize=7, color=INK)
+                ax.text(x, v + (0 if math.isnan(h) else h) + 0.015, f"{v:.2f}", ha="center", va="bottom", rotation=90, fontsize=7, color=INK)
         ax.set_xticks(range(len(cats)), [_cat_label(c) for c in cats], fontsize=8)
         return bool(shown)
     return draw

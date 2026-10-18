@@ -27,6 +27,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-lock.txt
       - run: pip install -r requirements-lock.txt
+      - run: python -m pytest -q   # never publish from a commit whose tests fail
       - run: python -m rootcause fetch-data   # the data-v1 release, checked against config.DATA_SHA256
       - run: python -m rootcause site
       - uses: actions/configure-pages@v5
