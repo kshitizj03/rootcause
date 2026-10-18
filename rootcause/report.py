@@ -30,7 +30,12 @@ PAIRS = [("agent-v0", "heuristic"), ("agent-v1", "heuristic"), ("agent-v1", "age
          ("agent-v1-nopriors", "agent-v1"), ("agent-v1-vague", "agent-v1"), ("agent-v0-nemotron", "heuristic"), ("agent-v1-nemotron", "heuristic"),
          ("agent-v1-nemotron", "agent-v1"), ("agent-v0-nemotron", "agent-v0"), ("agent-v1-nemotron", "agent-v0-nemotron"),
          ("agent-v1-nemotron-nopriors", "agent-v1-nemotron"), ("agent-v1-nemotron-vague", "agent-v1-nemotron"),
-         ("agent-v1-nemotron-steps30", "agent-v1-nemotron")]
+         ("agent-v1-nemotron-steps30", "agent-v1-nemotron"),
+         # agent v1 (and v0) unchanged on more models through eval --model: against the rule, the older Nemotron and Gemini
+         ("agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b", "heuristic"), ("agent-v0@nvidia-nemotron-3.5-super-vl-120b-a12b", "heuristic"),
+         ("agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b", "agent-v1-nemotron"), ("agent-v0@nvidia-nemotron-3.5-super-vl-120b-a12b", "agent-v0-nemotron"),
+         ("agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b", "agent-v0@nvidia-nemotron-3.5-super-vl-120b-a12b"),
+         ("agent-v1@z-ai-glm-5.3-flash", "heuristic"), ("agent-v1@z-ai-glm-5.3-flash", "agent-v1")]
 FLASH_NOTE = ("A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run "
               "takes about 12-15 requests (up to 17), so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparison is instead "
               "agent-v0-nemotron and agent-v1-nemotron: agents v0 and v1 unchanged (prompt, tools, step limit) on "

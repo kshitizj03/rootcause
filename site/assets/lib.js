@@ -22,6 +22,8 @@ export const SOLVERS = {
   "agent-v1-nemotron-vague": ["V1 on Nemotron (vague alerts)", "ablation: one generic alert"],
   "agent-v1-nemotron-steps30": ["V1 on Nemotron (30 steps)", "ablation: twice the step limit"],
   "agent-v1@z-ai-glm-5.3-flash": ["V1 on GLM", "change-aware tools, GLM 5.3 Flash"],
+  "agent-v0@nvidia-nemotron-3.5-super-vl-120b-a12b": ["V0 on Nemotron 3.5", "naive tools, Nemotron 3.5 Super"],
+  "agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b": ["V1 on Nemotron 3.5", "change-aware tools, Nemotron 3.5 Super"],
 };
 
 const GEMINI = "Gemini 3.5 Flash-Lite";
@@ -114,11 +116,12 @@ export const MODEL_PAIR = ["agent-v1-nemotron", "agent-v1"];   // the same agent
 
 // ---------------------------------------------------------------- charts
 
-/** The model a solver runs on, for its chart colour: rule (the heuristic), gemini, nemotron, glm, or other. */
+/** The model a solver runs on, for its chart colour: rule (the heuristic), gemini, nemotron, nemotron35, glm, or other. */
 export function modelOf(s) {
   if (s === "heuristic") return "rule";
   const [base, model = ""] = s.split("@");
   if (/glm/i.test(model)) return "glm";
+  if (/nemotron-3\.5/i.test(model)) return "nemotron35";
   if (model) return "other";
   if (!base.startsWith("agent")) return "other";
   return base.includes("nemotron") ? "nemotron" : "gemini";
@@ -153,7 +156,7 @@ export function vsRuleRows(data, complete) {
 
 /** What one paired comparison changes, in plain words: [group, change, held fixed]. */
 export function changeOf(a, b) {
-  const model = (s) => (modelOf(s) === "nemotron" ? "Nemotron" : modelOf(s) === "glm" ? "GLM" : "Gemini");
+  const model = (s) => ({ nemotron: "Nemotron", nemotron35: "Nemotron 3.5", glm: "GLM" }[modelOf(s)] ?? "Gemini");
   const tools = (s) => (toolsOf(s) === "v0" ? "naive tools" : "change-aware tools");
   if (toolsOf(a) === toolsOf(b) && modelOf(a) !== modelOf(b) && !isAblation(a) && !isAblation(b)) {
     return ["Model", `${model(a)} instead of ${model(b)}`, `same agent: v${toolsOf(a).slice(1)}, ${tools(a)}`];

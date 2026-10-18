@@ -16,6 +16,7 @@
   --gemini: #B5620E;
   --nemotron: #6A4BC4;
   --glm: #1E7F84;
+  --nemotron35: #A3358C;
 
   --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
   --body: "Atkinson Hyperlegible", system-ui, sans-serif;
@@ -44,6 +45,7 @@
     --gemini: #F0A04B;
     --nemotron: #B4A0FF;
     --glm: #5CCDD1;
+    --nemotron35: #F08BD0;
     color-scheme: dark;
   }
 }
@@ -150,6 +152,7 @@ figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; lin
 .m-gemini { color: var(--gemini); }
 .m-nemotron { color: var(--nemotron); }
 .m-glm { color: var(--glm); }
+.m-nemotron35 { color: var(--nemotron35); }
 .m-other { color: var(--muted); }
 
 .f-rows { list-style: none; margin: 0; padding: 0; }

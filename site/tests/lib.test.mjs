@@ -273,6 +273,9 @@ test("chart encoding: hue is the model, fill is the toolset", () => {
   assert.equal(modelOf("agent-v1"), "gemini");
   assert.equal(modelOf("agent-v0-nemotron"), "nemotron");
   assert.equal(modelOf("agent-v1@z-ai-glm-5.3-flash"), "glm");
+  assert.equal(modelOf("agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b"), "nemotron35");
+  assert.deepEqual(changeOf("agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b", "agent-v1-nemotron"),
+    ["Model", "Nemotron 3.5 instead of Nemotron", "same agent: v1, change-aware tools"]);
   assert.equal(modelOf("agent-v1@qwen-9b"), "other");
   assert.equal(modelOf("my-agent"), "other");
   assert.equal(toolsOf("agent-v0-nemotron"), "v0");
