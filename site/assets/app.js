@@ -565,8 +565,19 @@ async function renderIncident() {
   runPick.addEventListener("change", pick);
   replayButton.addEventListener("click", replay);
   showButton.addEventListener("click", () => showAll());
+  /** ?step=N opens the replay partway: the first N steps shown (the verdict after the last step), scrolled to the latest. */
+  function openAt(n) {
+    const items = [...body.querySelectorAll(".step"), body.querySelector(".verdict")].filter(Boolean);
+    const shown = Math.min(Math.max(0, n), items.length);
+    items.forEach((el, i) => el.classList.toggle("pending", i >= shown));
+    if (shown) items[shown - 1].scrollIntoView({ block: "end" });
+    status.textContent = shown === items.length ? "Replay finished. The verdict is shown." : `Step ${shown} of ${items.length - 1}`;
+  }
+
   const asked = state.run;
   draw();
+  const step = Number.parseInt(query.get("step"), 10);
+  if (Number.isFinite(step)) openAt(step);
   if (Object.hasOwn(runs, state.solver) && runs[state.solver].length) syncURL();
   if (query.has("run") && asked !== state.run) status.textContent = `Run ${query.get("run")} was not recorded, so run ${state.run} is shown.`;
 }

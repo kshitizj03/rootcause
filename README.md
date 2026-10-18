@@ -103,14 +103,14 @@ The two evidence measures are:
 
 A static site replays every recorded run, failures included:
 - **The scoreboard** shows one mark per run, for every incident and solver.
-- **Each incident page** steps through the agent's investigation: every tool call and what it returned, drawn as tables and sparklines. Next to it is the verdict against the true cause, the simple rule's answer for the same incident, and the cited evidence marked grounded or not.
+- **Each incident page** steps through the agent's investigation: every tool call and what it returned, drawn as tables and sparklines. Next to it is the verdict against the true cause, the simple rule's answer for the same incident, and the cited evidence marked grounded or not. Add `&step=N` to a replay link to open it at step N.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/replay-dark.png">
-  <img alt="Replay of valkey-cart-paused, a held-out incident: agent v1 on Nemotron ranked the symptom service, cart, above the paused valkey-cart, and the simple rule named cart too" src="docs/images/replay-light.png">
-</picture>
+<a href="https://kshitizj03.github.io/rootcause/incident.html?id=valkey-cart-paused&solver=agent-v1-nemotron&run=2"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/replay-dark.gif">
+  <img alt="Replay of agent v1 on Nemotron investigating valkey-cart-paused, a held-out incident, step by step: the change ranking, the service map with stopped calls, error traces, then the verdict, correct, next to the simple rule's wrong answer" src="docs/images/replay-light.gif">
+</picture></a>
 
-*A held-out incident agent v1 on Nemotron got wrong. Its change ranking put cart's latency at the top (about 1,850 times higher), so it named cart first and the paused valkey-cart second. The simple rule named cart too.*
+*A replay of agent v1 on Nemotron on a held-out incident: it follows the failing cart calls to the paused valkey-cart. This is run 2 of 5. It got this incident right in 2 of its 5 runs; in the other 3 it named the symptom service, cart, first, as the simple rule did.*
 
 ```bash
 python -m rootcause report    # rewrites docs/results/ from your data/runs; `git checkout docs/results` restores the published results
