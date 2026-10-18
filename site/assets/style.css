@@ -332,6 +332,9 @@ tbody:first-of-type .group th { padding-top: 1rem; }
   font: 700 1.0625rem/1 var(--glyph);
   color: #fff;
 }
+a.tile { text-decoration: none; }
+a.tile:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
+a.tile:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 .tile.hit { background: var(--hit-fill); }
 .tile.miss { background: var(--miss-fill); }
 .tile.part { background: linear-gradient(135deg, var(--hit-fill) 50%, var(--miss-fill) 50%); }
@@ -387,6 +390,21 @@ tfoot .total .acc { font-size: 1.75rem; }
   text-wrap: balance;
 }
 .alert-quote figcaption { margin: 0.5rem 0 0 1.25rem; color: var(--muted); font-size: 0.9375rem; }
+
+.every-solver { margin: 1.75rem 0 1.25rem; }
+main > section.every-solver > h2 { border-top: 1px solid var(--hairline); padding-top: 0.75rem; font-size: 1.0625rem; line-height: 1.3; font-stretch: 100%; }
+.solver-strips {
+  list-style: none; margin: 0.5rem 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); column-gap: 2rem;
+}
+.solver-strips li {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 0.35rem 0; border-bottom: 1px solid var(--hairline);
+}
+.solver-strips .who { font: 600 0.9375rem/1.3 var(--display); font-stretch: 90%; }
+.solver-strips li.current { box-shadow: inset 3px 0 0 var(--ink); padding-left: 0.6rem; }
+.solver-strips li.current .who { font-weight: 800; }
+.solver-strips .tile { width: 1.35rem; height: 1.35rem; font-size: 0.875rem; }
 
 /* pickers and the replay control: the only rounded things on the site */
 .controls {

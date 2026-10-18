@@ -35,10 +35,14 @@ const command = (text) => h("code", {}, text);
 
 // ---------------------------------------------------------------- index page
 
-function runStrip(solver, results, slots) {
+/** One incident's runs for one solver: each recorded run a tile that opens its replay, each run not done yet an empty slot. */
+function runStrip(solver, results, slots, id) {
   const { label, tiles } = strip(solver, results, slots);
-  return h("span", { class: "strip", role: "img", "aria-label": label },
-    tiles.map((m) => (m ? h("span", { class: `tile ${m.cls}` }, m.glyph) : h("span", { class: "tile empty" }))));
+  const href = (k) => `incident.html?${new URLSearchParams({ id, solver, run: k + 1 })}`;
+  return h("span", { class: "strip", role: "group", "aria-label": label },
+    tiles.map((m, k) => (m
+      ? h("a", { class: `tile ${m.cls}`, href: href(k), "aria-label": `Run ${k + 1}: ${m.word}. Open the replay` }, m.glyph)
+      : h("span", { class: "tile empty", "aria-hidden": "true" }))));
 }
 
 function truthCell(truth) {
@@ -258,7 +262,7 @@ function scoreboard(data, solvers, summary) {
           inc.heldout ? h("span", { class: "heldout" }, "held out") : null,
           h("span", { class: "alert" }, inc.alert)),
         truthCell(inc.truth),
-        solvers.map((s) => h("td", { class: "runs" }, runStrip(s, inc.results[s] || [], slots[s]))))),
+        solvers.map((s) => h("td", { class: "runs" }, runStrip(s, inc.results[s] || [], slots[s], inc.id))))),
       h("tr", { class: "acc-row" },
         h("th", { scope: "row", class: "incident" }, `${categoryName(cat)} accuracy`),
         h("td", {}),
@@ -452,6 +456,18 @@ function investigation(solver, run) {
         : "This run made no tool calls. ", solver === "heuristic" ? null : usage));
 }
 
+/** Every solver's runs on this incident, each a tile that opens that run, the one shown marked. */
+function everySolver(id, solvers, runs, current) {
+  if (solvers.length < 2) return null;
+  return h("section", { class: "every-solver", "aria-labelledby": "every-solver-title" },
+    h("h2", { id: "every-solver-title" }, "Every solver on this incident"),
+    h("ul", { class: "solver-strips" }, solvers.map((s) => {
+      const results = runs[s].map((r) => r.score?.correct ?? 0);
+      return h("li", { "data-solver": s, class: s === current ? "current" : null, "aria-current": s === current ? "true" : null },
+        h("span", { class: "who" }, solverName(s)), runStrip(s, results, results.length, id));
+    })));
+}
+
 async function renderIncident() {
   const root = document.getElementById("incident");
   const query = new URLSearchParams(location.search);
@@ -495,6 +511,7 @@ async function renderIncident() {
         category ? `${category[0]}: ${category[1]}.` : `${categoryName(data.category)}.`,
         heldout),
       h("figure", { class: "alert-quote" }, alertQuote, alertCaption)),
+    everySolver(data.id, have, runs, state.solver),
     h("div", { class: "controls" },
       h("div", { class: "pick" }, h("label", { for: "pick-solver" }, "Solver"), solverPick),
       h("div", { class: "pick" }, h("label", { for: "pick-run" }, "Run"), runPick),
@@ -535,6 +552,11 @@ async function renderIncident() {
   function draw() {
     stop();
     status.textContent = "";
+    for (const li of root.querySelectorAll(".solver-strips li")) {
+      const on = li.dataset.solver === state.solver;
+      li.classList.toggle("current", on);
+      if (on) li.setAttribute("aria-current", "true"); else li.removeAttribute("aria-current");
+    }
     const shown = alertFor(data, state.solver);   // the vague-alert ablations were given another alert
     alertQuote.firstChild.textContent = shown.alert;
     alertCaption.textContent = shown.caption;
