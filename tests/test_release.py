@@ -84,10 +84,12 @@ def test_fetch_checks_the_checksum_and_unpacks_data_that_evaluate_can_use(data, 
     assert release.fetch(archive, expected=digest, into=new, force=True) > 0
 
 
-def test_fetch_refuses_members_outside_the_data_dir(tmp_path):
+@pytest.mark.parametrize("member", ["runs/../../evil.txt", "/evil.txt", "C:evil.txt", "runs\\..\\..\\evil.txt",
+                                    "evil.txt", "other/evil.txt"])
+def test_fetch_refuses_members_outside_the_data_dir(tmp_path, member):
     bad = tmp_path / "bad.zip"
     with zipfile.ZipFile(bad, "w") as z:
-        z.writestr("runs/../../evil.txt", "x")
+        z.writestr(member, "x")
     with pytest.raises(release.FetchError, match="unexpected member"):
         release.fetch(bad, expected=hashlib.sha256(bad.read_bytes()).hexdigest(), into=tmp_path / "d")
     assert not (tmp_path / "evil.txt").exists()
