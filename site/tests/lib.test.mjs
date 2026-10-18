@@ -161,7 +161,7 @@ test("paired: no agent clearly better, the best quoted, and the model pair with 
     pair("agent-v1-nemotron", "agent-v1", 0.26, [0.10, 0.44], { n: 20, mean_diff: 0.11, ci: [-0.09, 0.31] })] };
   assert.equal(pairedText(data, ["heuristic", "agent-v1", "agent-v1-nemotron"]),
     "No agent is clearly better than the heuristic: on the 16 fault incidents, no paired 95% interval against it lies " +
-    "above 0 (the best, V1 on Nemotron, +0.08 (95% interval −0.05 to +0.23)). The same agent on two models: V1 on " +
+    "above 0 (the best is V1 on Nemotron at +0.08, 95% interval −0.05 to +0.23). The same agent on two models: V1 on " +
     "Nemotron vs V1 on Gemini +0.26 (95% interval +0.10 to +0.44) on the fault incidents, and +0.11 (95% interval " +
     "−0.09 to +0.31) with the controls counted, where false alarms count too.");
 });

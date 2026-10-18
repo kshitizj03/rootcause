@@ -118,7 +118,8 @@ export function pairedText(data, complete) {
   const ok = (data.paired || []).filter((p) => complete.includes(p.a) && complete.includes(p.b));
   const vsRule = ok.filter((p) => p.b === "heuristic" && p.ci);
   if (!vsRule.length) return null;
-  const diff = (p) => `${signed(p.mean_diff)} (95% interval ${signed(p.ci[0])} to ${signed(p.ci[1])})`;
+  const interval = (p) => `95% interval ${signed(p.ci[0])} to ${signed(p.ci[1])}`;
+  const diff = (p) => `${signed(p.mean_diff)} (${interval(p)})`;
   const names = (ps) => and(ps.map((p) => solverName(p.a)));
   const better = vsRule.filter((p) => p.ci[0] > 0), worse = vsRule.filter((p) => p.ci[1] < 0);
   const best = vsRule.reduce((x, y) => (y.mean_diff > x.mean_diff ? y : x));
@@ -126,7 +127,7 @@ export function pairedText(data, complete) {
     ? `${names(better)} ${better.length === 1 ? "is" : "are"} clearly better than the heuristic on the ${best.n} fault ` +
       `incidents: ${better.map((p) => `${solverName(p.a)} ${diff(p)}`).join(", ")}.`
     : `No agent is clearly better than the heuristic: on the ${best.n} fault incidents, no paired 95% interval against ` +
-      `it lies above 0 (the best, ${solverName(best.a)}, ${diff(best)}).`];
+      `it lies above 0 (the best is ${solverName(best.a)} at ${signed(best.mean_diff)}, ${interval(best)}).`];
   if (worse.length) out.push(`${names(worse)} ${worse.length === 1 ? "is" : "are"} clearly worse than it.`);
   const m = ok.find((p) => p.a === MODEL_PAIR[0] && p.b === MODEL_PAIR[1]);
   if (m?.ci && m.with_controls?.ci) {
