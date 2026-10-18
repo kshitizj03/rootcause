@@ -5,8 +5,10 @@
   --ink: #16263A;
   --muted: #5B6B7D;
   --cause: #2350C8;
-  --hit: #0B7A62;
-  --miss: #B0283F;
+  --hit: #0B7A62;         /* "correct" text */
+  --miss: #B0283F;        /* "wrong" text */
+  --hit-fill: #0B7A62;    /* tile behind a white glyph */
+  --miss-fill: #B0283F;
   --trace: #C47A12;
   --hairline: #C5CED7;   /* row separators: navy ink thinned against the paper */
   --wash: #F7F9FA;       /* row hover: lighter than the paper, so muted text keeps AA contrast */
@@ -18,6 +20,25 @@
   --gutter: clamp(16px, 4vw, 48px);
   --measure: 68ch;
   color-scheme: light;
+}
+
+/* Dark: the same navy-and-paper scheme inverted. Text colours lighten for contrast on the dark paper; tile fills keep
+   their depth so the white glyphs stay readable. The charts are light images and keep their own background. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #111A24;
+    --ink: #E3E9EF;
+    --muted: #98A6B5;
+    --cause: #8DB0FF;
+    --hit: #45C9A0;
+    --miss: #FF7D90;
+    --hit-fill: #0B7A62;
+    --miss-fill: #B0283F;
+    --trace: #E8A23A;
+    --hairline: #2C3A4A;
+    --wash: #1A2532;
+    color-scheme: dark;
+  }
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -194,9 +215,9 @@ tbody:first-of-type .group th { padding-top: 1rem; }
   font: 700 1.0625rem/1 var(--glyph);
   color: #fff;
 }
-.tile.hit { background: var(--hit); }
-.tile.miss { background: var(--miss); }
-.tile.part { background: linear-gradient(135deg, var(--hit) 50%, var(--miss) 50%); }
+.tile.hit { background: var(--hit-fill); }
+.tile.miss { background: var(--miss-fill); }
+.tile.part { background: linear-gradient(135deg, var(--hit-fill) 50%, var(--miss-fill) 50%); }
 .tile.empty { border: 1px dashed var(--muted); }
 
 .num { text-align: right; }

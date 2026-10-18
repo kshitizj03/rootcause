@@ -8,6 +8,16 @@ RootCause is an LLM agent that investigates microservice incidents over OpenTele
 - **Counting the 4 no-fault controls, that gap shrinks to +0.11 and its interval includes 0** (-0.09 to +0.31), because Nemotron raises far more false alarms.
 - **The change-aware tools change nothing measurable** on either model.
 
+| solver | model | tools | fault incidents (16) | controls answered correctly (4) | runs |
+|---|---|---|---|---|---|
+| heuristic | none | change ranking | 0.59 | 0.75 | 1 per incident |
+| agent v0 | Gemini 3.5 Flash-Lite | naive | 0.47 | 1.00 | 5 per incident |
+| agent v1 | Gemini 3.5 Flash-Lite | change-aware | 0.41 | 1.00 | 5 per incident |
+| agent v0 | Nemotron 3 Super | naive | 0.69 | 0.30 | 5 per incident |
+| agent v1 | Nemotron 3 Super | change-aware | 0.68 | 0.50 | 5 per incident |
+
+Accuracy is the mean over incidents of each incident's mean score across its runs.
+
 The tables behind every number are in [`docs/results/report.md`](docs/results/report.md), what they mean is in [`docs/results/agents.md`](docs/results/agents.md), and the threats to validity are in the [methodology FAQ](docs/faq.md).
 
 ## Quick start
@@ -90,11 +100,12 @@ A static site replays every recorded run, failures included:
 - **The scoreboard** shows one mark per run, for every incident and solver.
 - **Each incident page** steps through the agent's investigation: every tool call and what it returned, drawn as tables and sparklines. Next to it is the verdict against the true cause, the simple rule's answer for the same incident, and the cited evidence marked grounded or not.
 
-![Scoreboard: one mark per run for each incident and solver](docs/images/scoreboard.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/replay-dark.png">
+  <img alt="Replay of valkey-cart-paused, a held-out incident: agent v1 on Nemotron ranked the symptom service, cart, above the paused valkey-cart, and the simple rule named cart too" src="docs/images/replay-light.png">
+</picture>
 
-![Replay of a held-out incident agent v1 on Nemotron got wrong: it ranked the symptom service, cart, above the paused valkey-cart](docs/images/replay.png)
-
-*(Screenshots from 2026-10-18: the GLM batch and the Gemini ablations are still partial; empty tiles are runs not done yet.)*
+*A held-out incident agent v1 on Nemotron got wrong. Its change ranking put cart's latency at the top (about 1,850 times higher), so it named cart first and the paused valkey-cart second. The simple rule named cart too.*
 
 ```bash
 python -m rootcause report    # rewrites docs/results/ from your data/runs; `git checkout docs/results` restores the published results
