@@ -18,7 +18,7 @@ RootCause is an LLM agent that investigates microservice incidents over OpenTele
 
 Accuracy is the mean over incidents of each incident's mean score across its runs.
 
-The tables behind every number are in [`docs/results/report.md`](docs/results/report.md), what they mean is in [`docs/results/agents.md`](docs/results/agents.md), and the threats to validity are in the [methodology FAQ](docs/faq.md).
+Every run can be replayed on the [replay site](https://kshitizj03.github.io/rootcause/). The tables behind every number are in [`docs/results/report.md`](docs/results/report.md), what they mean is in [`docs/results/agents.md`](docs/results/agents.md), and the threats to validity are in the [methodology FAQ](docs/faq.md).
 
 ## Quick start
 
@@ -31,7 +31,7 @@ rootcause eval heuristic
 ```
 
 - `pip install -e .` installs the package and the `rootcause` command. It must be editable (`-e`), because the package reads `scenarios/` and `data/` from this checkout.
-- `rootcause fetch-data` downloads the data release (the 20 recorded snapshots and every run record behind the report), checks its SHA-256 and unpacks it into `data/`. It works once the `data-v1` release is published on GitHub (the archive's checksum is pinned in `rootcause/config.py`); offline, pass a downloaded copy of that archive with `rootcause fetch-data --from rootcause-data-v1.zip`.
+- `rootcause fetch-data` downloads the data release (the 20 recorded snapshots and every run record behind the report), checks its SHA-256 and unpacks it into `data/`. It comes from the [`data-v1` release](https://github.com/kshitizj03/rootcause/releases/tag/data-v1), and its checksum is pinned in `rootcause/config.py`. Offline, pass a downloaded copy with `rootcause fetch-data --from rootcause-data-v1.zip`.
 - `rootcause eval heuristic` scores the heuristic and prints its summary. Batches are resumable, so with the released records in place it adds no runs; delete `data/runs/heuristic` to score it from scratch. The agents need an API key (see [Score the solvers](#score-the-solvers)).
 
 ## Status
