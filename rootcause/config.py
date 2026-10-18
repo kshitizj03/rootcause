@@ -46,3 +46,4 @@ LOGS_PER_SERVICE = 200
 # valkey-cart-paused once during agent-v1 development (report.DISCLOSURE says what was kept).
 HELDOUT = ("product-catalog-failure", "valkey-cart-paused", "recommendation-cache-leak",
            "payment-failure-with-flood", "payment-failure-and-recommendation-leak", "control-4")
+HELDOUT_VIEWED = "valkey-cart-paused"  # the one held-out incident whose v1 tool output was viewed (report.DISCLOSURE)

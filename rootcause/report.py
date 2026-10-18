@@ -20,7 +20,7 @@ COLOURS = {"heuristic": "#2a78d6", "agent-v0": "#eb6834", "agent-v1": "#1baf7a",
 SPLITS = ("all", "tune", "heldout")
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
 NOT_RUN = "not run"
-DISCLOSURE = ("During agent-v1 development, v1 tool output was viewed on one held-out incident (valkey-cart-paused). "
+DISCLOSURE = (f"During agent-v1 development, v1 tool output was viewed on one held-out incident ({config.HELDOUT_VIEWED}). "
               "The one feature it suggested that no tuning snapshot exercised (an incomplete-services list) was removed "
               "before any v1 run; the other changes from that time (stopped service-map edges, the 'after = 0 can mean "
               "the service stopped reporting' caveat) are each exercised by the tuning snapshot payment-unreachable.")
@@ -171,19 +171,29 @@ def _ci(p):
     return f"{p['ci'][0]:+.2f} to {p['ci'][1]:+.2f}" if p["ci"] else "n/a (too few incidents or no spread)"
 
 
+def paired_results(records):
+    """[(a, b, paired() over the fault incidents, paired() over every library scenario)] for each PAIRS pair whose two
+    solvers have records ({solver: records}) and share a fault incident. The report and the site both read this."""
+    lib = {s.id for s in scenarios.load_all()}
+    faults = {s.id for s in scenarios.load_all() if s.category != "control"}
+    out = []
+    for a, b in PAIRS:
+        if records.get(a) and records.get(b):
+            ma, mb = ({sid: m for sid, (m, _) in _means(records[s]).items()} for s in (a, b))
+            p = paired({k: v for k, v in ma.items() if k in faults}, {k: v for k, v in mb.items() if k in faults})
+            if p:
+                out.append((a, b, p, paired({k: v for k, v in ma.items() if k in lib}, {k: v for k, v in mb.items() if k in lib})))
+    return out
+
+
 def _paired_section(data, solvers):
     lib = {s.id for s in scenarios.load_all()}
     faults = {s.id for s in scenarios.load_all() if s.category != "control"}
     rows, partial = [], {}
-    for a, b in PAIRS:
-        if a in solvers and b in solvers and data["records"][a] and data["records"][b]:
-            ma, mb = ({sid: m for sid, (m, _) in _means(data["records"][s]).items()} for s in (a, b))
-            p = paired({k: v for k, v in ma.items() if k in faults}, {k: v for k, v in mb.items() if k in faults})
-            if p:
-                every = paired({k: v for k, v in ma.items() if k in lib}, {k: v for k, v in mb.items() if k in lib})
-                rows.append([f"{a} vs {b}", f"{p['n']}/{len(faults)}", f"{p['wins']} / {p['ties']} / {p['losses']}",
-                             f"{p['mean_diff']:+.2f}", _ci(p), f"{p['p']:.2f}", f"{every['n']}/{len(lib)}", f"{every['mean_diff']:+.2f}", _ci(every)])
-                partial.update({s: note for s in (a, b) if (note := _partial(data, s, "all"))})
+    for a, b, p, every in paired_results({s: data["records"][s] for s in solvers}):
+        rows.append([f"{a} vs {b}", f"{p['n']}/{len(faults)}", f"{p['wins']} / {p['ties']} / {p['losses']}",
+                     f"{p['mean_diff']:+.2f}", _ci(p), f"{p['p']:.2f}", f"{every['n']}/{len(lib)}", f"{every['mean_diff']:+.2f}", _ci(every)])
+        partial.update({s: note for s in (a, b) if (note := _partial(data, s, "all"))})
     return ["## Paired comparisons (all split, fault incidents; the last three columns add the controls)",
             "Each solver's mean score per incident, compared on the incidents both have run. Wins / ties / losses count "
             "incidents where the first solver scored higher / the same / lower, by any margin. A per-incident mean of 0.5 "

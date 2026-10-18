@@ -90,6 +90,28 @@ def test_build_writes_index_and_incidents_without_private_fields(tmp_path, monke
         assert not {"messages", "path", "code"} & set(_walk(json.loads(f.read_text(encoding="utf-8")))), f
 
 
+def test_build_records_the_alert_each_solver_was_shown_the_viewed_held_out_incident_and_paired_rows(tmp_path, monkeypatch):
+    runs = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(config, "HELDOUT", ("a", "b"))
+    monkeypatch.setattr(config, "HELDOUT_VIEWED", "a")
+    (runs / "agent-v1-vague").mkdir()
+    sent = lambda alert: [{"role": "system", "content": "x"}, {"role": "user", "content": f"ALERT (fired at t=0): {alert}"}]
+    for k in range(5):  # agent-v1 was sent the scenario's own alert, the ablation a generic one
+        (runs / "agent-v1" / f"a__{k}.json").write_text(json.dumps(_rec("agent-v1", "a", k, 1.0, messages=sent("alert for a"))))
+        (runs / "agent-v1-vague" / f"a__{k}.json").write_text(json.dumps(
+            _rec("agent-v1-vague", "a", k, 0.0, messages=sent("Users report that something is wrong with the shop."))))
+    out = site.build(tmp_path / "out", runs, ["heuristic", "agent-v1", "agent-v1-vague"])
+    inc = json.loads((out / "data" / "incidents" / "a.json").read_text(encoding="utf-8"))
+    assert inc["alert"] == "alert for a"
+    assert inc["alerts_shown"] == {"agent-v1-vague": "Users report that something is wrong with the shop."}
+    assert inc["heldout_viewed"] is True
+    assert json.loads((out / "data" / "incidents" / "b.json").read_text(encoding="utf-8"))["heldout_viewed"] is False
+    paired = json.loads((out / "data" / "index.json").read_text(encoding="utf-8"))["paired"]
+    v1 = next(p for p in paired if (p["a"], p["b"]) == ("agent-v1", "heuristic"))
+    assert v1["n"] == 1 and v1["mean_diff"] == 0.0 and v1["ci"] is None and v1["with_controls"]["n"] == 1
+    assert any((p["a"], p["b"]) == ("agent-v1-vague", "agent-v1") and p["mean_diff"] == -1.0 for p in paired)
+
+
 def test_build_removes_stale_outputs_but_keeps_other_files(tmp_path, monkeypatch):
     runs = _setup(tmp_path, monkeypatch)
     out = tmp_path / "out"

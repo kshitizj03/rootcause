@@ -8,10 +8,11 @@ import shutil
 from datetime import date
 from pathlib import Path
 
-from rootcause import config, evaluate, scenarios, snapshot, tools_v0
+from rootcause import config, evaluate, report, scenarios, snapshot, tools_v0
 
 MAX_OUTPUT = 3000
 TAIL_LISTS = {"samples"}  # search_logs returns the *last* N lines, so cutting keeps the newest
+ALERT_PROMPT = "ALERT (fired at t=0): "  # agent._solve's first user message
 
 
 def _dump(path, obj):
@@ -77,6 +78,21 @@ def _run(r):
             **{k: r.get(k) for k in ("requests", "prompt_tokens", "completion_tokens", "parse_error", "error")}}
 
 
+def _alert_shown(rs):
+    """The alert a solver's first stored run was shown, read from its first user message; None for a solver that stores
+    no messages (the heuristic, most custom solvers), which is given the scenario's own alert."""
+    msgs = rs[0].get("messages") if rs else None
+    for m in msgs if isinstance(msgs, list) else []:
+        if isinstance(m, dict) and m.get("role") == "user" and str(m.get("content", "")).startswith(ALERT_PROMPT):
+            return m["content"][len(ALERT_PROMPT):]
+    return None
+
+
+def _pair(a, b, p, every):
+    keep = lambda q: {"n": q["n"], "mean_diff": q["mean_diff"], "ci": q["ci"]}
+    return {"a": a, "b": b, **keep(p), "with_controls": keep(every)}
+
+
 def _truth(s, rows):
     """Latest snapshot's truth.json; the scenario YAML if it has no snapshot (or the snapshot dir is gone)."""
     try:
@@ -109,15 +125,20 @@ def build(out_dir=config.ROOT / "site", runs_dir=evaluate.RUNS_DIR, solvers=None
         runs = {n: [_run(r) for r in sorted(rs, key=lambda r: r["run"]) if r["scenario"] == s.id]
                 for n, rs in records.items()}
         runs = {n: v for n, v in runs.items() if v}
-        meta = {"id": s.id, "category": s.category, "heldout": s.id in config.HELDOUT, "alert": s.alert,
-                "truth": _truth(s, rows)}
-        _dump(out_dir / "data" / "incidents" / f"{s.id}.json", {**meta, "runs": runs, "window_end_s": s.settle_s})
+        meta = {"id": s.id, "category": s.category, "heldout": s.id in config.HELDOUT,
+                "heldout_viewed": s.id == config.HELDOUT_VIEWED, "alert": s.alert, "truth": _truth(s, rows)}
+        # solvers shown another alert than the scenario's (the vague-alert ablations), from what their runs were sent
+        shown = {n: a for n, rs in records.items()
+                 if (a := _alert_shown([r for r in rs if r["scenario"] == s.id])) is not None and a != s.alert}
+        _dump(out_dir / "data" / "incidents" / f"{s.id}.json",
+              {**meta, "runs": runs, "alerts_shown": shown, "window_end_s": s.settle_s})
         incidents.append({**meta, "results": {n: [r["score"]["correct"] for r in v] for n, v in runs.items()}})
     expected = evaluate.expected_counts("all")
     index = {"generated": date.today().isoformat(), "solvers": list(records), "incidents": incidents,
              "planned_runs": {n: evaluate.planned_runs(n) for n in records},
              "categories": [c for c in evaluate.ORDER if c in {s.category for s in lib}],
-             "summary": {n: evaluate.summarise(n, runs_dir, expected=expected, split="all") for n in records}}
+             "summary": {n: evaluate.summarise(n, runs_dir, expected=expected, split="all") for n in records},
+             "paired": [_pair(*r) for r in report.paired_results(records)]}
     _dump(out_dir / "data" / "index.json", index)
     for png in sorted((config.ROOT / "docs" / "results" / "figures").glob("*.png")):
         (out_dir / "figures").mkdir(parents=True, exist_ok=True)
