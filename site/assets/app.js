@@ -573,9 +573,23 @@ async function renderIncident() {
 
 // ---------------------------------------------------------------- dispatch
 
+/** The share card (card.html): the hero's answer and plot alone, at a fixed 1280x640, to screenshot as assets/card.png. */
+async function renderCard() {
+  const data = await loadJSON("data/index.json");
+  if (!data?.solvers?.length) return;
+  const summary = Object.fromEntries(data.solvers.map((s) =>
+    [s, Object.fromEntries((data.summary[s] || []).map((r) => [r.category, r]))]));
+  const overall = Object.fromEntries(data.solvers.map((s) => [s, summary[s]["all incidents"]]));
+  const rows = vsRuleRows(data, mainSolvers(data, overall));
+  if (!rows.length) return;
+  document.getElementById("answer").textContent = rows.some((r) => r.ci[0] > 0) ? "Yes, by more than the noise." : "Not clearly.";
+  document.getElementById("hero-plot").replaceChildren(vsRulePlot(data, rows, overall));
+}
+
 const pages = {
   index: renderIndex,
   incident: renderIncident,
+  card: renderCard,
 };
 Promise.resolve(pages[document.body.dataset.page]?.()).catch((err) => {  // malformed data must not leave "Loading" up
   console.error(err);

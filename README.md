@@ -2,6 +2,11 @@
 
 RootCause is an LLM agent that investigates microservice incidents over OpenTelemetry metrics, traces and logs, and a benchmark that asks whether it beats a simple rule. Every answer is scored against ground truth on 20 recorded [OpenTelemetry Demo](https://github.com/open-telemetry/opentelemetry-demo) incidents (16 faults, 4 no-fault controls), against a 28-line heuristic that names the service whose fault signal rose most.
 
+<a href="https://kshitizj03.github.io/rootcause/"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/result-dark.png">
+  <img alt="Can an LLM agent find what broke, better than a simple rule? Not clearly: each agent's accuracy minus the rule's on 16 fault incidents, with a 95% interval; every interval crosses zero." src="docs/images/result-light.png">
+</picture></a>
+
 **The result, honestly:**
 - **No agent is clearly better than the heuristic.** Every paired 95% interval against it includes 0.
 - **The model matters more than the tools on fault incidents.** With the same prompt and tools, agent v1 on Nemotron 3 Super scores +0.26 higher than on Gemini 3.5 Flash-Lite (95% interval +0.10 to +0.44).
