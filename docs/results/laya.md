@@ -33,12 +33,12 @@ Per category (laya-multilingual): easy 0.33, cross-service 0.00, silent 0.50, no
 
 ## What it gets wrong
 
-- **It says "no incident" when the table is screaming.** 11 of the 16 faults got `no_incident`. These include:
+- **It says "no incident" when the table is screaming.** 10 of the 16 faults got `no_incident`. These include:
   - cart p95 latency 1.9 ms → 9.3 s (×1,850);
   - ad CPU 0.009 → 3.2 cores (×157);
   - payment error ratio 1% → 35% (×32).
 
-  Each of these is the top row of its table.
+  Each of these is the top row of its table. On payment-unreachable it did call an incident, but ranked payment third, behind ad and product-catalog.
 - **Its false alarms ignore direction.** On control-4 it named payment at 0.91, where payment's error ratio went *down* (4.8% → 0).
 - **What it gets right** is mostly where a service name and a big change line up: email, recommendation and product-catalog, the last on three incidents. It also named product-catalog at 0.97 on product-catalog-failure, where the top row is a different service (frontend errors). That is the one place it looked past the symptom.
 - **Its confidence does not track correctness.** It was 0.34–0.91 on its misses (0.91 on both false alarms) and 0.46–1.00 on its hits.
@@ -57,9 +57,11 @@ python -m venv .cache/venv-laya
 For the GPU, install torch with CUDA from the PyTorch index (`--index-url https://download.pytorch.org/whl/cu130` for the cu130 build used here); the default torch wheel on Windows is CPU-only. Then:
 
 ```bash
-.venv/Scripts/python.exe -m experiments.laya.prepare                                   # inputs, no ground truth
-HF_HOME=.cache/hf .cache/venv-laya/Scripts/python.exe -I experiments/laya/predict.py
-.venv/Scripts/python.exe -m experiments.laya.score                                     # records in data/runs/laya-*
+.venv/Scripts/python -m experiments.laya.prepare                                   # inputs, no ground truth
+HF_HOME=.cache/hf .cache/venv-laya/Scripts/python -I experiments/laya/predict.py
+.venv/Scripts/python -m experiments.laya.score                                     # records in data/runs/laya-*
 ```
+
+On macOS/Linux use `bin/python` instead of `Scripts/python`. The `HF_HOME=... command` form is for bash; in PowerShell run `$env:HF_HOME = ".cache/hf"` first, then the command without the prefix.
 
 The first step reads the recorded snapshots in `data/`, which are not in this repository (see Data in the README). The runs here used torch 2.14.1+cu130. The checkpoints are about 1.5 GB in `.cache/hf`.

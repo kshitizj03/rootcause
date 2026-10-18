@@ -34,7 +34,9 @@ Ratio checks compare against the baseline; `(max)` means the peak over the windo
 | control-3 | control | yes | all 16 services error_ratio ≤ 0.15 (max 0) | incident__20261006T165103Z |
 | control-4 | control | yes | all 16 services error_ratio ≤ 0.15 (max fraud-detection 0.016) | incident__20261006T171517Z |
 
-Weakest signal: **ad-failure** (ad error ratio 0.4% → 3.9%). It is real and sustained, but small, because only a fraction of ad requests fail. It is kept as an easy case and flagged here, because an agent may reasonably call it borderline.
+control-2 contains a real, unprompted payment p95 latency spike (8 ms → 7.5 s) in its window, with no fault injected. The control check bounds only error ratios, so it does not catch latency, and the recording stayed a control. The fixed scoring rules count any incident answer on it as a false alarm.
+
+Weakest signal: **ad-failure** (ad error ratio 0.2% → 3.9%). It is real and sustained, but small, because only a fraction of ad requests fail. It is kept as an easy case and flagged here, because an agent may reasonably call it borderline.
 
 ## Scenarios dropped or replaced (with evidence)
 
@@ -64,8 +66,9 @@ The recordings were kept. Only the check changed, and it was re-scored with `pyt
 
 ## Leak channels found and closed
 
-Each was found by grepping, or by a fault-vs-control differential audit of the real snapshots. All 20 snapshots were cleaned with `python -m rootcause resanitize`, which is atomic and was checked first with a dry run. A backup was kept locally.
+Each was found by grepping, or by a fault-vs-control differential audit of the real snapshots. All 20 snapshots were cleaned with `python -m rootcause resanitize`, which is atomic and was checked first with a dry run.
 
+- **Flag evaluation span events** (`feature_flag*`) carried the flag key and its variant. They are dropped from every span.
 - **`demo.feature_flag.recommendation_cache` = True only during the cache-leak fault.** The old sanitiser redacted the key but kept the boolean value, which is a direct answer. Flag-named attribute keys are now stripped, value and all.
 - The frontend-proxy's `/flagservice/` route (span "router flagservice egress" plus access logs) is now dropped.
 - Demo services announcing their own fault, which are not symptoms, are now dropped:
@@ -78,7 +81,7 @@ Each was found by grepping, or by a fault-vs-control differential audit of the r
 - Redaction stubs (`[redacted]`) are no longer emitted anywhere. A record that matches is dropped, and the leak scan flags any stub left behind.
 
 - **Envoy fault-injection flags.** frontend-proxy marks the image-slow-load delay with `response_flags: "DI"` ("delay injected") in spans and access logs, which any model that knows Envoy reads as the answer. DI/FI tokens are now **rewritten** out (`DI` → `-`, `DI,DC` → `DC`), so the 5 s latency evidence stays, and the leak scan flags any left over.
-- **A timing tell in meta.json.** `end - fault_start` was exactly 300.000 s for controls but 300.002–301.4 s for faults, because the injection time was counted in the window. The harness now takes `t_inject` after the injection completes and computes `t_end = t_inject + settle`. All 20 snapshots were migrated to `end = fault_start + 300`, and log lines past the new end were trimmed: 135 lines in ad-high-cpu, none elsewhere. A backup was kept locally.
+- **A timing tell in meta.json.** `end - fault_start` was exactly 300.000 s for controls but 300.002–301.4 s for faults, because the injection time was counted in the window. The harness now takes `t_inject` after the injection completes and computes `t_end = t_inject + settle`. All 20 snapshots were migrated to `end = fault_start + 300`, and log lines past the new end were trimmed: 135 lines in ad-high-cpu, none elsewhere.
 - **Control alerts were giveaways.** The controls were phrased as one-off or past events ("felt slow earlier today"), while every fault alert was sustained and present. They now use the same style as the fault alerts (for example "Some customers report that their orders are failing at checkout."), and the 4 control snapshots' meta alerts were updated to match.
 
 ## Data hygiene
@@ -95,4 +98,9 @@ Each was found by grepping, or by a fault-vs-control differential audit of the r
 - **Kept:** `python-requests` user agents in proxy access logs. They appear in every snapshot, controls included, so they say nothing about the fault.
 - Substring matching over-redacts a little: flag stems such as `adFailure` match inside `ReadFailure` or `upload.failure`. This errs on the safe side, and the dry runs showed no such drops in the real data.
 - Container IPs differ between recording sessions (stack restarts). They are not fault-specific, and each agent run sees a single snapshot.
-- Alert specificity varies. The email alert ("order confirmation messages") and the image alerts ("product pictures") all but name the service, although both are hard-silent. This is kept as-is; the vague-alert ablation (agent v1 given one generic alert for every incident) measures how much the alert wording helps.
+- Alert specificity varies. The email alert ("order confirmation messages") and the image alerts ("product pictures") all but name the service, although these are silent (latency or memory) faults. This is kept as-is; the vague-alert ablation (agent v1 given one generic alert for every incident) measures how much the alert wording helps.
+- **Accept lists with more than one service.** Two scenarios accept several answers, because the fault has no single owner:
+  - image-slow-load (and its half of image-slow-load-and-ad-high-cpu) accepts frontend-proxy or image-provider: the delay is injected by Envoy in frontend-proxy on the route to image-provider, so image-provider's own latency stays flat while the proxy's rises;
+  - kafka-queue-problems accepts kafka, checkout or fraud-detection: the flag makes checkout flood the Kafka queue and slows the fraud-detection consumer, so the producer, the queue and the consumer are all defensible answers.
+
+  A stricter reader could accept only one service in each; that would lower every solver's score on these incidents.

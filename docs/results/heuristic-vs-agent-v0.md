@@ -28,7 +28,7 @@ The heuristic names the service whose fault signal rose most against its 15-minu
 | control | 4 | 0.75 | - | - | 0.25 |
 | **all incidents** | 16 | **0.59** | 0.75 | 0.50 | - |
 
-**Where it fails, and why.** Every miss names a loud *symptom* instead of the *cause*:
+**Where it fails, and why.** Every miss names a loud *symptom* instead of the *cause*, including its partial miss on a two-fault incident:
 
 | Scenario | Heuristic said | True cause | Why |
 |---|---|---|---|
@@ -38,6 +38,7 @@ The heuristic names the service whose fault signal rose most against its 15-minu
 | product-catalog-failure | frontend | product-catalog | One failing product gives product-catalog 2.7% errors but its callers 4.1%. The relative rise is bigger downstream. |
 | product-catalog-lock-contention | recommendation | product-catalog | The caller's p95 (0.7 s → 14 s) rose more, in relative terms, than the locked service's own. |
 | lock-contention-with-flood | fraud-detection | product-catalog | The flood triggers unrelated consumer errors that outrank the real latency fault. |
+| image-slow-load-and-ad-high-cpu | ad, then frontend-web | ad + frontend-proxy or image-provider | It found the CPU fault, but ranked the browser-side frontend-web latency above the proxy's, so the image delay was missed (0.5). |
 | control-2 | payment (false alarm) | none | A real, unprompted payment latency spike (8 ms → 7.5 s) happened in a no-fault window. |
 
 So cross-service incidents defeat a change-ranking rule: it scores 0 of 3. That is exactly the gap an agent that follows traces and dependencies should close.
@@ -56,7 +57,7 @@ So cross-service incidents defeat a change-ranking rule: it scores 0 of 3. That 
 | control | 4 | 2 | 1.00 | - | - | **0.00** |
 | **all incidents** | 16 | 1-2 | **0.41** | 0.50 | 0.38 | - |
 
-So far agent v0 is *worse* than the heuristic on incidents (0.41 vs 0.59) and better on controls (no false alarms vs one). Paired per incident, v0 wins 3, ties 6 and loses 7. The bootstrap 95% interval on the difference is −0.50 to +0.12, so with 16 incidents this gap is not yet conclusive either way (`report.md`, paired comparisons). Two failure modes account for almost every miss:
+On these 32 runs agent v0 scored lower than the heuristic on incidents (0.41 vs 0.59), but the interval (−0.50 to +0.12) includes 0, and it did better on controls (no false alarms vs one). Paired per incident, v0 wins 3, ties 6 and loses 7. The complete batch, in `report.md`'s paired comparisons, shows no clear difference either. Two failure modes account for almost every miss:
 
 - **It says "no incident" when there is one.** 10 of 24 fault runs answered `no_incident`, mostly on silent faults: CPU on ad, memory leaks in email and recommendation, image latency, and both runs of the two-fault silent scenario. The transcripts show two different ways of getting there. In 4 of the 8 silent misses it never queried the signal that moved: ad CPU, recommendation memory, email memory in one run. In the others it looked and explained the change away. In email-memory-leak run 0 it saw email memory climb from 77 to 94 MB after t=0, then answered "no incident" because the error ratio was flat. In image-slow-load it checked image-provider's own p95, which stays flat, because the delay is injected at the proxy and shows up as frontend-proxy p95 (676 ms → 2.6 s). It stopped there. The same caution is why it never false-alarms on a control, so its control score is not evidence of judgement.
 - **It names the symptom, like the heuristic.** payment-unreachable → checkout, valkey-cart-paused → cart, kafka-queue-problems → accounting, payment-failure-50 → checkout first, payment second. Following one trace by hand does not get it to the dependency that went quiet.
