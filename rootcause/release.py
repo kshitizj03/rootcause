@@ -16,8 +16,9 @@ from pathlib import Path, PurePosixPath
 
 from rootcause import config, evaluate, scenarios, snapshot
 
-ARCHIVE = "rootcause-data-v1.zip"
-URL = f"https://github.com/kshitizj03/rootcause/releases/download/data-v1/{ARCHIVE}"
+TAG = "data-v2"  # the GitHub release this code's DATA_SHA256 belongs to; bump both when a new release is cut
+ARCHIVE = f"rootcause-{TAG}.zip"
+URL = f"https://github.com/kshitizj03/rootcause/releases/download/{TAG}/{ARCHIVE}"
 STAMP = (2026, 1, 1, 0, 0, 0)  # every entry's timestamp, so the same data always gives the same bytes
 
 # What must never be published, as the repository's own pre-push check looks for it (copied, since that check is local)

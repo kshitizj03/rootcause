@@ -36,7 +36,7 @@ rootcause eval heuristic
 ```
 
 - `pip install -e .` installs the package and the `rootcause` command. It must be editable (`-e`), because the package reads `scenarios/` and `data/` from this checkout.
-- `rootcause fetch-data` downloads the data release (the 20 recorded snapshots and every run record behind the report), checks its SHA-256 and unpacks it into `data/`. It comes from the [`data-v1` release](https://github.com/kshitizj03/rootcause/releases/tag/data-v1), and its checksum is pinned in `rootcause/config.py`. Offline, pass a downloaded copy with `rootcause fetch-data --from rootcause-data-v1.zip`.
+- `rootcause fetch-data` downloads the data release (the 20 recorded snapshots and every run record behind the report), checks its SHA-256 and unpacks it into `data/`. It comes from the [`data-v2` release](https://github.com/kshitizj03/rootcause/releases/tag/data-v2), and its checksum is pinned in `rootcause/config.py`. Offline, pass a downloaded copy with `rootcause fetch-data --from rootcause-data-v2.zip`.
 - `rootcause eval heuristic` scores the heuristic and prints its summary. Batches are resumable, so with the released records in place it adds no runs; delete `data/runs/heuristic` to score it from scratch. The agents need an API key (see [Score the solvers](#score-the-solvers)).
 
 ## Status

@@ -182,7 +182,7 @@ def build_parser():
     mc.add_argument("path")
     pk = sub.add_parser("pack-data", help="build the data release archive (snapshots scored on, run records) and its "
                                           "checksum")
-    pk.add_argument("--out", type=Path, help="archive path (default: data/rootcause-data-v1.zip)")
+    pk.add_argument("--out", type=Path, help="archive path (default: data/<release name>.zip)")
     fd = sub.add_parser("fetch-data", help="download the data release, check its checksum and unpack it into data/")
     fd.add_argument("--from", dest="source", help="archive path or URL (default: the GitHub release)")
     fd.add_argument("--force", action="store_true", help="overwrite files that already exist under data/")
@@ -587,7 +587,7 @@ def _dispatch(args):
         out = args.out or config.DATA / release.ARCHIVE
         digest = release.pack(out)
         print(f"wrote {out} and {out.name}.sha256\nsha256 {digest}\n"
-              f"when the data-v1 release is cut: DATA_SHA256 = \"{digest}\" in rootcause/config.py")
+              f"when the {release.TAG} release is cut: DATA_SHA256 = \"{digest}\" in rootcause/config.py")
     elif args.cmd == "fetch-data":
         n = release.fetch(args.source or release.URL, force=args.force)
         print(f"unpacked {n} files into {config.DATA}")
