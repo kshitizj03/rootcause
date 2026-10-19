@@ -12,11 +12,11 @@ Every scenario was kept only if metric checks showed the fault (`scenarios/NOTES
 
 ### How much can 16 fault incidents tell apart?
 
-Not much. Each paired comparison rests on 16 per-incident differences, and the report shows about a dozen comparisons with no multiple-comparison correction. The bootstrap intervals are somewhat too narrow at this size, so the report also gives an exact permutation p-value. An interval that only just excludes 0 is suggestive, not established. Category results rest on 2 to 6 incidents each.
+Not much. Each paired comparison rests on 16 per-incident differences, and the report shows about twenty comparisons with no multiple-comparison correction. The bootstrap intervals are somewhat too narrow at this size, so the report also gives an exact permutation p-value. An interval that only just excludes 0 is suggestive, not established. Category results rest on 2 to 6 incidents each.
 
 ### How many models were compared?
 
-Two completed models so far: Gemini 3.5 Flash-Lite and Nemotron 3 Super. Other runs are in progress, and the report marks them as partial. "The model matters more than the tools" is a statement about these two models, and two models say little about how others would do.
+Four: Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash, all on free tiers. Agent v0 ran on three of them. "The model matters more than the tools" is a statement about these four models; none is a frontier model, so it says little about how those would do.
 
 ### Is the agent's comparison with the heuristic fair?
 

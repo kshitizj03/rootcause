@@ -20,6 +20,6 @@ The first public version: the benchmark, its two agents and the results so far.
 ### Results and tooling
 - `rootcause report`: accuracy by category, false alarms, evidence, paired comparisons with bootstrap intervals and permutation p-values (with and without the controls), failure modes, step-limit hits, run-to-run agreement, calibration and cost (`docs/results/report.md`).
 - A static replay site of every run (`rootcause site`): the result as a forest plot of each agent against the rule, what moved accuracy, every run, charts drawn in the page, light and dark themes, a share card, and replay links that open at a given step (`&step=N`).
-- `rootcause pack-data` and `rootcause fetch-data` for the data release (`rootcause-data-v1.zip`, SHA-256 checked); `rootcause prompts` writes `docs/prompts.md` from the code.
+- `rootcause pack-data` and `rootcause fetch-data` for the data release (`data-v1` on 2026-10-18; `data-v2` on 2026-10-20 adds Nemotron 3.5 Super, GLM 5.3 Flash and the Gemini vague-alert ablation; SHA-256 checked); `rootcause prompts` writes `docs/prompts.md` from the code.
 - Methodology FAQ and threats to validity (`docs/faq.md`).
 - Apache-2.0 license, NOTICE, CITATION.cff, pinned dependencies (`requirements-lock.txt`), CI on Ubuntu and Windows with a check that the published report and the rule's scores reproduce from the data release, and a workflow that publishes the replay site from that release once the tests pass.

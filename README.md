@@ -8,10 +8,10 @@ RootCause is an LLM agent that investigates microservice incidents over OpenTele
 </picture></a>
 
 **The result, honestly:**
-- **No agent is clearly better than the heuristic.** Every paired 95% interval against it includes 0.
-- **The model matters more than the tools on fault incidents.** With the same prompt and tools, agent v1 on Nemotron 3 Super scores +0.26 higher than on Gemini 3.5 Flash-Lite (95% interval +0.10 to +0.44).
-- **Counting the 4 no-fault controls, that gap shrinks to +0.11 and its interval includes 0** (-0.09 to +0.31), because Nemotron raises far more false alarms.
-- **The change-aware tools change nothing measurable** on either model.
+- **No agent is clearly better than the heuristic, on four models.** Every paired 95% interval against it includes 0; the best, agent v1 on Nemotron 3.5 Super and on GLM 5.3 Flash, are +0.14 (Nemotron 3.5's interval only just includes 0: -0.02 to +0.33).
+- **The model matters more than the tools on fault incidents.** With the same prompt and tools, agent v1 on GLM 5.3 Flash scores +0.32 higher than on Gemini 3.5 Flash-Lite (95% interval +0.09 to +0.56), and on Nemotron 3 Super +0.26 (+0.10 to +0.44). A newer Nemotron (3.5 Super) is not measurably better than the old one (+0.06, interval -0.01 to +0.12).
+- **Counting the 4 no-fault controls shrinks the model gaps:** Nemotron vs Gemini falls to +0.11 and its interval includes 0 (-0.09 to +0.31), because Nemotron raises far more false alarms.
+- **The change-aware tools change nothing measurable** on any of the three models that ran both toolsets.
 
 | solver | model | tools | fault incidents (16) | controls answered correctly (4) | runs |
 |---|---|---|---|---|---|
@@ -20,6 +20,9 @@ RootCause is an LLM agent that investigates microservice incidents over OpenTele
 | agent v1 | Gemini 3.5 Flash-Lite | change-aware | 0.41 | 1.00 | 5 per incident |
 | agent v0 | Nemotron 3 Super | naive | 0.69 | 0.30 | 5 per incident |
 | agent v1 | Nemotron 3 Super | change-aware | 0.68 | 0.50 | 5 per incident |
+| agent v0 | Nemotron 3.5 Super | naive | 0.73 | 0.60 | 5 per incident |
+| agent v1 | Nemotron 3.5 Super | change-aware | 0.73 | 0.65 | 5 per incident |
+| agent v1 | GLM 5.3 Flash | change-aware | 0.73 | 0.80 | 5 per incident |
 
 Accuracy is the mean over incidents of each incident's mean score across its runs.
 
@@ -41,8 +44,8 @@ rootcause eval heuristic
 
 ## Status
 
-> - **Complete:** the heuristic; agents v0 and v1 on Gemini 3.5 Flash-Lite and on Nemotron 3 Super (5 runs on each of the 20 incidents); on Nemotron, the no-priors, vague-alert and 30-step ablations.
-> - **Running:** the Gemini vague-alert ablation (quota-bound on the free tier; the Gemini no-priors ablation is queued after it) and agent v1 on GLM 5.3 Flash. [`report.md`](docs/results/report.md) marks them as partial; no conclusions are drawn from them yet. Other models that were tried and not run (timeouts) are listed under [Models tried](docs/results/agents.md#models-tried).
+> - **Complete:** the heuristic; agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of the 20 incidents); on Nemotron 3 Super, the no-priors, vague-alert and 30-step ablations; on Gemini, the vague-alert ablation.
+> - **Running:** the Gemini no-priors ablation (quota-bound on the free tier). [`report.md`](docs/results/report.md) marks it as partial; no conclusions are drawn from it yet. Other models that were tried and not run (timeouts) are listed under [Models tried](docs/results/agents.md#models-tried).
 > - Two small decision models, Laya and Hunch, both scored below the heuristic zero-shot, so no small-model-then-agent cascade was built ([`laya.md`](docs/results/laya.md), [`hunch.md`](docs/results/hunch.md)).
 
 ## How it works
@@ -204,8 +207,8 @@ Both are scored by the same rules as the built-in solvers, and `summary`, `repor
 ## Honest limits
 
 - **Twenty incidents from one demo app on one laptop.** This is a small benchmark, not a general claim.
-- **Every solver gets the exact fault onset** (t=0 is the injection time), and several alerts hint at the culprit's functional area. On Nemotron, one generic alert for every incident lowers fault accuracy by 0.12 (interval -0.25 to -0.01, borderline) and doubles false alarms (35% to 70%); the same ablation on Gemini is running.
-- **Two completed models so far:** Gemini 3.5 Flash-Lite (free tier) and Nemotron 3 Super (NVIDIA's free trial endpoint), both at temperature 0. The spread across runs measures API nondeterminism, not sampling, and two models say little about how others would do.
+- **Every solver gets the exact fault onset** (t=0 is the injection time), and several alerts hint at the culprit's functional area. One generic alert for every incident lowers fault accuracy by 0.12 on Nemotron and 0.13 on Gemini (each borderline on its own) and raises false alarms on both, so the alerts' hints help.
+- **Four models, all free tiers:** Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash, all at temperature 0. The spread across runs measures API nondeterminism, not sampling, and four models say little about frontier models.
 
 The [methodology FAQ](docs/faq.md) covers these and the other threats to validity: one author for the scenarios, heuristic, tools and scoring; no multiple-comparison correction; the public demo code; and more.
 

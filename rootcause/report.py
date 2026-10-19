@@ -37,9 +37,10 @@ PAIRS = [("agent-v0", "heuristic"), ("agent-v1", "heuristic"), ("agent-v1", "age
          ("agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b", "agent-v0@nvidia-nemotron-3.5-super-vl-120b-a12b"),
          ("agent-v1@z-ai-glm-5.3-flash", "heuristic"), ("agent-v1@z-ai-glm-5.3-flash", "agent-v1")]
 FLASH_NOTE = ("A Flash vs Flash-Lite comparison is absent: Flash's free tier allows 20 requests/day and one agent run "
-              "takes about 12-15 requests (up to 17), so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparison is instead "
-              "agent-v0-nemotron and agent-v1-nemotron: agents v0 and v1 unchanged (prompt, tools, step limit) on "
-              "`nvidia/nemotron-3-super-120b-a12b` through NVIDIA's free trial endpoint.")
+              "takes about 12-15 requests (up to 17), so the Gemini agents run on `gemini-3.5-flash-lite` only. The model comparisons are instead "
+              "agents v0 and v1 unchanged (prompt, tools, step limit) on `nvidia/nemotron-3-super-120b-a12b` (agent-v0-nemotron, "
+              "agent-v1-nemotron) and `nvidia/nemotron-3.5-super-vl-120b-a12b`, and agent v1 on `z-ai/glm-5.3-flash`, the last two "
+              "through `eval --model`, all on NVIDIA's free endpoint.")
 
 
 def _table(header, rows):
@@ -206,7 +207,7 @@ def _paired_section(data, solvers):
             "incidents (10,000 resamples, fixed seed); at this few incidents it is approximate and somewhat too narrow, and "
             f"it is not given below {MIN_PAIRED} shared incidents. An interval that includes 0 means this benchmark cannot "
             "tell the two apart. p is an exact paired permutation test on the fault incidents (every sign flip of the "
-            "per-incident differences), which does not share the bootstrap's narrowness. About a dozen comparisons are shown with no multiple-comparison correction; an interval "
+            "per-incident differences), which does not share the bootstrap's narrowness. About twenty comparisons are shown with no multiple-comparison correction; an interval "
             "that only just excludes 0 is suggestive, not established. Fault-only differences ignore false alarms on the "
             f"{len(lib - faults)} controls; the last three columns include them, over the incidents both solvers have run.",
             _table(["comparison", "incidents", "wins / ties / losses", "mean difference", "95% interval", "p (permutation)",

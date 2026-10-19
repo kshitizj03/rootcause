@@ -139,7 +139,7 @@ function findingsPlot(rows) {
       h("span", { class: "keys" },
         h("span", { class: "key" }, h("span", { class: "key-bar" }), "fault incidents only"),
         h("span", { class: "key" }, h("span", { class: "key-bar ctl" }), "with the 4 no-fault controls counted, so false alarms cost")),
-      "Change in accuracy, with a 95% interval. About a dozen comparisons are shown without correction, so one that only just clears zero is suggestive."));
+      "Change in accuracy, with a 95% interval. About twenty comparisons are shown without correction, so one that only just clears zero is suggestive."));
 }
 
 /** Accuracy by incident type: one row per category, a dot per main batch on a 0-100% track. */

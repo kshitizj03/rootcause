@@ -45,7 +45,7 @@
 
   <section class="band" id="findings" aria-labelledby="findings-title">
     <h2 id="findings-title">What moved accuracy</h2>
-    <p class="section-lede">Each row changes one thing and keeps the rest. Swapping the model moves accuracy most, until the false alarms on no-fault controls are counted. The tools barely matter.</p>
+    <p class="section-lede">Each row changes one thing and keeps the rest. Swapping the model moves accuracy most, though a newer version of the same model did not, and false alarms on the no-fault controls shrink the gaps. The tools barely matter.</p>
     <div id="findings-plot"></div>
   </section>
 
@@ -86,7 +86,7 @@
         <ul class="limits">
           <li><strong>Small.</strong> Twenty incidents from one demo app, recorded on one laptop. Category results rest on two to six incidents each.</li>
           <li><strong>Generous inputs.</strong> Every solver is told when the fault began, and several alerts hint at the area of the cause. With one generic alert instead, false alarms double.</li>
-          <li><strong>Free models.</strong> Gemini 3.5 Flash-Lite and Nemotron 3 Super on free tiers, at temperature 0. The spread across runs is API nondeterminism, not sampling.</li>
+          <li><strong>Free models.</strong> Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash on free tiers, at temperature 0. The spread across runs is API nondeterminism, not sampling.</li>
           <li><strong>One author.</strong> The same person built the incidents, the rule, the agent and the scoring. The <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/faq.md">methodology FAQ</a> lists every known threat to validity.</li>
         </ul>
       </div>
