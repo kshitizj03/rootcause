@@ -16,7 +16,7 @@ from pathlib import Path, PurePosixPath
 
 from rootcause import config, evaluate, scenarios, snapshot
 
-TAG = "data-v2"  # the GitHub release this code's DATA_SHA256 belongs to; bump both when a new release is cut
+TAG = "data-v3"  # the GitHub release this code's DATA_SHA256 belongs to; bump both when a new release is cut
 ARCHIVE = f"rootcause-{TAG}.zip"
 URL = f"https://github.com/kshitizj03/rootcause/releases/download/{TAG}/{ARCHIVE}"
 STAMP = (2026, 1, 1, 0, 0, 0)  # every entry's timestamp, so the same data always gives the same bytes

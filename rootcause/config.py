@@ -10,7 +10,7 @@ STATE_FILE = DATA / "state.json"
 SCENARIOS_DIR = ROOT / "scenarios"
 # SHA-256 of the data release archive that fetch-data accepts: the digest `rootcause pack-data` printed for the
 # published archive (release.TAG names the release)
-DATA_SHA256 = "8e4fed789945e70eaf956ba8f0953624a295d1f18aaa76078fa730c2982464b8"
+DATA_SHA256 = "c89c559a897e37b0c32688238e767e6122bd583432229f85309af7fd708d0b93"
 
 COMPOSE_FILES = ["compose.yaml", "compose.full.yaml", "compose.observability.yaml",
                  "compose.extras.yaml", str(ROOT / "infra" / "compose.ports.yaml")]

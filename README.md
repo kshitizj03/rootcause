@@ -4,7 +4,7 @@ RootCause is an LLM agent that investigates microservice incidents over OpenTele
 
 <a href="https://kshitizj03.github.io/rootcause/"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/result-dark.png">
-  <img alt="Can an LLM agent find what broke, better than a simple rule? Not clearly: each agent's accuracy minus the rule's on 16 fault incidents, with a 95% interval; every interval crosses zero." src="docs/images/result-light.png">
+  <img alt="Can an LLM agent find what broke, better than a simple rule? Yes, by more than the noise: each agent's accuracy minus the rule's on 16 fault incidents, with a 95% interval; Claude Opus 5.5 and Sonnet 5.5 are clear of zero, every free model's interval crosses it." src="docs/images/result-light.png">
 </picture></a>
 
 **The result, honestly:**
@@ -44,12 +44,12 @@ rootcause eval heuristic
 ```
 
 - `pip install -e .` installs the package and the `rootcause` command. It must be editable (`-e`), because the package reads `scenarios/` and `data/` from this checkout.
-- `rootcause fetch-data` downloads the data release (the 20 recorded snapshots and every run record behind the report), checks its SHA-256 and unpacks it into `data/`. It comes from the [`data-v2` release](https://github.com/kshitizj03/rootcause/releases/tag/data-v2), and its checksum is pinned in `rootcause/config.py`. Offline, pass a downloaded copy with `rootcause fetch-data --from rootcause-data-v2.zip`.
+- `rootcause fetch-data` downloads the data release (the 20 recorded snapshots and every run record behind the report), checks its SHA-256 and unpacks it into `data/`. It comes from the [`data-v3` release](https://github.com/kshitizj03/rootcause/releases/tag/data-v3), and its checksum is pinned in `rootcause/config.py`. Offline, pass a downloaded copy with `rootcause fetch-data --from rootcause-data-v3.zip`.
 - `rootcause eval heuristic` scores the heuristic and prints its summary. Batches are resumable, so with the released records in place it adds no runs; delete `data/runs/heuristic` to score it from scratch. The agents need an API key (see [Score the solvers](#score-the-solvers)).
 
 ## Status
 
-> - **Complete:** the heuristic; agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of the 20 incidents); on Nemotron 3 Super, the no-priors, vague-alert and 30-step ablations; on Gemini, the vague-alert ablation; Claude Sonnet 5.5 and Opus 5.5 in Claude Code (5 runs on each incident). The Claude run records ship in the next data release (data-v3); until then `rootcause fetch-data` gets data-v2, without them.
+> - **Complete:** the heuristic; agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of the 20 incidents); on Nemotron 3 Super, the no-priors, vague-alert and 30-step ablations; on Gemini, the vague-alert ablation; Claude Sonnet 5.5 and Opus 5.5 in Claude Code (5 runs on each incident).
 > - **Running:** the Gemini no-priors ablation (quota-bound on the free tier). [`report.md`](docs/results/report.md) marks it as partial; no conclusions are drawn from it yet. Other models that were tried and not run (timeouts) are listed under [Models tried](docs/results/agents.md#models-tried).
 > - Two small decision models, Laya and Hunch, both scored below the heuristic zero-shot, so no small-model-then-agent cascade was built ([`laya.md`](docs/results/laya.md), [`hunch.md`](docs/results/hunch.md)).
 

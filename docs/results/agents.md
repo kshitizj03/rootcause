@@ -1,6 +1,6 @@
 # What helps the agent: model, tools, alert, prompt
 
-**Status: 2026-11-10.** Added: Claude Sonnet 5.5 and Opus 5.5 in Claude Code (5 runs on each of 20 incidents; records in the next data release). Complete since 2026-10-20: agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of 20 incidents); the no-priors, vague-alert and 30-step ablations on Nemotron 3 Super; the vague-alert ablation on Gemini (3 runs each). Running: the Gemini no-priors ablation (quota-bound); no conclusions are drawn from it here. Every figure below comes from [`report.md`](report.md), which marks running batches as partial and also has the per-scenario tables.
+**Status: 2026-11-10.** Added: Claude Sonnet 5.5 and Opus 5.5 in Claude Code (5 runs on each of 20 incidents; records in data-v3). Complete since 2026-10-20: agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of 20 incidents); the no-priors, vague-alert and 30-step ablations on Nemotron 3 Super; the vague-alert ablation on Gemini (3 runs each). Running: the Gemini no-priors ablation (quota-bound); no conclusions are drawn from it here. Every figure below comes from [`report.md`](report.md), which marks running batches as partial and also has the per-scenario tables.
 
 ## In short
 
