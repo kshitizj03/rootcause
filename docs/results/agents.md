@@ -13,7 +13,7 @@
 - **Reading the alert helps, on both models tested.** Replacing each incident's alert with one generic sentence lowers fault accuracy by 0.12 on Nemotron and 0.13 on Gemini (intervals -0.25 to -0.01 and -0.27 to -0.01; permutation p = 0.09 and 0.07, so each alone is borderline) and raises false alarms on the controls (Nemotron 35% to 70%, Gemini 0% to 25%). Counting the controls, both drops clear zero: -0.15 (interval -0.26 to -0.05) and -0.16 (-0.29 to -0.03).
 - **The two "prior" sentences in the prompt do nothing measurable** (-0.01, interval -0.07 to +0.06).
 - **A bigger step budget does not help.** With 30 steps instead of 15, Nemotron v1 mostly stops on its own (only 15% of its fault runs reach the 30-step limit), yet it scores no better (-0.04, interval -0.16 to +0.06) for 2.4 times the tokens.
-- **One run is not enough, and stated confidence overstates accuracy.** At temperature 0, all five runs of Nemotron v1 give the same top answer on only 8 of 20 incidents. Every agent states more confidence than it earns, Gemini the most (0.91 stated vs 0.53 right).
+- **One run is not enough, and stated confidence overstates accuracy.** At temperature 0, all five runs of Nemotron v1 give the same top answer on only 8 of 20 incidents. Every free-tier agent states more confidence than it earns, Gemini the most (0.91 stated vs 0.53 right); the two Claude models state less (see below).
 
 ## The numbers
 
@@ -165,7 +165,7 @@ Temperature 0 does not make a hosted model deterministic:
 
 - **A single run would be misleading.** On 12 of 20 incidents, Nemotron v1's five runs disagree on the top answer. This is why every agent batch is planned at 5 runs (3 for the Gemini ablations) and the report averages per incident before comparing.
 - **Gemini is more repeatable but more wrong.** Its runs agree more often (0.80). The agreement includes its repeated "no incident" answers (see finding 1).
-- **Every agent is overconfident.** Stated confidence is 0.2-0.4 above accuracy. The vague alert makes this worse: accuracy drops but confidence barely moves. Confidence alone is not a usable signal for when to trust an answer; the coverage curve in `report.md` shows the same.
+- **Every free-tier agent is overconfident.** Stated confidence is 0.2-0.4 above accuracy. The vague alert makes this worse: accuracy drops but confidence barely moves. Confidence alone is not a usable signal for when to trust an answer; the coverage curve in `report.md` shows the same.
 
 ## Claude in Claude Code
 

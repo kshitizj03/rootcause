@@ -16,7 +16,7 @@ Not much. Each paired comparison rests on 16 per-incident differences, and the r
 
 ### How many models were compared?
 
-Four: Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash, all on free tiers. Agent v0 ran on three of them. "The model matters more than the tools" is a statement about these four models; none is a frontier model, so it says little about how those would do.
+Six. Four on free tiers, in this repo's agent loop at temperature 0: Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash (agent v0 ran on three of them). Two frontier models, Claude Sonnet 5.5 and Opus 5.5, in Claude Code's own loop at default sampling, with agent v1's prompt and tools. "The model matters more than the tools" is a statement about the four free models. The Claude models are the only ones clearly better than the rule, but their gap over the free models mixes the model with the loop.
 
 ### Is the agent's comparison with the heuristic fair?
 
