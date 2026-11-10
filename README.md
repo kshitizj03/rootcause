@@ -8,7 +8,10 @@ RootCause is an LLM agent that investigates microservice incidents over OpenTele
 </picture></a>
 
 **The result, honestly:**
-- **No agent is clearly better than the heuristic, on four models.** Every paired 95% interval against it includes 0; the best, agent v1 on Nemotron 3.5 Super and on GLM 5.3 Flash, are +0.14 (Nemotron 3.5's interval only just includes 0: -0.02 to +0.33).
+- **Claude beats the rule; four free models don't.** Claude Opus 5.5 and Sonnet 5.5, run in Claude Code with agent v1's prompt and tools, score 0.88 and 0.87 on the fault incidents against the rule's 0.59: +0.28 (95% interval +0.09 to +0.49) and +0.27 (+0.08 to +0.50). With the 4 no-fault controls counted, Opus still clears zero (+0.25, +0.06 to +0.45) and Sonnet does not (+0.18, -0.03 to +0.39), because it raises more false alarms. Opus and Sonnet are indistinguishable on the fault incidents (+0.01).
+- **The free models are not clearly better than the heuristic.** Every paired 95% interval for agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash includes 0; the best are +0.14 (Nemotron 3.5's interval only just includes 0: -0.02 to +0.33).
+- **The Claude runs are a different harness.** Claude Code's own tool loop at the model's default sampling, not this repo's loop at temperature 0, so "Claude vs the free models" mixes the model with the loop. Against the rule, which uses neither, the comparison is clean.
+- **Claude is the first agent that is not overconfident.** Opus states 0.73 confidence and is right 0.87 of the time; Sonnet 0.60 and 0.81. Every other agent states more confidence than it earns.
 - **The model matters more than the tools on fault incidents.** With the same prompt and tools, agent v1 on GLM 5.3 Flash scores +0.32 higher than on Gemini 3.5 Flash-Lite (95% interval +0.09 to +0.56), and on Nemotron 3 Super +0.26 (+0.10 to +0.44). A newer Nemotron (3.5 Super) is not measurably better than the old one (+0.06, interval -0.01 to +0.12).
 - **Counting the 4 no-fault controls shrinks the model gaps:** Nemotron vs Gemini falls to +0.11 and its interval includes 0 (-0.09 to +0.31), because Nemotron raises far more false alarms.
 - **The change-aware tools change nothing measurable** on any of the three models that ran both toolsets.
@@ -23,6 +26,8 @@ RootCause is an LLM agent that investigates microservice incidents over OpenTele
 | agent v0 | Nemotron 3.5 Super | naive | 0.73 | 0.60 | 5 per incident |
 | agent v1 | Nemotron 3.5 Super | change-aware | 0.73 | 0.65 | 5 per incident |
 | agent v1 | GLM 5.3 Flash | change-aware | 0.73 | 0.80 | 5 per incident |
+| Claude Code | Claude Sonnet 5.5 | change-aware (v1 prompt) | 0.87 | 0.55 | 5 per incident |
+| Claude Code | Claude Opus 5.5 | change-aware (v1 prompt) | 0.88 | 0.85 | 5 per incident |
 
 Accuracy is the mean over incidents of each incident's mean score across its runs.
 
@@ -44,7 +49,7 @@ rootcause eval heuristic
 
 ## Status
 
-> - **Complete:** the heuristic; agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of the 20 incidents); on Nemotron 3 Super, the no-priors, vague-alert and 30-step ablations; on Gemini, the vague-alert ablation.
+> - **Complete:** the heuristic; agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of the 20 incidents); on Nemotron 3 Super, the no-priors, vague-alert and 30-step ablations; on Gemini, the vague-alert ablation; Claude Sonnet 5.5 and Opus 5.5 in Claude Code (5 runs on each incident). The Claude run records ship in the next data release (data-v3); until then `rootcause fetch-data` gets data-v2, without them.
 > - **Running:** the Gemini no-priors ablation (quota-bound on the free tier). [`report.md`](docs/results/report.md) marks it as partial; no conclusions are drawn from it yet. Other models that were tried and not run (timeouts) are listed under [Models tried](docs/results/agents.md#models-tried).
 > - Two small decision models, Laya and Hunch, both scored below the heuristic zero-shot, so no small-model-then-agent cascade was built ([`laya.md`](docs/results/laya.md), [`hunch.md`](docs/results/hunch.md)).
 
@@ -59,7 +64,7 @@ The scoring rules were fixed before the first run, there are no-fault controls, 
  incident snapshot  (metrics series + sanitised traces + sanitised logs; ground truth stored separately)
    │
    ├─► heuristic baseline ── "which service's fault signal rose most?"
-   └─► LLM agent (Gemini or Nemotron) ── tool loop: top_changes, service_map, search_traces, search_logs, ...
+   └─► LLM agent (Gemini, Nemotron, GLM, Claude) ── tool loop: top_changes, service_map, search_traces, search_logs, ...
               │                                    (same tools also served over MCP)
               ▼
    report {verdict, ranked causes, evidence[], confidence}
@@ -84,9 +89,10 @@ The automated leak scan checks every snapshot's metrics, spans and logs, which c
 - **Heuristic:** ranks every service's error ratio, p95 latency, peak memory, CPU and restarts by how much each rose compared with a 15-minute baseline. It names the top one. Its threshold was fixed in advance.
 - **Agent v0:** a model tool loop with naive tools (raw metric series, trace and log search).
 - **Agent v1:** the same loop with change-aware tools (`top_changes`, `service_health`, `service_map`) and structured, checkable evidence.
+- **Claude Code** (`rootcause/claude_code.py`): Claude Sonnet 5.5 or Opus 5.5 in headless Claude Code (`claude -p`), with agent v1's prompt, only the v1 tools (over MCP), the same 15-turn limit, step-limit message and repair turn. It has no built-in tools (no file reads, shell or web), no settings or CLAUDE.md, and its MCP server reads a copy of the snapshot without the ground truth; every run checks its tool list.
 - **Ablations of agent v1,** each changing one thing: *no priors* drops the two generic sentences from the prompt ("the service the alert mentions is often NOT the cause", "it is possible that nothing is actually wrong"), and *vague alert* gives every incident the same alert, "Users report that something is wrong with the shop." On Nemotron both are complete, plus a third ablation with a 30-step limit instead of 15; on Gemini both are in progress.
 
-The agents run on two model families, both at temperature 0: Gemini 3.5 Flash-Lite (free tier) and Nemotron 3 Super (`nvidia/nemotron-3-super-120b-a12b`, NVIDIA's free trial endpoint). One model is pinned per batch, so results never mix models.
+Agents v0 and v1 run at temperature 0 on four free-tier models: Gemini 3.5 Flash-Lite, and Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash on NVIDIA's free trial endpoint. The Claude Code solver runs Claude Sonnet 5.5 and Opus 5.5 on a Claude subscription, at the model's default sampling (Claude Code cannot set the temperature). One model is pinned per batch, so results never mix models.
 
 **4. Scoring.** The rules were written before any run (`rootcause/score.py`):
 - top-ranked cause in the accepted set;
@@ -178,6 +184,8 @@ Both commands need the data release or your own recorded incidents (see **Data**
 rootcause eval agent-v1 --model <model> --base-url <endpoint URL> --key-env <VAR holding the key> --runs 5
 # your own solver: a function that takes a snapshot and returns (report, info)
 rootcause eval-custom examples.my_agent:solve --name my-agent
+# Claude in Claude Code, on your Claude subscription (no API key): needs the `claude` CLI, signed in with `claude auth login`
+rootcause eval-custom rootcause.claude_code:sonnet --name claude-code-sonnet-5.5 --runs 5
 ```
 
 Both are scored by the same rules as the built-in solvers, and `summary`, `report` and `site` pick their records up. [`docs/benchmark.md`](docs/benchmark.md) describes what a snapshot holds, what a solver may read, the report schema, the scoring rules, the splits and the rules for honest use. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers adding scenarios and built-in solvers.
@@ -194,6 +202,7 @@ Both are scored by the same rules as the built-in solvers, and `summary`, `repor
 | `rootcause/score.py`, `evaluate.py` | report validation, scoring, resumable runs, per-category summaries |
 | `rootcause/summary.py`, `heuristic.py` | baseline-vs-fault change table and the heuristic |
 | `rootcause/tools_v0.py`, `tools_v1.py`, `agent.py` | agent tools (v0, v1) and the model tool loop (Gemini or NVIDIA) |
+| `rootcause/claude_code.py` | the Claude Code solver: `claude -p` with the v1 prompt and only the v1 tools |
 | `rootcause/evidence.py`, `mcp_server.py` | evidence checker and MCP server |
 | `rootcause/report.py`, `tracing.py` | results report and figures; optional OpenTelemetry GenAI spans of agent runs |
 | `rootcause/site.py`, `site/` | data builder and static front end of the replay site |
@@ -208,7 +217,7 @@ Both are scored by the same rules as the built-in solvers, and `summary`, `repor
 
 - **Twenty incidents from one demo app on one laptop.** This is a small benchmark, not a general claim.
 - **Every solver gets the exact fault onset** (t=0 is the injection time), and several alerts hint at the culprit's functional area. One generic alert for every incident lowers fault accuracy by 0.12 on Nemotron and 0.13 on Gemini (each borderline on its own) and raises false alarms on both, so the alerts' hints help.
-- **Four models, all free tiers:** Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash, all at temperature 0. The spread across runs measures API nondeterminism, not sampling, and four models say little about frontier models.
+- **Four free-tier models and two Claude models:** Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash at temperature 0, in this repo's loop; Claude Sonnet 5.5 and Opus 5.5 at default sampling, in Claude Code's loop. For the free models the spread across runs measures API nondeterminism, not sampling. The Claude gap over the free models mixes model and harness; the Claude gap over the rule does not.
 
 The [methodology FAQ](docs/faq.md) covers these and the other threats to validity: one author for the scenarios, heuristic, tools and scoring; no multiple-comparison correction; the public demo code; and more.
 

@@ -17,6 +17,7 @@
   --nemotron: #6A4BC4;
   --glm: #1E7F84;
   --nemotron35: #A3358C;
+  --claude: #3F7A2E;
 
   --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
   --body: "Atkinson Hyperlegible", system-ui, sans-serif;
@@ -46,6 +47,7 @@
     --nemotron: #B4A0FF;
     --glm: #5CCDD1;
     --nemotron35: #F08BD0;
+    --claude: #8FD27A;
     color-scheme: dark;
   }
 }
@@ -152,6 +154,7 @@ figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; lin
 .m-gemini { color: var(--gemini); }
 .m-nemotron { color: var(--nemotron); }
 .m-glm { color: var(--glm); }
+.m-claude { color: var(--claude); }
 .m-nemotron35 { color: var(--nemotron35); }
 .m-other { color: var(--muted); }
 

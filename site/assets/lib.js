@@ -24,6 +24,8 @@ export const SOLVERS = {
   "agent-v1@z-ai-glm-5.3-flash": ["V1 on GLM", "change-aware tools, GLM 5.3 Flash"],
   "agent-v0@nvidia-nemotron-3.5-super-vl-120b-a12b": ["V0 on Nemotron 3.5", "naive tools, Nemotron 3.5 Super"],
   "agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b": ["V1 on Nemotron 3.5", "change-aware tools, Nemotron 3.5 Super"],
+  "claude-code-sonnet-5.5": ["Claude Code: Sonnet 5.5", "v1 prompt and tools in Claude Code's loop"],
+  "claude-code-opus-5.5": ["Claude Code: Opus 5.5", "v1 prompt and tools in Claude Code's loop"],
 };
 
 const GEMINI = "Gemini 3.5 Flash-Lite";
@@ -116,9 +118,11 @@ export const MODEL_PAIR = ["agent-v1-nemotron", "agent-v1"];   // the same agent
 
 // ---------------------------------------------------------------- charts
 
-/** The model a solver runs on, for its chart colour: rule (the heuristic), gemini, nemotron, nemotron35, glm, or other. */
+/** The model a solver runs on, for its chart colour: rule (the heuristic), gemini, nemotron, nemotron35, glm, claude,
+ * or other. */
 export function modelOf(s) {
   if (s === "heuristic") return "rule";
+  if (s.startsWith("claude-code-")) return "claude";
   const [base, model = ""] = s.split("@");
   if (/glm/i.test(model)) return "glm";
   if (/nemotron-3\.5/i.test(model)) return "nemotron35";

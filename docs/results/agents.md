@@ -1,10 +1,11 @@
 # What helps the agent: model, tools, alert, prompt
 
-**Status: 2026-10-20.** Complete: agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of 20 incidents); the no-priors, vague-alert and 30-step ablations on Nemotron 3 Super; the vague-alert ablation on Gemini (3 runs each). Running: the Gemini no-priors ablation (quota-bound); no conclusions are drawn from it here. Every figure below comes from [`report.md`](report.md), which marks running batches as partial and also has the per-scenario tables.
+**Status: 2026-11-10.** Added: Claude Sonnet 5.5 and Opus 5.5 in Claude Code (5 runs on each of 20 incidents; records in the next data release). Complete since 2026-10-20: agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of 20 incidents); the no-priors, vague-alert and 30-step ablations on Nemotron 3 Super; the vague-alert ablation on Gemini (3 runs each). Running: the Gemini no-priors ablation (quota-bound); no conclusions are drawn from it here. Every figure below comes from [`report.md`](report.md), which marks running batches as partial and also has the per-scenario tables.
 
 ## In short
 
-- **No agent is clearly better than the simple rule, on four models.** The best agents, v1 on Nemotron 3.5 Super and on GLM 5.3 Flash, score 0.14 above the heuristic on fault incidents, but every interval includes 0 (Nemotron 3.5's only just: -0.02 to +0.33), so this benchmark cannot tell them apart. Most of them also raise more false alarms on the no-fault controls.
+- **Claude beats the simple rule (added 2026-11-10).** Claude Opus 5.5 and Sonnet 5.5 in Claude Code, with agent v1's prompt and tools, score 0.88 and 0.87 on fault incidents against the rule's 0.59 (+0.28, interval +0.09 to +0.49; +0.27, +0.08 to +0.50). Counting the controls, only Opus clears zero (+0.25, +0.06 to +0.45). See [Claude in Claude Code](#claude-in-claude-code).
+- **No free-tier agent is clearly better than the simple rule, on four models.** The best agents, v1 on Nemotron 3.5 Super and on GLM 5.3 Flash, score 0.14 above the heuristic on fault incidents, but every interval includes 0 (Nemotron 3.5's only just: -0.02 to +0.33), so this benchmark cannot tell them apart. Most of them also raise more false alarms on the no-fault controls.
 - **The model matters most on fault incidents.** With the same agent, tools and prompt, GLM 5.3 Flash scores 0.32 above Gemini 3.5 Flash-Lite (95% interval +0.09 to +0.56) and Nemotron 3 Super 0.26 above it (+0.10 to +0.44). Agent v0 shows the same Nemotron gap (+0.23, interval +0.04 to +0.41).
 - **A newer version of the same model does not measurably help.** Nemotron 3.5 Super against Nemotron 3 Super: +0.06 with agent v1 (interval -0.01 to +0.12) and +0.04 with v0 (-0.05 to +0.12).
 - **Counting the controls shrinks the model gaps.** Over all 20 incidents, the 4 no-fault controls included, Nemotron v1 vs Gemini v1 falls to +0.11 (interval -0.09 to +0.31), because Nemotron raises far more false alarms (35% of control runs against Gemini's 0%). GLM vs Gemini stays only just positive (+0.21, interval +0.00 to +0.43).
@@ -165,6 +166,29 @@ Temperature 0 does not make a hosted model deterministic:
 - **A single run would be misleading.** On 12 of 20 incidents, Nemotron v1's five runs disagree on the top answer. This is why every agent batch is planned at 5 runs (3 for the Gemini ablations) and the report averages per incident before comparing.
 - **Gemini is more repeatable but more wrong.** Its runs agree more often (0.80). The agreement includes its repeated "no incident" answers (see finding 1).
 - **Every agent is overconfident.** Stated confidence is 0.2-0.4 above accuracy. The vague alert makes this worse: accuracy drops but confidence barely moves. Confidence alone is not a usable signal for when to trust an answer; the coverage curve in `report.md` shows the same.
+
+## Claude in Claude Code
+
+Added 2026-11-10. `rootcause/claude_code.py` runs headless Claude Code (`claude -p`) on a Claude subscription with agent v1's system prompt and only the v1 tools, served by `rootcause.mcp_server` from a copy of the snapshot that has no ground truth. Claude Code gets no built-in tools, settings or CLAUDE.md, and every run checks its tool list. The 15-turn limit, the step-limit message and the repair turn match agent v1. Two things differ: the tool loop is Claude Code's, and sampling is the model's default (it cannot be set), so these are their own solvers, not "agent v1 on Claude".
+
+| solver | fault incidents | controls answered correctly | held-out faults | mean confidence / accuracy | prompt tokens per run |
+|---|---|---|---|---|---|
+| Claude Code, Opus 5.5 | 0.88 | 0.85 | 1.00 | 0.73 / 0.87 | 37k |
+| Claude Code, Sonnet 5.5 | 0.87 | 0.55 | 0.92 | 0.60 / 0.81 | 37k |
+
+| comparison | wins / ties / losses | mean difference | 95% interval | p | with controls | 95% interval (all 20) |
+|---|---|---|---|---|---|---|
+| Opus vs heuristic | 6 / 10 / 0 | +0.28 | +0.09 to +0.49 | 0.03 | +0.25 | +0.06 to +0.45 |
+| Sonnet vs heuristic | 6 / 9 / 1 | +0.27 | +0.08 to +0.50 | 0.05 | +0.18 | -0.03 to +0.39 |
+| Opus vs Sonnet | 3 / 12 / 1 | +0.01 | -0.12 to +0.11 | 1.00 | +0.06 | -0.06 to +0.17 |
+| Opus vs GLM v1 | 6 / 10 / 0 | +0.14 | +0.04 to +0.28 | 0.03 | +0.12 | +0.00 to +0.26 |
+| Sonnet vs GLM v1 | 5 / 8 / 3 | +0.14 | -0.04 to +0.33 | 0.22 | +0.06 | -0.13 to +0.25 |
+
+- **Both beat the rule on fault incidents; with the controls counted, only Opus does.** Sonnet raised an incident on all five runs of control-3 (product-catalog latency) and on three of control-2; Opus answered control-2, the control with a real unprompted latency spike, "no incident" on all five runs.
+- **No run hit the step limit,** and no answer failed to parse.
+- **Neither is overconfident,** unlike every other agent: stated confidence is below accuracy, and a confidence threshold helps (Opus is right on every run answered at confidence 0.75 or more, 53% of runs).
+- **Where they still fail:** kafka-queue-problems (0 of 5 for both: they name accounting, a Kafka consumer; the accepted answers are kafka, checkout and fraud-detection) and, for Opus, product-catalog-lock-contention (1 of 5, against Sonnet's 5 of 5).
+- **Claude vs the free models mixes model and harness.** Opus is above GLM v1 on fault incidents (+0.14, interval +0.04 to +0.28), but part of that may be Claude Code's loop rather than the model.
 
 ## Models tried
 

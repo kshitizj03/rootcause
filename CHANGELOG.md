@@ -14,6 +14,7 @@ The first public version: the benchmark, its two agents and the results so far.
 - A 28-line change-ranking heuristic (`rootcause/heuristic.py`).
 - Agent v0 (naive tools) and agent v1 (change-aware tools: `top_changes`, `service_health`, `service_map`), on Gemini 3.5 Flash-Lite and Nemotron 3 Super, plus no-priors, vague-alert and 30-step ablations.
 - `eval --model --base-url --key-env` runs a built-in agent on any OpenAI-compatible endpoint; `eval-custom` scores your own solver.
+- A Claude Code solver (`rootcause/claude_code.py`): Claude Sonnet 5.5 or Opus 5.5 in headless Claude Code on a Claude subscription, with agent v1's prompt and only the v1 tools; both beat the heuristic on fault incidents, and Opus also with the controls counted.
 - The v1 tools served over MCP (`rootcause mcp`), and optional OpenTelemetry GenAI spans of agent runs (`eval --trace`).
 - Two decision-model entry tests, Laya and Hunch (`experiments/`).
 
