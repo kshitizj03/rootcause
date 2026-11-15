@@ -1,17 +1,18 @@
 # What helps the agent: model, tools, alert, prompt
 
-**Status: 2026-11-10.** Added: Claude Sonnet 5.5 and Opus 5.5 in Claude Code (5 runs on each of 20 incidents; records in data-v3). Complete since 2026-10-20: agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of 20 incidents); the no-priors, vague-alert and 30-step ablations on Nemotron 3 Super; the vague-alert ablation on Gemini (3 runs each). Running: the Gemini no-priors ablation (quota-bound); no conclusions are drawn from it here. Every figure below comes from [`report.md`](report.md), which marks running batches as partial and also has the per-scenario tables.
+**Status: 2026-11-15.** Added: agent v1 on Nemotron 3 Ultra and on Nemotron 3.5 Lightning (5 runs on each of 20 incidents), and the finished Gemini no-priors ablation (3 runs each); records in data-v4. Added 2026-11-10: Claude Sonnet 5.5 and Opus 5.5 in Claude Code (5 runs on each of 20 incidents). Complete since 2026-10-20: agents v0 and v1 on Gemini 3.5 Flash-Lite, Nemotron 3 Super and Nemotron 3.5 Super, and agent v1 on GLM 5.3 Flash (5 runs on each of 20 incidents); the no-priors, vague-alert and 30-step ablations on Nemotron 3 Super; the vague-alert ablation on Gemini (3 runs each). Every figure below comes from [`report.md`](report.md), which marks running batches as partial and also has the per-scenario tables.
 
 ## In short
 
 - **Claude beats the simple rule (added 2026-11-10).** Claude Opus 5.5 and Sonnet 5.5 in Claude Code, with agent v1's prompt and tools, score 0.88 and 0.87 on fault incidents against the rule's 0.59 (+0.28, interval +0.09 to +0.49; +0.27, +0.08 to +0.50). Counting the controls, only Opus clears zero (+0.25, +0.06 to +0.45). See [Claude in Claude Code](#claude-in-claude-code).
-- **No free-tier agent is clearly better than the simple rule, on four models.** The best agents, v1 on Nemotron 3.5 Super and on GLM 5.3 Flash, score 0.14 above the heuristic on fault incidents, but every interval includes 0 (Nemotron 3.5's only just: -0.02 to +0.33), so this benchmark cannot tell them apart. Most of them also raise more false alarms on the no-fault controls.
+- **The largest free model beats the rule on fault incidents, but not once false alarms count (added 2026-11-15).** Agent v1 on Nemotron 3 Ultra (550B, NVIDIA's free endpoint, this repo's loop at temperature 0) scores 0.81 on fault incidents: +0.22 over the heuristic (interval +0.02 to +0.44, permutation p = 0.09, so suggestive). With the controls counted, +0.15 (-0.02 to +0.35). It is not measurably below Opus (Opus +0.06, -0.09 to +0.21). See [Scale](#scale-a-larger-model-helps-where-a-newer-one-did-not).
+- **No other free-tier agent is clearly better than the simple rule, on five more models.** The best, v1 on Nemotron 3.5 Super and on GLM 5.3 Flash, score 0.14 above the heuristic on fault incidents, but every interval includes 0 (Nemotron 3.5's only just: -0.02 to +0.33), so this benchmark cannot tell them apart. Most of them also raise more false alarms on the no-fault controls.
 - **The model matters most on fault incidents.** With the same agent, tools and prompt, GLM 5.3 Flash scores 0.32 above Gemini 3.5 Flash-Lite (95% interval +0.09 to +0.56) and Nemotron 3 Super 0.26 above it (+0.10 to +0.44). Agent v0 shows the same Nemotron gap (+0.23, interval +0.04 to +0.41).
-- **A newer version of the same model does not measurably help.** Nemotron 3.5 Super against Nemotron 3 Super: +0.06 with agent v1 (interval -0.01 to +0.12) and +0.04 with v0 (-0.05 to +0.12).
+- **A newer version of the same model does not measurably help; a larger one does.** Nemotron 3.5 Super against Nemotron 3 Super: +0.06 with agent v1 (interval -0.01 to +0.12) and +0.04 with v0 (-0.05 to +0.12). Nemotron 3 Ultra against Nemotron 3 Super, the version held: +0.14 (+0.03 to +0.27), and +0.14 (+0.04 to +0.25) with the controls counted. Going smaller costs false alarms: Nemotron 3.5 Super against 3.5 Lightning is +0.09 on fault incidents (-0.01 to +0.21) and +0.11 (+0.02 to +0.22) with the controls.
 - **Counting the controls shrinks the model gaps.** Over all 20 incidents, the 4 no-fault controls included, Nemotron v1 vs Gemini v1 falls to +0.11 (interval -0.09 to +0.31), because Nemotron raises far more false alarms (35% of control runs against Gemini's 0%). GLM vs Gemini stays only just positive (+0.21, interval +0.00 to +0.43).
 - **The change-aware tools do not change accuracy; they change where it comes from.** v1's tools score the same as v0's naive tools on all three models that ran both (Nemotron -0.02, Gemini -0.06, Nemotron 3.5 -0.00; every interval includes 0). On Nemotron they score higher on silent faults, two-fault incidents and controls and lower on cross-service incidents (2-6 incidents per category, no intervals); on Gemini the categories barely move. They also make the evidence checkable.
 - **Reading the alert helps, on both models tested.** Replacing each incident's alert with one generic sentence lowers fault accuracy by 0.12 on Nemotron and 0.13 on Gemini (intervals -0.25 to -0.01 and -0.27 to -0.01; permutation p = 0.09 and 0.07, so each alone is borderline) and raises false alarms on the controls (Nemotron 35% to 70%, Gemini 0% to 25%). Counting the controls, both drops clear zero: -0.15 (interval -0.26 to -0.05) and -0.16 (-0.29 to -0.03).
-- **The two "prior" sentences in the prompt do nothing measurable** (-0.01, interval -0.07 to +0.06).
+- **The two "prior" sentences in the prompt matter on Gemini, not on Nemotron.** Removing them does nothing measurable on Nemotron (-0.01, interval -0.07 to +0.06). On Gemini it raises fault accuracy by 0.12 (+0.02 to +0.23, p = 0.05): Gemini stops answering "no incident" so often. But it also starts raising false alarms on the controls, so with them counted the gain is +0.04 (-0.08 to +0.16).
 - **A bigger step budget does not help.** With 30 steps instead of 15, Nemotron v1 mostly stops on its own (only 15% of its fault runs reach the 30-step limit), yet it scores no better (-0.04, interval -0.16 to +0.06) for 2.4 times the tokens.
 - **One run is not enough, and stated confidence overstates accuracy.** At temperature 0, all five runs of Nemotron v1 give the same top answer on only 8 of 20 incidents. Every free-tier agent states more confidence than it earns, Gemini the most (0.91 stated vs 0.53 right); the two Claude models state less (see below).
 
@@ -29,10 +30,13 @@ Accuracy on the 16 fault incidents, and the share of control runs answered corre
 | agent v0 | Nemotron 3.5 Super | naive | 0.73 | 0.60 | 0.73 | 100/100 |
 | agent v1 | Nemotron 3.5 Super | change-aware | 0.73 | 0.65 | 0.87 | 100/100 |
 | agent v1 | GLM 5.3 Flash | change-aware | 0.73 | 0.80 | 0.80 | 100/100 |
+| agent v1 | Nemotron 3 Ultra | change-aware | 0.81 | 0.65 | 0.80 | 100/100 |
+| agent v1 | Nemotron 3.5 Lightning | change-aware | 0.64 | 0.45 | 0.60 | 100/100 |
 | agent v1, no priors | Nemotron 3 Super | change-aware | 0.67 | 0.50 | 0.67 | 100/100 |
 | agent v1, vague alert | Nemotron 3 Super | change-aware | 0.56 | 0.25 | 0.33 | 100/100 |
 | agent v1, 30-step limit | Nemotron 3 Super | change-aware | 0.63 | 0.55 | 0.73 | 100/100 |
 | agent v1, vague alert | Gemini 3.5 Flash-Lite | change-aware | 0.28 | 0.75 | 1.00 | 60/60 |
+| agent v1, no priors | Gemini 3.5 Flash-Lite | change-aware | 0.53 | 0.75 | 0.78 | 60/60 |
 
 The paired comparisons compare each solver's mean score per incident with another's on the same incidents. The interval is a 95% bootstrap over incidents, and p is an exact paired permutation test, both on the 16 fault incidents. With this few incidents, an interval that includes 0 means the benchmark cannot tell the two apart. The last two columns repeat the comparison over all 20 incidents, the controls included, so false alarms count too.
 
@@ -43,22 +47,27 @@ The paired comparisons compare each solver's mean score per incident with anothe
 | GLM v1 vs Gemini v1 (model) | 9 / 5 / 2 | +0.32 | +0.09 to +0.56 | 0.03 | +0.21 | +0.00 to +0.43 |
 | Nemotron 3.5 v1 vs Nemotron v1 (newer version) | 5 / 10 / 1 | +0.06 | -0.01 to +0.12 | 0.19 | +0.07 | -0.00 to +0.16 |
 | Nemotron 3.5 v0 vs Nemotron v0 (newer version) | 4 / 10 / 2 | +0.04 | -0.05 to +0.12 | 0.62 | +0.09 | -0.02 to +0.21 |
+| Nemotron 3 Ultra v1 vs Nemotron v1 (larger) | 6 / 9 / 1 | +0.14 | +0.03 to +0.27 | 0.08 | +0.14 | +0.04 to +0.25 |
+| Nemotron 3.5 v1 vs Nemotron 3.5 Lightning v1 (larger) | 5 / 9 / 2 | +0.09 | -0.01 to +0.21 | 0.17 | +0.11 | +0.02 to +0.22 |
 | Nemotron v1 vs heuristic | 5 / 8 / 3 | +0.08 | -0.05 to +0.23 | 0.31 | +0.01 | -0.11 to +0.15 |
 | Nemotron v0 vs heuristic | 6 / 4 / 6 | +0.10 | -0.15 to +0.35 | 0.49 | -0.01 | -0.24 to +0.23 |
 | Nemotron 3.5 v1 vs heuristic | 6 / 7 / 3 | +0.14 | -0.02 to +0.33 | 0.21 | +0.09 | -0.05 to +0.25 |
 | Nemotron 3.5 v0 vs heuristic | 6 / 6 / 4 | +0.14 | -0.13 to +0.41 | 0.37 | +0.08 | -0.16 to +0.32 |
 | GLM v1 vs heuristic | 5 / 9 / 2 | +0.14 | -0.09 to +0.38 | 0.34 | +0.12 | -0.09 to +0.33 |
+| Nemotron 3 Ultra v1 vs heuristic | 6 / 8 / 2 | +0.22 | +0.02 to +0.44 | 0.09 | +0.15 | -0.02 to +0.35 |
+| Nemotron 3.5 Lightning v1 vs heuristic | 3 / 9 / 4 | +0.05 | -0.09 to +0.22 | 0.62 | -0.02 | -0.16 to +0.14 |
 | Nemotron v1 vs Nemotron v0 (tools) | 6 / 4 / 6 | -0.02 | -0.14 to +0.11 | 0.86 | +0.03 | -0.09 to +0.14 |
 | Gemini v1 vs Gemini v0 (tools) | 5 / 6 / 5 | -0.06 | -0.23 to +0.10 | 0.60 | -0.05 | -0.18 to +0.08 |
 | Nemotron 3.5 v1 vs Nemotron 3.5 v0 (tools) | 4 / 8 / 4 | -0.00 | -0.17 to +0.17 | 1.00 | +0.01 | -0.14 to +0.15 |
 | Nemotron v1, vague alert vs Nemotron v1 | 1 / 9 / 6 | -0.12 | -0.25 to -0.01 | 0.09 | -0.15 | -0.26 to -0.05 |
 | Gemini v1, vague alert vs Gemini v1 | 1 / 7 / 8 | -0.13 | -0.27 to -0.01 | 0.07 | -0.16 | -0.29 to -0.03 |
 | Nemotron v1, no priors vs Nemotron v1 | 4 / 8 / 4 | -0.01 | -0.07 to +0.06 | 1.00 | -0.00 | -0.07 to +0.07 |
+| Gemini v1, no priors vs Gemini v1 | 7 / 7 / 2 | +0.12 | +0.02 to +0.23 | 0.05 | +0.04 | -0.08 to +0.16 |
 | Nemotron v1, 30 steps vs Nemotron v1 (15) | 4 / 7 / 5 | -0.04 | -0.16 to +0.06 | 0.53 | -0.03 | -0.14 to +0.09 |
 | Gemini v0 vs heuristic | 3 / 5 / 8 | -0.12 | -0.39 to +0.17 | 0.44 | -0.05 | -0.29 to +0.20 |
 | Gemini v1 vs heuristic | 3 / 7 / 6 | -0.18 | -0.40 to +0.02 | 0.15 | -0.10 | -0.30 to +0.11 |
 
-These are about twenty comparisons with no multiple-comparison correction, so a single interval that only just excludes 0 is suggestive, not established.
+These are about thirty comparisons with no multiple-comparison correction, so a single interval that only just excludes 0 is suggestive, not established.
 
 ## Findings
 
@@ -74,6 +83,10 @@ Gemini 3.5 Flash-Lite and Nemotron 3 Super get the same prompt, tools and step l
 When Gemini Flash-Lite is cut off, it often concludes that nothing is wrong. That happens even when its first tool call ranked the fault first. On ad-high-cpu, `top_changes` put ad's CPU at the top (+163x), and all five v1 runs still answered "no incident" (confidence 0.8-0.95). Nemotron names its best suspect. When Gemini finishes on its own, its accuracy (0.61) is close to Nemotron v1's when cut off (0.63).
 
 Two more models run through the same agent confirm the size of the model effect: GLM 5.3 Flash scores 0.32 above Gemini on fault incidents (interval +0.09 to +0.56), while Nemotron 3.5 Super, a newer version of Nemotron, is not measurably better than Nemotron 3 Super (+0.06, interval -0.01 to +0.12). A model change can matter a lot; a version bump within one model family did not here.
+
+#### Scale: a larger model helps where a newer one did not
+
+Nemotron 3 Ultra (550B parameters, 55B active) is the same model generation as Nemotron 3 Super (120B, 12B active), so the comparison holds the version and changes the size. With the same agent v1, Ultra is +0.14 on fault incidents (interval +0.03 to +0.27) and keeps the whole gap once the controls count (+0.14, +0.04 to +0.25), unlike the other model changes in this table. It hits the 15-turn limit about as often as Super (65% of fault runs against 68%), but when cut off it still names a suspect and is right as often as when it finishes (0.81 against 0.82). In the other direction, Nemotron 3.5 Lightning (30B, 3B active) scores 0.64 on fault incidents and answers only 0.45 of control runs correctly, below Nemotron 3.5 Super on both. Ultra is also the most expensive free model here: 181k prompt tokens per run, against 94k for Super.
 
 The same habit is why the gap shrinks once the controls count. Gemini's perfect control score is the other side of its "no incident" answers, not better judgement, and Nemotron's false alarms (35% of control runs for v1) cancel most of its lead: over all 20 incidents the difference is +0.11, and its interval includes 0.
 
@@ -132,9 +145,11 @@ With two examples it would be fitting a rule to the test, so it was not built.
 
 The vague-alert ablation gives every incident the same alert: "Users report that something is wrong with the shop." Against Nemotron v1, the clearest effect is on the controls: false alarms double, from 35% to 70% of control runs, and correct control runs fall from 0.50 to 0.25. Accuracy on fault incidents falls from 0.68 to 0.56 (paired -0.12, interval -0.25 to -0.01, permutation p = 0.09), a borderline drop that two incidents drive most of. Over all 20 incidents the drop is -0.15 (interval -0.26 to -0.05). Part of any agent's edge over the heuristic, which never reads the alert, is reading it. Several alerts name the functional area of the cause; `scenarios/NOTES.md` lists them.
 
-### 4. The prompt's two priors do not matter
+### 4. The prompt's two priors matter on Gemini, not on Nemotron
 
 v1's prompt contains two sentences: "the service the alert mentions is often NOT the cause" and "it is possible that nothing is actually wrong". Removing them changes nothing measurable on Nemotron: -0.01 on fault incidents, the same 0.50 on controls, and 4 wins and 4 losses.
+
+On Gemini (3 runs per incident), removing them moves where it errs. Fault accuracy rises from 0.41 to 0.53 (paired +0.12, interval +0.02 to +0.23, p = 0.05), because Gemini answers "no incident" on fewer fault runs: 9 of 48 (19%) against 34 of 80 (43%) with the priors, and 5 of 20 against 27 of 49 when cut off at the step limit. The cost is on the controls: false alarms go from 0% to 25% of control runs (on control-2 and control-3), and over all 20 incidents the gain shrinks to +0.04 (-0.08 to +0.16). The "nothing may be wrong" prior looks like part of why Gemini Flash-Lite gives up with "no incident" (finding 1); removing it shifts the trade-off between missed incidents and false alarms rather than adding accuracy.
 
 ### 5. A bigger step budget does not help
 
@@ -160,6 +175,7 @@ Temperature 0 does not make a hosted model deterministic:
 | Nemotron v0 | 6 of 20 | 0.54 | 0.82 | 0.61 | 0.20 |
 | Nemotron v1 | 8 of 20 | 0.66 | 0.87 | 0.64 | 0.23 |
 | Nemotron v1, vague alert | 9 of 20 | 0.58 | 0.85 | 0.49 | 0.36 |
+| Nemotron 3 Ultra v1 | 13 of 20 | 0.78 | 0.89 | 0.78 | 0.11 |
 
 (Accuracy and confidence here are over every run, controls included. ECE is over 5 equal-width confidence bins.)
 
@@ -192,9 +208,13 @@ Added 2026-11-10. `rootcause/claude_code.py` runs headless Claude Code (`claude 
 
 ## Models tried
 
-Besides Gemini 3.5 Flash-Lite and Nemotron 3 Super, the agents ran unchanged (prompt, tools, step limit) on two more models through `eval --model`, both on NVIDIA's free endpoint:
+Besides Gemini 3.5 Flash-Lite and Nemotron 3 Super, the agents ran unchanged (prompt, tools, step limit) on four more models through `eval --model`, all on NVIDIA's free endpoint:
 - **Nemotron 3.5 Super** (`nvidia/nemotron-3.5-super-vl-120b-a12b`): agents v1 and v0, complete. It was the fastest model tried, at about 90 seconds per run.
 - **GLM 5.3 Flash** (`z-ai/glm-5.3-flash`): agent v1, complete.
+- **Nemotron 3 Ultra** (`nvidia/nemotron-3-ultra-550b-a55b`): agent v1, complete (2026-10-21). About 2.3 minutes per run.
+- **Nemotron 3.5 Lightning** (`nvidia/nemotron-3.5-lightning-30b-a3b`): agent v1, complete (2026-10-21). About 40 seconds per run.
+- **Running, not in this release:** agent v1 on Gemini 3.1 Flash-Lite (`gemini-3.1-flash-lite`, Gemini endpoint), quota-bound at about 500 requests a day.
+- **Smoke-tested only** (one incident each, 2026-10-20): `meta/muse-glimmer-30b` and `openai/gpt-oss-20b` (slow and flaky). Their single runs are not in the data release.
 - **Gemma 4 26B** (Gemini endpoint) timed out on almost every request in two attempts (2026-10-16 and 2026-10-18). Its single completed run is set aside and not reported.
 - **Not run:** GLM 5.3, DeepSeek V4.1 Flash and Gemma 4 31B on the NVIDIA endpoint, and Gemma 4 31B on the Gemini endpoint, all timed out or returned errors when tried on 2026-10-18; DeepSeek V4.1 Flash timed out again on 2026-10-19.
 
@@ -204,5 +224,4 @@ Besides Gemini 3.5 Flash-Lite and Nemotron 3 Super, the agents ran unchanged (pr
 - **Sixteen fault incidents, one demo app.** Category numbers rest on 2-6 incidents each.
 - **Held out.** One held-out incident's v1 tool output was viewed during development; see the Provenance section of `report.md`.
 - **Temperature 0.** The 5-run spread measures nondeterminism in the model APIs, not sampling.
-- **Gemini no-priors ablation running.** It is quota-bound; `report.md` shows it as partial and this page will add it when it finishes.
 - More threats to validity, in plain words, are in the [methodology FAQ](../faq.md).

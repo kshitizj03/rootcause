@@ -12,11 +12,11 @@ Every scenario was kept only if metric checks showed the fault (`scenarios/NOTES
 
 ### How much can 16 fault incidents tell apart?
 
-Not much. Each paired comparison rests on 16 per-incident differences, and the report shows about twenty comparisons with no multiple-comparison correction. The bootstrap intervals are somewhat too narrow at this size, so the report also gives an exact permutation p-value. An interval that only just excludes 0 is suggestive, not established. Category results rest on 2 to 6 incidents each.
+Not much. Each paired comparison rests on 16 per-incident differences, and the report shows about thirty comparisons with no multiple-comparison correction. The bootstrap intervals are somewhat too narrow at this size, so the report also gives an exact permutation p-value. An interval that only just excludes 0 is suggestive, not established. Category results rest on 2 to 6 incidents each.
 
 ### How many models were compared?
 
-Six. Four on free tiers, in this repo's agent loop at temperature 0: Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash (agent v0 ran on three of them). Two frontier models, Claude Sonnet 5.5 and Opus 5.5, in Claude Code's own loop at default sampling, with agent v1's prompt and tools. "The model matters more than the tools" is a statement about the four free models. The Claude models are the only ones clearly better than the rule, but their gap over the free models mixes the model with the loop.
+Eight. Six on free tiers, in this repo's agent loop at temperature 0: Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super, Nemotron 3 Ultra, Nemotron 3.5 Lightning and GLM 5.3 Flash (agent v0 ran on three of them). Two frontier models, Claude Sonnet 5.5 and Opus 5.5, in Claude Code's own loop at default sampling, with agent v1's prompt and tools. "The model matters more than the tools" is a statement about the free models. On the fault incidents, the two Claude models and Nemotron 3 Ultra are clearly better than the rule; with the controls counted, only Opus is. Claude's gap over the free models mixes the model with the loop.
 
 ### Is the agent's comparison with the heuristic fair?
 

@@ -13,7 +13,7 @@
 <meta property="og:image" content="https://kshitizj03.github.io/rootcause/assets/card.png">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="640">
-<meta property="og:image:alt" content="Can an LLM agent find what broke, better than a simple rule? Yes: Claude Opus 5.5 and Sonnet 5.5 beat it on 16 fault incidents (95% intervals right of zero); the four free models' intervals all cross zero.">
+<meta property="og:image:alt" content="Can an LLM agent find what broke, better than a simple rule? Yes: Claude Opus 5.5, Claude Sonnet 5.5 and the free Nemotron 3 Ultra beat it on 16 fault incidents (95% intervals right of zero); the other free models' intervals all cross zero.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,7 +45,7 @@
 
   <section class="band" id="findings" aria-labelledby="findings-title">
     <h2 id="findings-title">What moved accuracy</h2>
-    <p class="section-lede">Each row changes one thing and keeps the rest. Swapping the model moves accuracy most, though a newer version of the same model did not, and false alarms on the no-fault controls shrink the gaps. The tools barely matter.</p>
+    <p class="section-lede">Each row changes one thing and keeps the rest. Swapping the model moves accuracy most, and a larger model did where a newer version of the same one did not; false alarms on the no-fault controls shrink the gaps. The tools barely matter.</p>
     <div id="findings-plot"></div>
   </section>
 
@@ -86,7 +86,7 @@
         <ul class="limits">
           <li><strong>Small.</strong> Twenty incidents from one demo app, recorded on one laptop. Category results rest on two to six incidents each.</li>
           <li><strong>Generous inputs.</strong> Every solver is told when the fault began, and several alerts hint at the area of the cause. With one generic alert instead, false alarms double.</li>
-          <li><strong>Two harnesses.</strong> Gemini 3.5 Flash-Lite, Nemotron 3 Super, Nemotron 3.5 Super and GLM 5.3 Flash run on free tiers in this repo&rsquo;s loop at temperature 0, so their spread across runs is API nondeterminism, not sampling. Claude Sonnet 5.5 and Opus 5.5 run in Claude Code&rsquo;s own loop at default sampling, so Claude against the free models mixes model and loop; Claude against the rule does not.</li>
+          <li><strong>Two harnesses.</strong> Gemini 3.5 Flash-Lite, GLM 5.3 Flash and four Nemotron models run on free tiers in this repo&rsquo;s loop at temperature 0, so their spread across runs is API nondeterminism, not sampling. Claude Sonnet 5.5 and Opus 5.5 run in Claude Code&rsquo;s own loop at default sampling, so Claude against the free models mixes model and loop; Claude against the rule does not.</li>
           <li><strong>One author.</strong> The same person built the incidents, the rule, the agent and the scoring. The <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/faq.md">methodology FAQ</a> lists every known threat to validity.</li>
         </ul>
       </div>
@@ -95,7 +95,7 @@
 
   <section class="band" id="reproduce" aria-labelledby="reproduce-title">
     <h2 id="reproduce-title">Reproduce it</h2>
-    <p class="section-lede">The recorded incidents and every run behind this page are in the <a href="https://github.com/kshitizj03/rootcause/releases/tag/data-v3">data release</a>. Three commands rescore the rule from the raw telemetry; the free-tier agents need a free API key, and the Claude Code solver a Claude subscription.</p>
+    <p class="section-lede">The recorded incidents and every run behind this page are in the <a href="https://github.com/kshitizj03/rootcause/releases/tag/data-v4">data release</a>. Three commands rescore the rule from the raw telemetry; the free-tier agents need a free API key, and the Claude Code solver a Claude subscription.</p>
     <pre class="commands" tabindex="0"><code>pip install -e .
 rootcause fetch-data
 rootcause eval heuristic</code></pre>
