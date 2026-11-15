@@ -24,6 +24,8 @@ export const SOLVERS = {
   "agent-v1@z-ai-glm-5.3-flash": ["V1 on GLM", "change-aware tools, GLM 5.3 Flash"],
   "agent-v0@nvidia-nemotron-3.5-super-vl-120b-a12b": ["V0 on Nemotron 3.5", "naive tools, Nemotron 3.5 Super"],
   "agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b": ["V1 on Nemotron 3.5", "change-aware tools, Nemotron 3.5 Super"],
+  "agent-v1@nvidia-nemotron-3-ultra-550b-a55b": ["V1 on Nemotron 3 Ultra", "change-aware tools, Nemotron 3 Ultra"],
+  "agent-v1@nvidia-nemotron-3.5-lightning-30b-a3b": ["V1 on Nemotron 3.5 Lightning", "change-aware tools, Nemotron 3.5 Lightning"],
   "claude-code-sonnet-5.5": ["Claude Code: Sonnet 5.5", "v1 prompt and tools in Claude Code's loop"],
   "claude-code-opus-5.5": ["Claude Code: Opus 5.5", "v1 prompt and tools in Claude Code's loop"],
 };
@@ -118,13 +120,15 @@ export const MODEL_PAIR = ["agent-v1-nemotron", "agent-v1"];   // the same agent
 
 // ---------------------------------------------------------------- charts
 
-/** The model a solver runs on, for its chart colour: rule (the heuristic), gemini, nemotron, nemotron35, glm, claude,
- * or other. */
+/** The model a solver runs on, for its chart colour: rule (the heuristic), gemini, nemotron, nemotron35, ultra,
+ * lightning, glm, claude, or other. */
 export function modelOf(s) {
   if (s === "heuristic") return "rule";
   if (s.startsWith("claude-code-")) return "claude";
   const [base, model = ""] = s.split("@");
   if (/glm/i.test(model)) return "glm";
+  if (/nemotron-3-ultra/i.test(model)) return "ultra";
+  if (/nemotron-3\.5-lightning/i.test(model)) return "lightning";
   if (/nemotron-3\.5/i.test(model)) return "nemotron35";
   if (model) return "other";
   if (!base.startsWith("agent")) return "other";
@@ -160,7 +164,8 @@ export function vsRuleRows(data, complete) {
 
 /** What one paired comparison changes, in plain words: [group, change, held fixed]. */
 export function changeOf(a, b) {
-  const model = (s) => ({ nemotron: "Nemotron", nemotron35: "Nemotron 3.5", glm: "GLM" }[modelOf(s)] ?? "Gemini");
+  const model = (s) => ({ nemotron: "Nemotron 3 Super", nemotron35: "Nemotron 3.5 Super", ultra: "Nemotron 3 Ultra", lightning: "Nemotron 3.5 Lightning",
+    glm: "GLM" }[modelOf(s)] ?? "Gemini");
   const tools = (s) => (toolsOf(s) === "v0" ? "naive tools" : "change-aware tools");
   if (toolsOf(a) === toolsOf(b) && modelOf(a) !== modelOf(b) && !isAblation(a) && !isAblation(b)) {
     return ["Model", `${model(a)} instead of ${model(b)}`, `same agent: v${toolsOf(a).slice(1)}, ${tools(a)}`];

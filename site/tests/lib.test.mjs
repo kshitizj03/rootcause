@@ -275,8 +275,12 @@ test("chart encoding: hue is the model, fill is the toolset", () => {
   assert.equal(modelOf("agent-v1@z-ai-glm-5.3-flash"), "glm");
   assert.equal(modelOf("agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b"), "nemotron35");
   assert.deepEqual(changeOf("agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b", "agent-v1-nemotron"),
-    ["Model", "Nemotron 3.5 instead of Nemotron", "same agent: v1, change-aware tools"]);
+    ["Model", "Nemotron 3.5 Super instead of Nemotron 3 Super", "same agent: v1, change-aware tools"]);
   assert.equal(modelOf("claude-code-opus-5.5"), "claude");
+  assert.equal(modelOf("agent-v1@nvidia-nemotron-3-ultra-550b-a55b"), "ultra");
+  assert.equal(modelOf("agent-v1@nvidia-nemotron-3.5-lightning-30b-a3b"), "lightning");
+  assert.deepEqual(changeOf("agent-v1@nvidia-nemotron-3-ultra-550b-a55b", "agent-v1-nemotron"),
+    ["Model", "Nemotron 3 Ultra instead of Nemotron 3 Super", "same agent: v1, change-aware tools"]);
   assert.equal(toolsOf("claude-code-opus-5.5"), null);
   assert.equal(modelOf("agent-v1@qwen-9b"), "other");
   assert.equal(modelOf("my-agent"), "other");
@@ -320,7 +324,7 @@ test("findings: what each comparison changes, model first, with the controls int
   const complete = d.solvers.filter((s) => !isPartial(d, s, overallOf(d)));
   const rows = findingRows(d, complete);
   assert.deepEqual(rows.map((r) => r.group), ["Model", "Ablation"]);
-  assert.equal(rows[0].change, "Nemotron instead of Gemini");
+  assert.equal(rows[0].change, "Nemotron 3 Super instead of Gemini");
   assert.deepEqual(rows[0].controls, { mean: 0.11, ci: [-0.09, 0.31] });
   assert.equal(rows[1].change, "One generic alert for every incident");
   assert.deepEqual(changeOf("agent-v1", "agent-v0"), ["Tools", "Change-aware tools, not naive", "same model: Gemini"]);
