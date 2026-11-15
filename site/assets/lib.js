@@ -12,25 +12,26 @@ export const CATEGORIES = {
 
 export const SOLVERS = {
   heuristic: ["Heuristic", "the simple rule"],
-  "agent-v0": ["V0 on Gemini", "naive tools, Gemini 3.5 Flash-Lite"],
-  "agent-v1": ["V1 on Gemini", "change-aware tools, Gemini 3.5 Flash-Lite"],
-  "agent-v1-nopriors": ["V1 on Gemini (no priors)", "ablation: two prompt sentences removed"],
-  "agent-v1-vague": ["V1 on Gemini (vague alerts)", "ablation: one generic alert"],
-  "agent-v0-nemotron": ["V0 on Nemotron", "naive tools, Nemotron 3 Super"],
-  "agent-v1-nemotron": ["V1 on Nemotron", "change-aware tools, Nemotron 3 Super"],
-  "agent-v1-nemotron-nopriors": ["V1 on Nemotron (no priors)", "ablation: two prompt sentences removed"],
-  "agent-v1-nemotron-vague": ["V1 on Nemotron (vague alerts)", "ablation: one generic alert"],
-  "agent-v1-nemotron-steps30": ["V1 on Nemotron (30 steps)", "ablation: twice the step limit"],
-  "agent-v1@z-ai-glm-5.3-flash": ["V1 on GLM", "change-aware tools, GLM 5.3 Flash"],
-  "agent-v0@nvidia-nemotron-3.5-super-vl-120b-a12b": ["V0 on Nemotron 3.5", "naive tools, Nemotron 3.5 Super"],
-  "agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b": ["V1 on Nemotron 3.5", "change-aware tools, Nemotron 3.5 Super"],
+  "agent-v0": ["V0 on Gemini Flash-Lite", "naive tools, Gemini 3.5 Flash-Lite"],
+  "agent-v1": ["V1 on Gemini Flash-Lite", "change-aware tools, Gemini 3.5 Flash-Lite"],
+  "agent-v1-nopriors": ["V1 on Gemini Flash-Lite (no priors)", "ablation: two prompt sentences removed"],
+  "agent-v1-vague": ["V1 on Gemini Flash-Lite (vague alerts)", "ablation: one generic alert"],
+  "agent-v0-nemotron": ["V0 on Nemotron 3 Super", "naive tools, Nemotron 3 Super"],
+  "agent-v1-nemotron": ["V1 on Nemotron 3 Super", "change-aware tools, Nemotron 3 Super"],
+  "agent-v1-nemotron-nopriors": ["V1 on Nemotron 3 Super (no priors)", "ablation: two prompt sentences removed"],
+  "agent-v1-nemotron-vague": ["V1 on Nemotron 3 Super (vague alerts)", "ablation: one generic alert"],
+  "agent-v1-nemotron-steps30": ["V1 on Nemotron 3 Super (30 steps)", "ablation: twice the step limit"],
+  "agent-v1@z-ai-glm-5.3-flash": ["V1 on GLM 5.3 Flash", "change-aware tools, GLM 5.3 Flash"],
+  "agent-v0@nvidia-nemotron-3.5-super-vl-120b-a12b": ["V0 on Nemotron 3.5 Super", "naive tools, Nemotron 3.5 Super"],
+  "agent-v1@nvidia-nemotron-3.5-super-vl-120b-a12b": ["V1 on Nemotron 3.5 Super", "change-aware tools, Nemotron 3.5 Super"],
   "agent-v1@nvidia-nemotron-3-ultra-550b-a55b": ["V1 on Nemotron 3 Ultra", "change-aware tools, Nemotron 3 Ultra"],
   "agent-v1@nvidia-nemotron-3.5-lightning-30b-a3b": ["V1 on Nemotron 3.5 Lightning", "change-aware tools, Nemotron 3.5 Lightning"],
-  "claude-code-sonnet-5.5": ["Claude Code: Sonnet 5.5", "v1 prompt and tools in Claude Code's loop"],
-  "claude-code-opus-5.5": ["Claude Code: Opus 5.5", "v1 prompt and tools in Claude Code's loop"],
+  "claude-code-sonnet-5.5": ["Claude Sonnet 5.5", "v1 prompt and tools, in Claude Code's loop"],
+  "claude-code-opus-5.5": ["Claude Opus 5.5", "v1 prompt and tools, in Claude Code's loop"],
 };
 
 const GEMINI = "Gemini 3.5 Flash-Lite";
+const GEMINI_NAME = " on Gemini Flash-Lite";   // in the names; a base@model record swaps the model in
 
 /** [name, subtitle]: a built-in solver's label; a built-in one run on another model (eval --model, records named
  * base@model, where the base is always a Gemini solver) with that model in place of Gemini; anything else (your own
@@ -40,7 +41,7 @@ function label(s) {
   const [base, model] = s.split("@");
   if (model && SOLVERS[base]) {
     const [name, sub] = SOLVERS[base];
-    return [name.includes(" on Gemini") ? name.replace(" on Gemini", ` on ${model}`) : `${name} on ${model}`,
+    return [name.includes(GEMINI_NAME) ? name.replace(GEMINI_NAME, ` on ${model}`) : `${name} on ${model}`,
       sub.replace(GEMINI, "another model")];
   }
   return [s, "custom"];
@@ -98,7 +99,7 @@ export function answerText(data, overall) {
   if (!shown.length) return null;
   const n = overall[shown[0]].expected ?? overall[shown[0]].scenarios;
   const planned = data.planned_runs || {};   // absent in an older index.json: then only missing incidents count as partial
-  const lowerFirst = (s) => s[0].toLowerCase() + s.slice(1);   // "V1 on Nemotron" -> "v1 on Nemotron"
+  const lowerFirst = (s) => s.replace(/^(V\d|Heuristic)/, (m) => m.toLowerCase());   // "V1 on …" -> "v1 on …"; Claude keeps its capital
   const counts = (s) => data.incidents.map((i) => (i.results[s] || []).length);   // controls included
   const short = (s) => planned[s] && Math.min(...counts(s)) < planned[s];
   const isPartial = (s) => short(s) || overall[s].scenarios < n;
@@ -149,23 +150,36 @@ export function isPartial(data, s, overall) {
   return Boolean((planned && Math.min(...counts) < planned) || !overall[s] || overall[s].scenarios < n);
 }
 
-/** The complete, non-ablation batches: the heuristic and each agent on each model. */
+/** The complete, non-ablation batches: the heuristic first, then each agent on each model, most accurate first, so the
+ * scoreboard's first columns are the ones the headline is about. */
 export const mainSolvers = (data, overall) =>
-  data.solvers.filter((s) => overall[s] && !isAblation(s) && !isPartial(data, s, overall));
+  data.solvers.filter((s) => overall[s] && !isAblation(s) && !isPartial(data, s, overall))
+    .sort((x, y) => (y === "heuristic") - (x === "heuristic") || overall[y].accuracy_mean - overall[x].accuracy_mean);
 
 /** Each complete agent against the heuristic on the fault incidents, best first: {s, mean, ci, n}. Pairs without an
  * interval are left out. */
 export function vsRuleRows(data, complete) {
   return (data.paired || [])
     .filter((p) => p.b === "heuristic" && p.ci && complete.includes(p.a))
-    .map((p) => ({ s: p.a, mean: p.mean_diff, ci: p.ci, n: p.n }))
+    .map((p) => ({ s: p.a, mean: p.mean_diff, ci: p.ci, n: p.n, p: p.p, wins: p.wins, losses: p.losses }))
     .sort((x, y) => y.mean - x.mean);
+}
+
+/** A comparison is clearly better only when its 95% interval lies above 0 and the permutation test agrees (p <= 0.05);
+ * an interval above 0 with a larger p is suggestive. The bootstrap is somewhat too narrow at 16 incidents, so the
+ * interval alone overstates. A row without p (an older index.json) goes by the interval. */
+export const strength = (r) => (r.ci[0] <= 0 ? "none" : r.p == null || r.p <= 0.05 ? "clear" : "suggestive");
+
+/** The hero's one-line answer from the vs-rule rows, naming no vendor: none, some or all of the agents clearly better. */
+export function heroAnswer(rows) {
+  const clear = rows.filter((r) => strength(r) === "clear").length;
+  return !clear ? "Not clearly." : clear < rows.length ? "Only the strongest models." : "Yes, by more than the noise.";
 }
 
 /** What one paired comparison changes, in plain words: [group, change, held fixed]. */
 export function changeOf(a, b) {
   const model = (s) => ({ nemotron: "Nemotron 3 Super", nemotron35: "Nemotron 3.5 Super", ultra: "Nemotron 3 Ultra", lightning: "Nemotron 3.5 Lightning",
-    glm: "GLM" }[modelOf(s)] ?? "Gemini");
+    glm: "GLM 5.3 Flash" }[modelOf(s)] ?? "Gemini Flash-Lite");
   const tools = (s) => (toolsOf(s) === "v0" ? "naive tools" : "change-aware tools");
   if (toolsOf(a) === toolsOf(b) && modelOf(a) !== modelOf(b) && !isAblation(a) && !isAblation(b)) {
     return ["Model", `${model(a)} instead of ${model(b)}`, `same agent: v${toolsOf(a).slice(1)}, ${tools(a)}`];

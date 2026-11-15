@@ -585,3 +585,9 @@ body.card .hero-plot .f-label > .dot { top: 0.2rem; }
 body.card .hero-plot .f-zero { top: -0.25rem; bottom: -0.25rem; }
 body.card .hero-plot figcaption { display: none; }
 .card-foot { position: absolute; left: 64px; bottom: 28px; margin: 0; color: var(--muted); font-size: 1.0625rem; }
+
+/* a hero row whose interval clears zero but whose permutation p does not: said in words, not left to the bar */
+.tag {
+  display: inline-block; margin-left: 0.5rem; padding: 0 0.4rem; border: 1px solid var(--muted); border-radius: 3px;
+  font: 400 0.75rem/1.4 var(--body); color: var(--muted); white-space: nowrap; vertical-align: 0.15em;
+}

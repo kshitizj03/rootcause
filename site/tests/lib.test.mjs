@@ -4,13 +4,13 @@ import assert from "node:assert/strict";
 import {
   solverName, solverSub, categoryName, pct, signed, plural, num, minutes, counted, mark,
   stripSlots, strip, answerText, pairedText, alertFor, sparkGeometry, logsLine, trimNotes, argText, evidenceText,
-  modelOf, toolsOf, isAblation, isPartial, mainSolvers, vsRuleRows, changeOf, findingRows, forestDomain, at,
+  modelOf, toolsOf, isAblation, isPartial, mainSolvers, vsRuleRows, changeOf, findingRows, forestDomain, at, strength, heroAnswer,
 } from "../assets/lib.js";
 
 // ---------------------------------------------------------------- names and numbers
 
 test("names: known solvers and categories, unknown ones by their record name", () => {
-  assert.equal(solverName("agent-v1-nemotron"), "V1 on Nemotron");
+  assert.equal(solverName("agent-v1-nemotron"), "V1 on Nemotron 3 Super");
   assert.equal(solverName("my-agent"), "my-agent");
   assert.equal(solverSub("my-agent"), "custom");
   assert.equal(solverSub("agent-v1"), "change-aware tools, Gemini 3.5 Flash-Lite");   // every agent names its model
@@ -21,7 +21,7 @@ test("names: known solvers and categories, unknown ones by their record name", (
 test("names: a built-in agent on another model names that model, not Gemini", () => {
   assert.equal(solverName("agent-v1@qwen-9b"), "V1 on qwen-9b");
   assert.equal(solverSub("agent-v1@qwen-9b"), "change-aware tools, another model");
-  assert.equal(solverName("agent-v1@z-ai-glm-5.3-flash"), "V1 on GLM");  // a planned batch gets its own label
+  assert.equal(solverName("agent-v1@z-ai-glm-5.3-flash"), "V1 on GLM 5.3 Flash");  // a planned batch gets its own label
   assert.equal(solverName("agent-v1-vague@m"), "V1 on m (vague alerts)");
   assert.equal(solverSub("my-agent@m"), "custom");   // not a built-in base
 });
@@ -71,8 +71,8 @@ test("strip slots: planned runs, or more if more were recorded", () => {
 test("strip: a tile per run, then empty tiles up to the slots", () => {
   const s = strip("agent-v0", [1, 0.5], 4);
   assert.deepEqual(s.tiles.map((m) => m && m.cls), ["hit", "part", null, null]);
-  assert.equal(s.label, "V0 on Gemini: 1 of 2 runs correct, 1 partly correct, 2 not run yet");
-  assert.equal(strip("agent-v0", [], 3).label, "V0 on Gemini: no runs recorded yet");
+  assert.equal(s.label, "V0 on Gemini Flash-Lite: 1 of 2 runs correct, 1 partly correct, 2 not run yet");
+  assert.equal(strip("agent-v0", [], 3).label, "V0 on Gemini Flash-Lite: no runs recorded yet");
   assert.deepEqual(strip("agent-v0", [], 3).tiles, [null, null, null]);
 });
 
@@ -85,14 +85,14 @@ test("headline: every batch complete, no partial note", () => {
   const data = { solvers: ["heuristic", "agent-v0"], planned_runs: { heuristic: 1, "agent-v0": 2 },
     incidents: incidents([{ heuristic: [1], "agent-v0": [1, 0] }, { heuristic: [0], "agent-v0": [1, 1] }]) };
   assert.deepEqual(answerText(data, { heuristic: row(0.59, 16), "agent-v0": row(0.41, 16) }),
-    { headline: "Accuracy on the 16 fault incidents: heuristic 59% and v0 on Gemini 41%.", partial: "",
+    { headline: "Accuracy on the 16 fault incidents: heuristic 59% and v0 on Gemini Flash-Lite 41%.", partial: "",
       complete: ["heuristic", "agent-v0"] });
 });
 
 test("headline: lowercases the first letter only, so Nemotron keeps its capital", () => {
   const data = { solvers: ["agent-v1-nemotron"], incidents: [] };
   assert.equal(answerText(data, { "agent-v1-nemotron": row(0.5, 16) }).headline,
-    "Accuracy on the 16 fault incidents: v1 on Nemotron 50%.");
+    "Accuracy on the 16 fault incidents: v1 on Nemotron 3 Super 50%.");
 });
 
 test("headline: null when no solver has an overall row", () => {
@@ -103,7 +103,7 @@ test("partial batch: incidents missing", () => {
   const data = { solvers: ["heuristic", "agent-v1"], planned_runs: { heuristic: 1, "agent-v1": 1 },
     incidents: incidents([{ heuristic: [1], "agent-v1": [1] }, { heuristic: [1], "agent-v1": [0] }]) };
   const text = answerText(data, { heuristic: row(0.5, 16), "agent-v1": row(0.6, 12) });
-  assert.equal(text.partial, "V1 on Gemini is a partial batch so far (12 of 16 incidents); its 60% is not comparable yet.");
+  assert.equal(text.partial, "V1 on Gemini Flash-Lite is a partial batch so far (12 of 16 incidents); its 60% is not comparable yet.");
   assert.equal(text.headline, "Accuracy on the 16 fault incidents: heuristic 50%.");   // a partial batch is left out
   assert.deepEqual(text.complete, ["heuristic"]);
 });
@@ -121,7 +121,7 @@ test("partial batch: fewer runs than planned on some incidents", () => {
   const data = { solvers: ["agent-v1"], planned_runs: { "agent-v1": 3 },
     incidents: incidents([{ "agent-v1": [1, 1, 1] }, { "agent-v1": [1] }]) };
   assert.equal(answerText(data, { "agent-v1": row(0.9, 16) }).partial,
-    "V1 on Gemini is a partial batch so far (1–3 of 3 planned runs per incident); its 90% is not comparable yet.");
+    "V1 on Gemini Flash-Lite is a partial batch so far (1–3 of 3 planned runs per incident); its 90% is not comparable yet.");
   assert.equal(answerText(data, { "agent-v1": row(0.9, 16) }).headline, "No batch is complete yet.");
 });
 
@@ -129,14 +129,14 @@ test("partial batch: both clauses, and an even shortfall shows one number", () =
   const data = { solvers: ["agent-v1"], planned_runs: { "agent-v1": 3 },
     incidents: incidents([{ "agent-v1": [1, 1] }, { "agent-v1": [0, 1] }]) };
   assert.equal(answerText(data, { "agent-v1": row(0.7, 10) }).partial,
-    "V1 on Gemini is a partial batch so far (10 of 16 incidents, 2 of 3 planned runs per incident); its 70% is not comparable yet.");
+    "V1 on Gemini Flash-Lite is a partial batch so far (10 of 16 incidents, 2 of 3 planned runs per incident); its 70% is not comparable yet.");
 });
 
 test("partial batch: planned_runs absent (an older index.json) counts only missing incidents", () => {
   const data = { solvers: ["agent-v1"], incidents: incidents([{ "agent-v1": [1, 1, 1] }, { "agent-v1": [1] }]) };
   assert.equal(answerText(data, { "agent-v1": row(0.9, 16) }).partial, "");
   assert.equal(answerText(data, { "agent-v1": row(0.9, 15) }).partial,
-    "V1 on Gemini is a partial batch so far (15 of 16 incidents); its 90% is not comparable yet.");
+    "V1 on Gemini Flash-Lite is a partial batch so far (15 of 16 incidents); its 90% is not comparable yet.");
 });
 
 test("partial batch: a control incident short of its planned runs counts", () => {
@@ -144,7 +144,7 @@ test("partial batch: a control incident short of its planned runs counts", () =>
     incidents: [{ category: "easy", results: { "agent-v1": [1, 1] } },
       { category: "control", results: { "agent-v1": [1] } }] };
   assert.equal(answerText(data, { "agent-v1": row(1, 16) }).partial,
-    "V1 on Gemini is a partial batch so far (1–2 of 2 planned runs per incident); its 100% is not comparable yet.");
+    "V1 on Gemini Flash-Lite is a partial batch so far (1–2 of 2 planned runs per incident); its 100% is not comparable yet.");
 });
 
 test("headline: n falls back to scenarios without expected", () => {
@@ -163,8 +163,8 @@ test("paired: no agent clearly better, the best quoted, and the model pair with 
     pair("agent-v1-nemotron", "agent-v1", 0.26, [0.10, 0.44], { n: 20, mean_diff: 0.11, ci: [-0.09, 0.31] })] };
   assert.equal(pairedText(data, ["heuristic", "agent-v1", "agent-v1-nemotron"]),
     "No agent is clearly better than the heuristic: on the 16 fault incidents, no paired 95% interval against it lies " +
-    "above 0 (the best is V1 on Nemotron at +0.08, 95% interval −0.05 to +0.23). The same agent on two models: V1 on " +
-    "Nemotron vs V1 on Gemini +0.26 (95% interval +0.10 to +0.44) on the fault incidents, and +0.11 (95% interval " +
+    "above 0 (the best is V1 on Nemotron 3 Super at +0.08, 95% interval −0.05 to +0.23). The same agent on two models: V1 on " +
+    "Nemotron 3 Super vs V1 on Gemini Flash-Lite +0.26 (95% interval +0.10 to +0.44) on the fault incidents, and +0.11 (95% interval " +
     "−0.09 to +0.31) with the controls counted, where false alarms count too.");
 });
 
@@ -172,8 +172,8 @@ test("paired: an interval wholly above or below 0 is called clearly better or wo
   const data = { paired: [pair("agent-v0", "heuristic", 0.3, [0.1, 0.5]), pair("agent-v1", "heuristic", -0.3, [-0.5, -0.1]),
     pair("agent-v1-vague", "heuristic", 0.9, [0.8, 1.0])] };
   assert.equal(pairedText(data, ["heuristic", "agent-v0", "agent-v1"]),
-    "V0 on Gemini is clearly better than the heuristic on the 16 fault incidents: V0 on Gemini +0.30 (95% interval " +
-    "+0.10 to +0.50). V1 on Gemini is clearly worse than it.");
+    "V0 on Gemini Flash-Lite is clearly better than the heuristic on the 16 fault incidents: V0 on Gemini Flash-Lite +0.30 (95% interval " +
+    "+0.10 to +0.50). V1 on Gemini Flash-Lite is clearly worse than it.");
   assert.equal(pairedText({ paired: [pair("agent-v0", "heuristic", 0.3, null)] }, ["heuristic", "agent-v0"]), null);
   assert.equal(pairedText({}, ["heuristic"]), null);   // an older index.json without paired rows
 });
@@ -183,9 +183,9 @@ test("paired: an interval wholly above or below 0 is called clearly better or wo
 test("alert: a vague-alert solver sees its own alert, and the caption names who saw another one", () => {
   const data = { alert: "Checkout fails.", alerts_shown: { "agent-v1-nemotron-vague": "Something is wrong." } };
   assert.deepEqual(alertFor(data, "agent-v1-nemotron-vague"), { alert: "Something is wrong.",
-    caption: "The generic alert V1 on Nemotron (vague alerts) was given instead of this incident’s. The other solvers saw: “Checkout fails.”" });
+    caption: "The generic alert V1 on Nemotron 3 Super (vague alerts) was given instead of this incident’s. The other solvers saw: “Checkout fails.”" });
   assert.deepEqual(alertFor(data, "heuristic"), { alert: "Checkout fails.",
-    caption: "The alert given to every solver except V1 on Nemotron (vague alerts), which was given a generic one." });
+    caption: "The alert given to every solver except V1 on Nemotron 3 Super (vague alerts), which was given a generic one." });
   assert.equal(alertFor({ alert: "Checkout fails." }, "heuristic").caption, "The alert every solver was given.");
 });
 
@@ -324,10 +324,10 @@ test("findings: what each comparison changes, model first, with the controls int
   const complete = d.solvers.filter((s) => !isPartial(d, s, overallOf(d)));
   const rows = findingRows(d, complete);
   assert.deepEqual(rows.map((r) => r.group), ["Model", "Ablation"]);
-  assert.equal(rows[0].change, "Nemotron 3 Super instead of Gemini");
+  assert.equal(rows[0].change, "Nemotron 3 Super instead of Gemini Flash-Lite");
   assert.deepEqual(rows[0].controls, { mean: 0.11, ci: [-0.09, 0.31] });
   assert.equal(rows[1].change, "One generic alert for every incident");
-  assert.deepEqual(changeOf("agent-v1", "agent-v0"), ["Tools", "Change-aware tools, not naive", "same model: Gemini"]);
+  assert.deepEqual(changeOf("agent-v1", "agent-v0"), ["Tools", "Change-aware tools, not naive", "same model: Gemini Flash-Lite"]);
 });
 
 test("forest axis: symmetric around 0, holds every interval, positions clamp to the track", () => {
@@ -335,4 +335,23 @@ test("forest axis: symmetric around 0, holds every interval, positions clamp to 
   assert.deepEqual(forestDomain([{ ci: [-0.05, 0.03], controls: { ci: [-0.3, 0.1] } }]), [-0.4, 0.4]);
   assert.equal(at(0, [-0.5, 0.5]), "50.00%");
   assert.equal(at(0.9, [-0.5, 0.5]), "100.00%");
+});
+
+test("hero: clear needs the interval above 0 and p <= 0.05; the answer names no vendor", () => {
+  const row = (s, lo, p) => ({ s, ci: [lo, lo + 0.4], p });
+  assert.equal(strength(row("x", -0.1, 0.5)), "none");
+  assert.equal(strength(row("x", 0.02, 0.09)), "suggestive");
+  assert.equal(strength(row("x", 0.09, 0.03)), "clear");
+  assert.equal(strength(row("x", 0.09, undefined)), "clear");   // an older index.json without p
+  const opus = row("claude-code-opus-5.5", 0.09, 0.03), ultra = row("agent-v1@nvidia-nemotron-3-ultra-550b-a55b", 0.02, 0.09);
+  assert.equal(heroAnswer([opus, ultra]), "Only the strongest models.");
+  assert.equal(heroAnswer([ultra]), "Not clearly.");
+  assert.equal(heroAnswer([opus, row("agent-v1", 0.05, 0.01)]), "Yes, by more than the noise.");
+});
+
+test("main solvers: the rule first, then most accurate first", () => {
+  const data = { solvers: ["agent-v0", "heuristic", "agent-v1"], incidents: [{ results: {} }] };
+  const overall = { heuristic: { accuracy_mean: 0.6, scenarios: 16 }, "agent-v0": { accuracy_mean: 0.5, scenarios: 16 },
+    "agent-v1": { accuracy_mean: 0.9, scenarios: 16 } };
+  assert.deepEqual(mainSolvers(data, overall), ["heuristic", "agent-v1", "agent-v0"]);
 });

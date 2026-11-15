@@ -13,7 +13,7 @@
 <meta property="og:image" content="https://kshitizj03.github.io/rootcause/assets/card.png">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="640">
-<meta property="og:image:alt" content="Can an LLM agent find what broke, better than a simple rule? Yes: Claude Opus 5.5, Claude Sonnet 5.5 and the free Nemotron 3 Ultra beat it on 16 fault incidents (95% intervals right of zero); the other free models' intervals all cross zero.">
+<meta property="og:image:alt" content="Can an LLM agent find what broke, better than a simple rule? Only the strongest models: Claude Opus 5.5 and Sonnet 5.5 beat it on 16 fault incidents (95% intervals right of zero, permutation p of 0.05 or less), the largest free model, Nemotron 3 Ultra, is suggestive (p = 0.09), and the smaller models' intervals cross zero.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,7 +39,7 @@
   <section class="hero" id="results" aria-labelledby="headline">
     <h1 id="headline">Can an LLM agent find what broke, better than a simple rule?</h1>
     <p class="answer-line" id="answer" aria-live="polite">Loading the result.</p>
-    <p class="lede">RootCause is an LLM agent that reads an incident’s metrics, traces and logs and names the service that broke. It is scored against a 28-line rule that names the service whose fault signal rose most, on incidents recorded from a 28-service demo shop, with every run shown, failures included.</p>
+    <p class="lede">RootCause is a benchmark and a toolset: an LLM agent reads an incident’s metrics, traces and logs through its tools and names the service that broke, and is scored against a 28-line rule that names the service whose fault signal rose most, on incidents recorded from a 28-service demo shop. The same tools are served over MCP, so any agent harness can run them. Every run is shown, failures included.</p>
     <div id="hero-plot"><noscript><p class="status">This page needs JavaScript to draw the results.</p></noscript></div>
   </section>
 
@@ -51,7 +51,7 @@
 
   <section class="board" id="every-run" aria-labelledby="board-title">
     <h2 id="board-title">Every run</h2>
-    <p class="section-lede">One mark per run, for every incident. Open an incident to replay what the agent looked at and why it answered as it did.</p>
+    <p class="section-lede">One mark per run, for every incident. Open a run to replay every tool call the agent made, what each returned, and what it answered.</p>
     <div id="scoreboard" data-root>
       <p class="status">Loading results.</p>
     </div>
@@ -87,6 +87,7 @@
           <li><strong>Small.</strong> Twenty incidents from one demo app, recorded on one laptop. Category results rest on two to six incidents each.</li>
           <li><strong>Generous inputs.</strong> Every solver is told when the fault began, and several alerts hint at the area of the cause. With one generic alert instead, false alarms double.</li>
           <li><strong>Two harnesses.</strong> Gemini 3.5 Flash-Lite, GLM 5.3 Flash and four Nemotron models run on free tiers in this repo&rsquo;s loop at temperature 0, so their spread across runs is API nondeterminism, not sampling. Claude Sonnet 5.5 and Opus 5.5 run in Claude Code&rsquo;s own loop at default sampling, so Claude against the free models mixes model and loop; Claude against the rule does not.</li>
+          <li><strong>Few incidents decide it.</strong> The leading agents (Claude, Nemotron 3 Ultra, GLM) score the same as the rule on 8 to 10 of the 16 fault incidents, so each of those comparisons rests on the other 6 to 8. A right answer can also cite the symptom’s evidence rather than the cause’s.</li>
           <li><strong>One author.</strong> The same person built the incidents, the rule, the agent and the scoring. The <a href="https://github.com/kshitizj03/rootcause/blob/main/docs/faq.md">methodology FAQ</a> lists every known threat to validity.</li>
         </ul>
       </div>

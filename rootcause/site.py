@@ -90,7 +90,8 @@ def _alert_shown(rs):
 
 def _pair(a, b, p, every):
     keep = lambda q: {"n": q["n"], "mean_diff": q["mean_diff"], "ci": q["ci"]}
-    return {"a": a, "b": b, **keep(p), "with_controls": keep(every)}
+    # p, wins and losses on the fault incidents: the site calls an agent clearly better only when p agrees with the CI
+    return {"a": a, "b": b, **keep(p), "p": p["p"], "wins": p["wins"], "losses": p["losses"], "with_controls": keep(every)}
 
 
 def _truth(s, rows):

@@ -4,7 +4,7 @@
 import {
   CATEGORIES, SOLVERS, solverName, solverSub, categoryName, pct, signed, plural, isObj, num, minutes, counted, isTrueCause,
   mark, stripSlots, strip, answerText, alertFor, sparkGeometry, logsLine, trimNotes, argText, evidenceText,
-  modelOf, toolsOf, isPartial, mainSolvers, vsRuleRows, findingRows, forestDomain, at,
+  modelOf, toolsOf, isPartial, mainSolvers, vsRuleRows, findingRows, forestDomain, at, strength, heroAnswer,
 } from "./lib.js";
 
 const REPO = "https://github.com/kshitizj03/rootcause";
@@ -103,14 +103,20 @@ function vsRulePlot(data, rows, overall) {
       h("div", { class: "f-ends" }, h("span", {}, "worse than the rule"), h("span", {}, "better than the rule"))),
     h("ul", { class: "f-rows", role: "list" }, rows.map((r) =>
       h("li", { class: "f-row" },
-        h("span", { class: "f-label" }, swatch(r.s), h("span", { class: "f-name" }, solverName(r.s)),
-          h("span", { class: "f-sub" }, `${pct(overall[r.s].accuracy_mean)} of ${r.n} fault incidents`)),
-        h("div", { class: "f-track", role: "img", "aria-label": `${solverName(r.s)} minus the rule: ${diffText(r.mean, r.ci)}` },
+        h("span", { class: "f-label" }, swatch(r.s), h("span", { class: "f-name" }, solverName(r.s),
+            strength(r) === "suggestive" ? h("span", { class: "tag", title: `permutation p = ${r.p.toFixed(2)}` }, "suggestive") : null),
+          h("span", { class: "f-sub" }, `${pct(overall[r.s].accuracy_mean)} of ${r.n} fault incidents`,
+            r.wins != null ? `; beat the rule on ${r.wins}, lost on ${r.losses}` : "")),
+        h("div", { class: "f-track", role: "img", "aria-label": `${solverName(r.s)} minus the rule: ${diffText(r.mean, r.ci)}` +
+          (r.p != null ? `, permutation p = ${r.p.toFixed(2)}${strength(r) === "suggestive" ? ", so only suggestive" : ""}` : "") },
           h("span", { class: "f-zero" }), interval(r.s, r.mean, r.ci, domain))))),
     forestAxis(domain),
     h("figcaption", {}, `Each agent’s accuracy minus the simple rule’s (${rule ? pct(rule.accuracy_mean) : "n/a"}) on the same `,
       `${rows[0]?.n ?? 16} fault incidents, with a 95% bootstrap interval over incidents. `,
-      rows.every((r) => r.ci[0] <= 0) ? "Every interval crosses zero: none is clearly better." : "An interval wholly right of zero is clearly better."));
+      rows.every((r) => r.ci[0] <= 0) ? "Every interval crosses zero: none is clearly better."
+        : "An agent is clearly better when its interval lies wholly right of zero and an exact permutation test agrees (p ≤ 0.05); " +
+          "an interval right of zero with a larger p is only suggestive, since the bootstrap runs narrow at 16 incidents. " +
+          "On the other incidents the agent and the rule score the same."));
 }
 
 /** What moved accuracy: the paired comparisons that change one thing, fault-only and with the controls counted. */
@@ -210,8 +216,7 @@ async function renderIndex() {
 
   const rows = vsRuleRows(data, main);
   if (rows.length) {
-    const yes = rows.some((r) => r.ci[0] > 0);
-    document.getElementById("answer").textContent = yes ? "Yes, by more than the noise." : "Not clearly.";
+    document.getElementById("answer").textContent = heroAnswer(rows);
     document.getElementById("hero-plot").replaceChildren(vsRulePlot(data, rows, overall));
   }
   const findings = findingRows(data, complete);
@@ -615,7 +620,7 @@ async function renderCard() {
   const overall = Object.fromEntries(data.solvers.map((s) => [s, summary[s]["all incidents"]]));
   const rows = vsRuleRows(data, mainSolvers(data, overall));
   if (!rows.length) return;
-  document.getElementById("answer").textContent = rows.some((r) => r.ci[0] > 0) ? "Yes, by more than the noise." : "Not clearly.";
+  document.getElementById("answer").textContent = heroAnswer(rows);
   document.getElementById("hero-plot").replaceChildren(vsRulePlot(data, rows, overall));
 }
 
