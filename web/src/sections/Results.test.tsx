@@ -56,3 +56,14 @@ it('under reduced motion bars render at their final width', () => {
   expect(bar.style.left).toBe(at(list[0].ci[0], dom))
   expect(bar.style.width).toBe(`${(parseFloat(at(list[0].ci[1], dom)) - parseFloat(at(list[0].ci[0], dom))).toFixed(2)}%`)
 })
+
+it('the eyebrow counts the fault incidents the chart compares on', () => {
+  render(<Results data={fixtureIndex()} />)
+  expect(screen.getByText(/Across 2 recorded outages/)).toBeInTheDocument()
+})
+
+it('each interval says its verdict in words', () => {
+  render(<Results data={fixtureIndex()} />)
+  expect(screen.getByRole('img', { name: /Claude Opus 5\.5: clearly better than the rule, \+0\.90 \(95% interval \+0\.50 to \+1\.00\)/ })).toBeInTheDocument()
+  expect(screen.getByRole('img', { name: /not distinguishable from the rule/ })).toBeInTheDocument()
+})
