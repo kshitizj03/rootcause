@@ -1,9 +1,14 @@
 import { render, screen, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { it, expect } from 'vitest'
+import { it, expect, vi, afterEach } from 'vitest'
+import { useReducedMotion } from 'motion/react'
 import { Story } from './Story'
 import { STORY } from './valkey-cart'
 import { MockIntersectionObserver } from '../test/setup'
+
+vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: vi.fn(() => false) }))
+
+afterEach(() => vi.mocked(useReducedMotion).mockReturnValue(false))
 
 const mapRoot = (c: HTMLElement) => c.querySelector('svg.map-story')!
 
@@ -34,13 +39,27 @@ it('switching to run 3 shows the wrong verdict and its replay link', async () =>
 it('the switcher works from the keyboard', async () => {
   render(<Story story={STORY} />)
   const user = userEvent.setup()
-  await user.tab() // the replay link comes first in the page
-  await user.tab()
-  await user.tab()
-  await user.tab()
-  expect(screen.getAllByRole('button')[2]).toHaveFocus()
+  const opus = screen.getByRole('button', { name: /Opus · run 1/ })
+  for (let i = 0; i < 10 && document.activeElement !== opus; i++) await user.tab()
+  expect(opus).toHaveFocus()
   await user.keyboard('{Enter}')
-  expect(screen.getByRole('button', { name: /Opus · run 1/ })).toHaveAttribute('aria-pressed', 'true')
+  expect(opus).toHaveAttribute('aria-pressed', 'true')
+})
+
+it('under reduced motion everything is in its final state', () => {
+  vi.mocked(useReducedMotion).mockReturnValue(true)
+  const { container } = render(<Story story={STORY} />)
+  reach(4)
+  const lines = container.querySelectorAll('.log .call')
+  expect(lines).toHaveLength(STORY.runs[0].lines.length)
+  lines.forEach((l) => expect(l).not.toHaveAttribute('aria-hidden', 'true'))
+  container.querySelectorAll<HTMLElement>('.step').forEach((s) => expect(s.getAttribute('style')).toBeNull())
+})
+
+it('hides the log lines from screen readers until the alert', () => {
+  const { container } = render(<Story story={STORY} />)
+  container.querySelectorAll('.log .call').forEach((l) => expect(l).toHaveAttribute('aria-hidden', 'true'))
+  expect(container.querySelector('.log')).not.toHaveAttribute('aria-live')
 })
 
 it('the active step drives the map', () => {
