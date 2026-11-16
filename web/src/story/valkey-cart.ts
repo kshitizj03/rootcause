@@ -1,0 +1,110 @@
+import type { Story } from "./types";
+
+export const STORY: Story = {
+  incident: "valkey-cart-paused",
+  steps: [
+    {
+      eyebrow: "01 · The fault",
+      title: "The cart's database stops answering.",
+      body: "Recorded live: valkey-cart is paused inside the running shop. Nobody is told which service. The alert only says:",
+      quote: "“Adding items to the basket fails.”",
+    },
+    {
+      eyebrow: "02 · The symptom spreads",
+      title: "The loudest service is not the broken one.",
+      body: "Within a minute cart's p95 latency goes from 2 ms to 9.3 seconds, and errors reach checkout and payment. valkey-cart itself barely changes: a paused service emits almost nothing.",
+    },
+    {
+      eyebrow: "03 · The rule guesses",
+      title: 'The rule names cart. <span class="bad">Wrong.</span>',
+      body: "The 28-line baseline picks whichever service's fault signal rose most. On this incident that is the victim, not the cause. It is right on 59% of the 16 fault incidents.",
+    },
+    {
+      eyebrow: "04 · The agent investigates",
+      title: "It follows the failing calls.",
+      body: "It works through the tools: what changed most, cart's health, the service map, then the error traces. <strong>Every one of frontend's 74 calls to cart failed</strong>, and cart's own traces say it can't reach its storage.",
+    },
+    {
+      eyebrow: "05 · The verdict",
+      title: "The verdict",
+      body: "",
+    },
+  ],
+  runs: [
+    {
+      key: "a",
+      label: "Nemotron 3 Super · run 2",
+      short: "Nemotron · run 2",
+      solver: "agent-v1-nemotron",
+      run: 2,
+      ok: true,
+      calls: 13,
+      topCause: "valkey-cart",
+      confidence: 0.95,
+      lines: [
+        ["top_changes()", "cart p95_ms", "+1853.5×"],
+        ["service_health(cart)", "error_ratio 0 → 0.38", ""],
+        ["service_map()", "frontend → cart:", "74 of 74 calls failed"],
+        ["search_traces(cart, errors)", "", "“Can't access cart storage”"],
+        ["service_health(valkey-cart)", "barely changed: a paused service goes quiet", ""],
+        ["report", "1. valkey-cart · confidence 0.95", ""],
+      ],
+      verdictTitle: 'valkey-cart. <span class="ok">Right.</span>',
+      verdictText:
+        "Nemotron 3 Super names valkey-cart at 95% confidence. Honestly: this model got this incident right in <strong>2 of its 5 runs</strong>. Switch to run 3 to see one it got wrong.",
+    },
+    {
+      key: "b",
+      label: "Nemotron 3 Super · run 3",
+      short: "Nemotron · run 3",
+      solver: "agent-v1-nemotron",
+      run: 3,
+      ok: false,
+      calls: 14,
+      topCause: "cart",
+      secondCause: "valkey-cart",
+      confidence: 0.9,
+      lines: [
+        ["top_changes()", "cart p95_ms", "+1853.5×"],
+        ["service_map()", "frontend → cart:", "74 of 74 calls failed"],
+        ["search_traces(cart, errors)", "", "“Can't access cart storage”"],
+        ["service_health(valkey-cart)", "barely changed", ""],
+        ["search_logs(cart, “RedisTimeout”)", "nothing found", ""],
+        ["report", "1. cart · 2. valkey-cart · confidence 0.90", ""],
+      ],
+      verdictTitle: 'cart. <span class="bad">Wrong.</span>',
+      verdictText:
+        "Same model, same incident, <strong>the same clues</strong>: 74 of 74 failed calls and “can't access cart storage”. It still ranked the victim first and the cause second. Only the top answer counts.",
+    },
+    {
+      key: "c",
+      label: "Claude Opus 5.5 · run 1",
+      short: "Opus · run 1",
+      solver: "claude-code-opus-5.5",
+      run: 1,
+      ok: true,
+      calls: 10,
+      topCause: "valkey-cart",
+      confidence: 0.75,
+      lines: [
+        ["top_changes()", "cart p95_ms", "+1853.5×"],
+        ["service_map()", "frontend → cart:", "74 of 74 calls failed"],
+        ["search_traces(cart, errors)", "", "“Can't access cart storage”"],
+        ["service_health(valkey-cart)", "barely changed", ""],
+        ["get_metric(valkey-cart, cpu)", "flat: paused, not overloaded", ""],
+        ["report", "1. valkey-cart · confidence 0.75", ""],
+      ],
+      verdictTitle: 'valkey-cart. <span class="ok">Right.</span>',
+      verdictText:
+        "Claude Opus 5.5 takes 10 calls and states only 75% confidence, yet it named valkey-cart in <strong>5 of its 5 runs</strong>. The rule never does.",
+    },
+  ],
+  facts: {
+    cartP95: { before: 1.931, after: 9270, change: "+1853.5x" },
+    failedCalls: { caller: "frontend", callee: "cart", errors: 74, calls: 74 },
+    storageError: "Can't access cart storage",
+    spreadTo: ["payment", "checkout"],
+    rightOutOf5: { "agent-v1-nemotron": 2, "claude-code-opus-5.5": 5, heuristic: 0 },
+    ruleFaultAccuracy: 0.59,
+  },
+};
