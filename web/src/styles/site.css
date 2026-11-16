@@ -86,3 +86,29 @@ footer { border-top: 1px solid var(--line); margin-top: 100px; padding: 28px 0 6
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* results */
+section.results { padding-block: 140px 40px; }
+.big { font: 400 clamp(48px, 7vw, 96px)/.95 var(--serif); letter-spacing: -.025em; margin: 16px 0 18px; }
+.lede { color: var(--muted); max-width: 600px; font-size: 18px; margin: 0; }
+.forest { margin-top: 56px; }
+.frow { display: grid; grid-template-columns: 240px 1fr 120px; align-items: center; gap: 24px; padding: 13px 0; border-top: 1px solid var(--line); }
+.frow .nm { font-weight: 500; }
+.frow .nm small { display: block; color: var(--muted); font: 12px var(--mono); margin-top: 2px; }
+.tag { margin-left: 8px; padding: 1px 7px; border: 1px solid var(--muted); border-radius: 999px; font: 11px var(--mono); color: var(--muted); vertical-align: 2px; }
+.track { position: relative; height: 22px; }
+.zero { position: absolute; top: -13px; bottom: -13px; border-left: 1.5px solid var(--ink); }
+.bar { position: absolute; top: 50%; height: 3px; translate: 0 -50%; border-radius: 2px; background: var(--c); }
+.dot { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%; translate: -50% -50%; background: var(--c); }
+.dot.hollow { background: var(--paper); border: 2px solid var(--c); }
+.frow .num { text-align: right; font: 13px var(--mono); color: var(--muted); }
+.axis { display: grid; grid-template-columns: 240px 1fr 120px; gap: 24px; border-top: 1px solid var(--ink); padding-top: 8px; font: 12px var(--mono); color: var(--muted); }
+.axis .ends { display: flex; justify-content: space-between; }
+.legend { display: flex; gap: 22px; margin-top: 22px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; }
+@media (max-width: 720px) {
+  .frow, .axis { grid-template-columns: 1fr; gap: 6px; }
+  .frow .num { text-align: left; }
+  .zero { top: -4px; bottom: -4px; }
+  .axis span:first-child, .axis span:last-child { display: none; }
+}

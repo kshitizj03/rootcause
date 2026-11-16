@@ -5,6 +5,7 @@ import { Nav } from './sections/Nav'
 import { Hero } from './sections/Hero'
 import { Story } from './story/Story'
 import { STORY } from './story/valkey-cart'
+import { Results } from './sections/Results'
 import { Footer } from './sections/Footer'
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
       <main>
         <Hero data={data} />
         <Story story={STORY} />
+        {data && <Results data={data} />}
       </main>
       <Footer />
     </>
