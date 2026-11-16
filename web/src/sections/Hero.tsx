@@ -62,7 +62,7 @@ export function Hero({ data }: { data: IndexData | null }) {
           <a className="btn" href="#results">See the results</a>
         </Fade>
       </div>
-      <div className="scroll-hint">scroll</div>
+      <div className="scroll-hint" aria-hidden="true">scroll</div>
     </section>
   )
 }

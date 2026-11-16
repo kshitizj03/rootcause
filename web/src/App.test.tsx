@@ -1,7 +1,9 @@
 import { render, screen } from '@testing-library/react'
-import { it, expect, vi } from 'vitest'
+import { it, expect, vi, afterEach } from 'vitest'
 import App from './App'
 import { fixtureIndex } from './test/fixture'
+
+afterEach(() => vi.unstubAllGlobals())
 
 it('renders the hero question', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => fixtureIndex() })))
@@ -10,5 +12,4 @@ it('renders the hero question', async () => {
   expect(h1).toHaveTextContent('Something broke.')
   expect(h1).toHaveTextContent('Which service?')
   expect(await screen.findByText(/3 recorded outages/)).toBeInTheDocument()
-  vi.unstubAllGlobals()
 })

@@ -47,5 +47,6 @@ footer { border-top: 1px solid var(--line); margin-top: 100px; padding: 28px 0 6
   .btn { text-align: center; }
 }
 @media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
