@@ -3,6 +3,8 @@ import type { IndexData } from './data/types'
 import { loadIndex } from './data/load'
 import { Nav } from './sections/Nav'
 import { Hero } from './sections/Hero'
+import { Story } from './story/Story'
+import { STORY } from './story/valkey-cart'
 import { Footer } from './sections/Footer'
 
 export default function App() {
@@ -18,6 +20,7 @@ export default function App() {
       <Nav />
       <main>
         <Hero data={data} />
+        <Story story={STORY} />
       </main>
       <Footer />
     </>
