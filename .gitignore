@@ -9,3 +9,5 @@ site/data/
 site/figures/
 *.orig
 *.egg-info/
+web/node_modules/
+web/dist/

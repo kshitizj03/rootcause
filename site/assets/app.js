@@ -480,7 +480,7 @@ async function renderIncident() {
   const data = /^[a-z0-9][a-z0-9-]*$/i.test(id) ? await loadJSON(`data/incidents/${id}.json`) : null;
   if (!data) {
     root.replaceChildren(h("p", { class: "status" }, id ? `No incident called ${id}. ` : "No incident was named. ",
-      h("a", { href: "./" }, "Back to the scoreboard"), "."));
+      h("a", { href: "results.html" }, "Back to the scoreboard"), "."));
     return;
   }
   document.title = `${data.id}: RootCause replay`;
