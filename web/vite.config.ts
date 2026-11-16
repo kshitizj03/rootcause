@@ -8,5 +8,5 @@ export default defineConfig({
   publicDir: '../site',
   plugins: [react()],
   build: { assetsDir: '_app' },
-  test: { environment: 'jsdom', setupFiles: ['src/test/setup.ts'] },
+  test: { environment: 'jsdom', setupFiles: ['src/test/setup.ts'], include: ['src/**/*.test.{ts,tsx}'] },
 })

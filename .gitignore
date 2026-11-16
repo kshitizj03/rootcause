@@ -2,7 +2,7 @@
 .venv/
 .cache/
 vendor/
-data/
+/data/
 __pycache__/
 .pytest_cache/
 site/data/
