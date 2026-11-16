@@ -39,17 +39,25 @@ describe.skipIf(!have)("valkey-cart story claims", () => {
     );
   });
 
+  // Every run the story shows quotes the same clues, so check them for all three.
+  const stepsOf = (r: (typeof STORY.runs)[number]): Step[] => file.runs[r.solver][r.run - 1].steps;
+
   it("the failed calls come from service_map", () => {
     const { caller, callee, errors, calls } = STORY.facts.failedCalls;
-    const edges = (firstOf("service_map")!.output as { edges: { caller: string; callee: string; errors_after: number; calls_after: number }[] }).edges;
-    expect(edges).toContainEqual(expect.objectContaining({ caller, callee, errors_after: errors, calls_after: calls }));
+    for (const r of STORY.runs) {
+      const map = stepsOf(r).find((s) => s.tool === "service_map")!;
+      const edges = (map.output as { edges: { caller: string; callee: string; errors_after: number; calls_after: number }[] }).edges;
+      expect(edges, r.key).toContainEqual(expect.objectContaining({ caller, callee, errors_after: errors, calls_after: calls }));
+    }
   });
 
   it("the storage error comes from the traces", () => {
-    const found = stepsA
-      .filter((s) => s.tool === "search_traces")
-      .some((s) => Object.keys((s.output as { error_messages?: Record<string, number> }).error_messages ?? {}).some((m) => m.includes(STORY.facts.storageError)));
-    expect(found).toBe(true);
+    for (const r of STORY.runs) {
+      const found = stepsOf(r)
+        .filter((s) => s.tool === "search_traces")
+        .some((s) => Object.keys((s.output as { error_messages?: Record<string, number> }).error_messages ?? {}).some((m) => m.includes(STORY.facts.storageError)));
+      expect(found, r.key).toBe(true);
+    }
   });
 
   it("errors spread to payment and checkout", () => {
