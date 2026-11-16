@@ -1,7 +1,25 @@
+import { useEffect, useState } from 'react'
+import type { IndexData } from './data/types'
+import { loadIndex } from './data/load'
+import { Nav } from './sections/Nav'
+import { Hero } from './sections/Hero'
+import { Footer } from './sections/Footer'
+
 export default function App() {
+  const [data, setData] = useState<IndexData | null>(null)
+  useEffect(() => {
+    let live = true
+    // Task 9 adds the error state; until then a failed load leaves the hero as is.
+    loadIndex().then((d) => live && setData(d), () => {})
+    return () => { live = false }
+  }, [])
   return (
-    <h1>
-      Something broke. <span>Which service?</span>
-    </h1>
+    <>
+      <Nav />
+      <main>
+        <Hero data={data} />
+      </main>
+      <Footer />
+    </>
   )
 }

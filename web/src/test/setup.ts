@@ -1,4 +1,6 @@
 import '@testing-library/jest-dom/vitest'
+import { cleanup } from '@testing-library/react'
+import { afterEach } from 'vitest'
 
 window.matchMedia = (query: string) =>
   ({
@@ -33,3 +35,6 @@ export class MockIntersectionObserver {
   }
 }
 window.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver
+
+// No vitest globals, so Testing Library does not clean up on its own.
+afterEach(cleanup)

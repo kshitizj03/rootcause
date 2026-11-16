@@ -1,0 +1,11 @@
+:root {
+  --paper: #F6F4EF; --paper-2: #EEEBE4; --ink: #1B1714; --muted: #6F675F; --line: #E0DBD1;
+  --fault: #C8452C; --warn: #C27A1A; --ok: #2E6B4F; --lit: #F3D9B8; --mid: #8A7E70; --faint: #C9C1B5; --on-mark: #fff;
+  color-scheme: light;
+  --serif: "Instrument Serif", Georgia, serif; --sans: "Geist", system-ui, sans-serif; --mono: "Geist Mono", ui-monospace, monospace;
+  --ease: cubic-bezier(.2,.7,.2,1);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --paper: #12100E; --paper-2: #1C1916; --ink: #EDE8E0; --muted: #9A9187; --line: #2D2824;
+    --fault: #E3664B; --warn: #D9963A; --ok: #55A87F; --lit: #4A3420; --mid: #A69A8B; --faint: #4A443E; --on-mark: #12100E; color-scheme: dark; }
+}
