@@ -31,13 +31,15 @@ export function Ticker({ data }: { data: IndexData }) {
   return (
     <div role="region" className={`ticker${reduced ? ' static' : ''}${paused ? ' paused' : ''}`} aria-label="Verdicts from recorded runs">
       {!reduced && (
-        <button type="button" className="pause" aria-pressed={paused} aria-label="Pause the verdict ticker" onClick={() => setPaused(!paused)}>
-          {paused ? 'Play' : 'Pause'}
+        <button type="button" className="pause" onClick={() => setPaused(!paused)}>
+          {paused ? 'Resume ticker' : 'Pause ticker'}
         </button>
       )}
-      <div className="row">
-        {items}
-        {!reduced && <span className="dup" aria-hidden="true">{items}</span>}
+      <div className="view">
+        <div className="row">
+          {items}
+          {!reduced && <span className="dup" aria-hidden="true">{items}</span>}
+        </div>
       </div>
     </div>
   )

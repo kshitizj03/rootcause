@@ -45,14 +45,12 @@ it('animates otherwise', () => {
 
 it('a button pauses and resumes the marquee', () => {
   render(<Ticker data={fixtureWithGridSolvers()} />)
-  const b = screen.getByRole('button', { name: 'Pause the verdict ticker' })
   const t = screen.getByLabelText('Verdicts from recorded runs')
-  expect(b).toHaveAttribute('aria-pressed', 'false')
-  fireEvent.click(b)
+  fireEvent.click(screen.getByRole('button', { name: 'Pause ticker' }))
   expect(t).toHaveClass('paused')
-  expect(b).toHaveAttribute('aria-pressed', 'true')
-  fireEvent.click(b)
+  fireEvent.click(screen.getByRole('button', { name: 'Resume ticker' }))
   expect(t).not.toHaveClass('paused')
+  expect(screen.getByRole('button', { name: 'Pause ticker' })).toBeInTheDocument()
 })
 
 it('has no pause button under reduced motion', () => {
