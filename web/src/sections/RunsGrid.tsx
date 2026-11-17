@@ -1,14 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { animate, useInView, useReducedMotion } from 'motion/react'
 import type { IndexData } from '../data/types'
-import { faultIncidents, investigationCount, isPartial, mark, overallOf, solverName, type Overall } from '../lib/results'
-
-export const GRID_SOLVERS = [
-  'heuristic',
-  'claude-code-opus-5.5',
-  'agent-v1@nvidia-nemotron-3-ultra-550b-a55b',
-  'agent-v1@z-ai-glm-5.3-flash',
-]
+import { faultIncidents, investigationCount, mark, overallOf, solverName } from '../lib/results'
+import { GRID_SOLVERS, availableSolvers } from './gridSolvers'
 
 const HEAD: Record<string, string> = {
   heuristic: 'Rule',
@@ -16,10 +10,6 @@ const HEAD: Record<string, string> = {
   'agent-v1@nvidia-nemotron-3-ultra-550b-a55b': 'Nemotron 3 Ultra',
   'agent-v1@z-ai-glm-5.3-flash': 'GLM 5.3 Flash',
 }
-
-/** The ids this release has as complete batches. */
-export const availableSolvers = (data: IndexData, overall: Overall, ids: string[]): string[] =>
-  ids.filter((s) => data.solvers.includes(s) && !isPartial(data, s, overall))
 
 const fmt = (n: number) => n.toLocaleString('en-US')
 
@@ -40,7 +30,7 @@ export function RunsGrid({ data }: { data: IndexData }) {
     return () => c.stop()
   }, [reduced, headInView, total])
   const cascade = reduced || inView
-  let k = 0
+  const per = Math.max(1, ...faultIncidents(data).flatMap((i) => cols.map((s) => (i.results[s] ?? []).length)))
   return (
     <section className="runs wrap" id="runs">
       <span className="eyebrow">Every run, failures included</span>
@@ -54,17 +44,17 @@ export function RunsGrid({ data }: { data: IndexData }) {
       <div className={`grid${cascade ? ' in' : ''}`} ref={gridRef} style={{ '--cols': cols.length } as React.CSSProperties}>
         <div className="hd">Incident</div>
         {cols.map((s) => <div className="hd" key={s}>{HEAD[s]}</div>)}
-        {faultIncidents(data).map((i) => (
+        {faultIncidents(data).map((i, ii) => (
           <Fragment key={i.id}>
             <div className="inc">{i.id}</div>
-            {cols.map((s) => (
+            {cols.map((s, ci) => (
               <div key={s}>
                 <span className="tiles">
                   {(i.results[s] ?? []).map((c, n) => {
                     const m = mark(c)
                     const label = `${i.id}, ${solverName(s)}, run ${n + 1}: ${m.cls === 'part' ? 'half right' : m.word}`
                     return (
-                      <a key={n} className={`t${m.cls === 'miss' ? ' x' : m.cls === 'part' ? ' h' : ''}`} style={{ '--i': k++ } as React.CSSProperties}
+                      <a key={n} className={`t${m.cls === 'miss' ? ' x' : m.cls === 'part' ? ' h' : ''}`} style={{ '--i': (ii * cols.length + ci) * per + n } as React.CSSProperties}
                         href={`incident.html?id=${i.id}&solver=${encodeURIComponent(s)}&run=${n + 1}`} title={label}>
                         <span className="vh">{label}</span>
                       </a>

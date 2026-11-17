@@ -21,7 +21,8 @@
   --ultra: #2C5DA8;
   --lightning: #7A6A12;
 
-  --display: "Instrument Serif", Georgia, serif;
+  --display: "Geist", system-ui, sans-serif;
+  --serif: "Instrument Serif", Georgia, serif;   /* big headings only: it has one weight */
   --body: "Geist", system-ui, sans-serif;
   --glyph: "Geist", "Segoe UI Symbol", "Apple Symbols", "DejaVu Sans", sans-serif;
 
@@ -74,7 +75,7 @@ a:hover { text-decoration-thickness: 2px; }
 
 code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.9em; }
 
-h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; margin: 0; }
 
 .visually-hidden {
   position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0;
@@ -96,7 +97,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
   display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem 1.5rem;
   padding-block: 1.1rem 0.9rem;
 }
-.wordmark { font: 800 1.125rem/1 var(--display); font-stretch: 75%; letter-spacing: 0.01em; text-decoration: none; }
+.wordmark { font: 700 1.125rem/1 var(--display); letter-spacing: 0.01em; text-decoration: none; }
 .masthead nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; font-size: 0.9375rem; }
 .masthead nav a { color: var(--muted); text-decoration: none; }
 .masthead nav a:hover { color: var(--ink); text-decoration: underline; }
@@ -104,13 +105,13 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; }
 .hero { padding-block: clamp(2.5rem, 7vw, 5rem) 0; }
 .hero h1 {
   font-size: clamp(1.6rem, 1rem + 2.4vw, 2.4rem);
-  line-height: 1.1; letter-spacing: -0.01em; font-stretch: 92%; font-weight: 650;
+  font-family: var(--serif); font-weight: 400; line-height: 1.1; letter-spacing: -0.01em;
   max-width: 24em; text-wrap: balance;
 }
 /* the answer is the loudest type on the site: the question asked, then this */
 .answer-line {
   margin: 0.4rem 0 0;
-  font: 800 clamp(2.75rem, 1.5rem + 5.5vw, 5rem)/0.95 var(--display); font-stretch: 72%; letter-spacing: -0.015em;
+  font: 400 clamp(2.75rem, 1.5rem + 5.5vw, 5rem)/0.95 var(--serif); letter-spacing: -0.015em;
 }
 .lede { max-width: 62ch; margin: 1.5rem 0 0; font-size: 1.125rem; line-height: 1.55; }
 #hero-plot { margin-top: 2.25rem; max-width: 64rem; }
@@ -120,7 +121,7 @@ main > section + section { margin-top: clamp(4rem, 9vw, 6.5rem); }
 main > section:not(.hero) > h2 {
   border-top: 3px solid var(--ink);
   padding-top: 0.75rem;
-  font-size: clamp(1.5rem, 1.2rem + 1vw, 1.875rem); line-height: 1.15; font-stretch: 90%;
+  font-family: var(--serif); font-weight: 400; font-size: clamp(1.7rem, 1.3rem + 1.2vw, 2.2rem); line-height: 1.1;
 }
 .section-lede { max-width: 62ch; margin: 0.6rem 0 0; color: var(--muted); }
 
@@ -172,7 +173,7 @@ figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; lin
 .f-row { padding-block: 0.6rem; border-bottom: 1px solid var(--hairline); }
 .f-label { position: relative; padding-left: 1.5rem; min-width: 0; }
 .f-label > .dot { position: absolute; left: 0; top: 0.3rem; }
-.f-name { display: block; font: 700 1.0625rem/1.25 var(--display); font-stretch: 90%; }
+.f-name { display: block; font: 700 1.0625rem/1.25 var(--display); }
 .f-sub { display: block; color: var(--muted); font-size: 0.875rem; line-height: 1.35; }
 
 .f-track { position: relative; height: 1.75rem; }
@@ -191,7 +192,7 @@ figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; lin
 .f-axis .f-track { height: 1.25rem; }
 .f-tick {
   position: absolute; top: 0; transform: translateX(-50%);
-  font: 0.8125rem/1 var(--display); font-stretch: 85%; font-variant-numeric: tabular-nums; color: var(--muted);
+  font: 0.8125rem/1 var(--display); font-variant-numeric: tabular-nums; color: var(--muted);
 }
 .f-tick.zero { color: var(--ink); font-weight: 700; }
 .f-scale { margin-bottom: 0.25rem; }
@@ -199,7 +200,7 @@ figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; lin
 
 .f-group {
   padding: 1.5rem 0 0.4rem; border-bottom: 1px solid var(--ink);
-  font: 700 1rem/1.2 var(--display); font-stretch: 90%;
+  font: 700 1rem/1.2 var(--display);
 }
 .f-group:first-child { padding-top: 0.5rem; }
 
@@ -234,7 +235,7 @@ figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; lin
 
 .cov { display: block; width: 100%; height: auto; }
 .cov-grid { stroke: var(--hairline); stroke-width: 1; }
-.cov-tick { fill: var(--muted); font: 13px var(--display); font-stretch: 85%; }
+.cov-tick { fill: var(--muted); font: 13px var(--display); }
 .cov-line { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linejoin: round; }
 .cov-pt { fill: currentColor; stroke: currentColor; stroke-width: 2; }
 .cov-pt.t-v0 { fill: var(--paper); }
@@ -254,7 +255,7 @@ figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; lin
 .board-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 2rem; margin: 1.25rem 0 0.75rem; }
 .seg { display: inline-flex; border: 1px solid var(--ink); border-radius: 6px; overflow: hidden; }
 .seg button {
-  font: 700 0.9375rem/1.2 var(--display); font-stretch: 90%;
+  font: 700 0.9375rem/1.2 var(--display);
   padding: 0.5rem 0.85rem; border: 0; background: transparent; color: var(--ink); cursor: pointer;
 }
 .seg button + button { border-left: 1px solid var(--ink); }
@@ -277,7 +278,6 @@ figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; lin
   border-spacing: 0;
   border-top: 3px solid var(--ink);
   font-family: var(--display);
-  font-stretch: 82%;
   font-variant-numeric: tabular-nums;
   text-align: left;
 }
@@ -292,7 +292,7 @@ figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; lin
 }
 .scoreboard .sub {
   display: block;
-  font-family: var(--body); font-stretch: normal; font-weight: 400;
+  font-family: var(--body); font-weight: 400;
   font-size: 0.8125rem; color: var(--muted); line-height: 1.3;
 }
 
@@ -304,12 +304,12 @@ figcaption { margin-top: 0.85rem; color: var(--muted); font-size: 0.9375rem; lin
 }
 /* solver columns hug their run strips, so each accuracy figure sits under its own strip */
 .scoreboard th.solver, .scoreboard td.runs, .scoreboard td.num { width: 1%; min-width: 7.5rem; }
-.scoreboard th.solver { font-size: 1.1875rem; font-weight: 750; font-stretch: 90%; }
+.scoreboard th.solver { font-size: 1.1875rem; font-weight: 700; }
 
 .group th {
   padding-top: 2rem; padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--ink);
-  font-size: 1.1875rem; font-weight: 750; font-stretch: 100%;
+  font-size: 1.1875rem; font-weight: 700;
 }
 .group-label { position: sticky; left: 0; display: inline-block; }
 .group .sub { display: inline; margin-left: 0.6rem; }
@@ -322,18 +322,18 @@ tbody:first-of-type .group th { padding-top: 1rem; }
 .incident-row th a:hover { text-decoration-color: currentColor; }
 .heldout {
   margin-left: 0.5rem;
-  font-family: var(--body); font-stretch: normal; font-weight: 400; font-style: italic;
+  font-family: var(--body); font-weight: 400; font-style: italic;
   font-size: 0.875rem; color: var(--muted); white-space: nowrap;
 }
 .alert {
   display: block; max-width: 40ch; margin-top: 0.15rem;
-  font-family: var(--body); font-stretch: normal; font-weight: 400;
+  font-family: var(--body); font-weight: 400;
   font-size: 0.875rem; line-height: 1.4; color: var(--muted);
 }
 
 .truth { min-width: 9rem; font-size: 0.9375rem; }
 .cause { display: block; }
-.svc { color: var(--cause); font-weight: 650; }
+.svc { color: var(--cause); font-weight: 600; }
 .ftype, .none { color: var(--muted); }
 
 .runs { white-space: nowrap; }
@@ -355,10 +355,10 @@ a.tile:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 .num { text-align: right; }
 .acc-row th, .acc-row td { padding-top: 0.7rem; padding-bottom: 0.9rem; vertical-align: baseline; }
 .acc-row th.incident { font-weight: 600; font-size: 0.9375rem; color: var(--muted); }
-.acc { display: block; font-size: 1.375rem; font-weight: 750; font-stretch: 90%; line-height: 1.1; }
+.acc { display: block; font-size: 1.375rem; font-weight: 700; line-height: 1.1; }
 .acc-detail, .acc-none {
   display: block; white-space: nowrap;
-  font-family: var(--body); font-stretch: normal; font-size: 0.8125rem; color: var(--muted);
+  font-family: var(--body); font-size: 0.8125rem; color: var(--muted);
 }
 
 tfoot .total th, tfoot .total td { border-top: 3px solid var(--ink); padding-top: 0.9rem; }
@@ -390,7 +390,7 @@ tfoot .total .acc { font-size: 1.75rem; }
 .incident-head { padding-block: clamp(2rem, 5vw, 3.5rem) 1.5rem; max-width: var(--measure); }
 .incident-head h1 {
   font-size: clamp(1.75rem, 1.1rem + 2.6vw, 2.6rem);
-  line-height: 1.08; letter-spacing: -0.01em; font-stretch: 88%;
+  font-family: var(--serif); font-weight: 400; line-height: 1.08; letter-spacing: -0.01em;
 }
 .incident-meta { margin: 0.5rem 0 0; color: var(--muted); }
 .incident-meta .heldout { display: block; margin: 0.15rem 0 0; font-size: 1rem; white-space: normal; }
@@ -398,13 +398,13 @@ tfoot .total .acc { font-size: 1.75rem; }
 .alert-quote { margin: 1.75rem 0 0; }
 .alert-quote blockquote { margin: 0; padding-left: 1.25rem; border-left: 3px solid var(--ink); }
 .alert-quote blockquote p {
-  margin: 0; font: 600 clamp(1.3rem, 1rem + 1.2vw, 1.75rem)/1.3 var(--display); font-stretch: 95%;
+  margin: 0; font: 600 clamp(1.3rem, 1rem + 1.2vw, 1.75rem)/1.3 var(--display);
   text-wrap: balance;
 }
 .alert-quote figcaption { margin: 0.5rem 0 0 1.25rem; color: var(--muted); font-size: 0.9375rem; }
 
 .every-solver { margin: 1.75rem 0 1.25rem; }
-main > section.every-solver > h2 { border-top: 1px solid var(--hairline); padding-top: 0.75rem; font-size: 1.0625rem; line-height: 1.3; font-stretch: 100%; }
+main > section.every-solver > h2 { border-top: 1px solid var(--hairline); padding-top: 0.75rem; font-family: var(--display); font-weight: 600; font-size: 1.0625rem; line-height: 1.3; }
 .solver-strips {
   list-style: none; margin: 0.5rem 0 0; padding: 0;
   display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); column-gap: 2rem;
@@ -413,9 +413,9 @@ main > section.every-solver > h2 { border-top: 1px solid var(--hairline); paddin
   display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
   padding: 0.35rem 0; border-bottom: 1px solid var(--hairline);
 }
-.solver-strips .who { font: 600 0.9375rem/1.3 var(--display); font-stretch: 90%; }
+.solver-strips .who { font: 600 0.9375rem/1.3 var(--display); }
 .solver-strips li.current { box-shadow: inset 3px 0 0 var(--ink); padding-left: 0.6rem; }
-.solver-strips li.current .who { font-weight: 800; }
+.solver-strips li.current .who { font-weight: 700; }
 .solver-strips .tile { width: 1.35rem; height: 1.35rem; font-size: 0.875rem; }
 
 /* pickers and the replay control: the only rounded things on the site */
@@ -432,7 +432,7 @@ main > section.every-solver > h2 { border-top: 1px solid var(--hairline); paddin
 }
 .replay-buttons { display: flex; gap: 0.5rem; }
 .replay-buttons button {
-  font: 700 1rem/1.2 var(--display); font-stretch: 90%;
+  font: 700 1rem/1.2 var(--display);
   padding: 0.5rem 1rem; border: 1px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer;
 }
 .replay-buttons button.primary { background: var(--ink); color: var(--paper); }
@@ -449,7 +449,7 @@ main > section.every-solver > h2 { border-top: 1px solid var(--hairline); paddin
 .step { padding: 0.9rem 0 1.1rem 0.25rem; border-top: 1px solid var(--hairline); }
 .step::marker { font: 700 1rem var(--display); font-variant-numeric: tabular-nums; }
 .call { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.75rem; }
-.call .tool { font: 700 1.0625rem/1.3 var(--display); font-stretch: 90%; }
+.call .tool { font: 700 1.0625rem/1.3 var(--display); }
 .call .args { color: var(--muted); font-size: 0.8125rem; overflow-wrap: anywhere; }
 .output { margin-top: 0.6rem; min-width: 0; }
 .out-line { margin: 0; font-size: 0.9375rem; }
@@ -463,7 +463,7 @@ main > section.every-solver > h2 { border-top: 1px solid var(--hairline); paddin
 
 .out {
   border-collapse: collapse; margin-top: 0.4rem; min-width: 100%;
-  font-family: var(--display); font-stretch: 82%; font-variant-numeric: tabular-nums;
+  font-family: var(--display); font-variant-numeric: tabular-nums;
   font-size: 0.9375rem; text-align: left;
 }
 .out th, .out td { padding: 0.3rem 0.9rem 0.3rem 0; vertical-align: top; }
@@ -471,7 +471,7 @@ main > section.every-solver > h2 { border-top: 1px solid var(--hairline); paddin
 .out th { font-weight: 700; border-bottom: 1px solid var(--ink); white-space: nowrap; }
 .out td { border-bottom: 1px solid var(--hairline); }
 .out .num { text-align: right; white-space: nowrap; }
-.out .msg { display: block; color: var(--muted); font-family: var(--body); font-stretch: normal; font-size: 0.8125rem; }
+.out .msg { display: block; color: var(--muted); font-family: var(--body); font-size: 0.8125rem; }
 .out code { font-size: 0.8125rem; color: var(--muted); }
 
 .facts { margin: 0; display: grid; gap: 0.2rem; font-size: 0.9375rem; }
@@ -492,7 +492,7 @@ main > section.every-solver > h2 { border-top: 1px solid var(--hairline); paddin
 .spark-line { fill: none; stroke: var(--ink); stroke-width: 1.75; stroke-linejoin: round; }
 .spark-range {
   display: flex; flex-direction: column; justify-content: space-between;
-  font: 0.8125rem/1 var(--display); font-stretch: 82%; font-variant-numeric: tabular-nums; color: var(--muted);
+  font: 0.8125rem/1 var(--display); font-variant-numeric: tabular-nums; color: var(--muted);
 }
 .spark-axis {
   position: relative; display: flex; justify-content: space-between; margin-top: 0.25rem; max-width: none;
@@ -503,7 +503,7 @@ main > section.every-solver > h2 { border-top: 1px solid var(--hairline); paddin
 
 /* verdict */
 .verdict { min-width: 0; }
-.result { margin: 0.5rem 0 0; font: 750 1.25rem/1.2 var(--display); font-stretch: 90%; }
+.result { margin: 0.5rem 0 0; font: 700 1.25rem/1.2 var(--display); }
 .result.big { font-size: 2.25rem; letter-spacing: -0.01em; }
 .result.hit { color: var(--hit); }
 .result.miss { color: var(--miss); }
@@ -518,7 +518,7 @@ main > section.every-solver > h2 { border-top: 1px solid var(--hairline); paddin
 .ranked, .truth-list { margin: 0; padding-left: 1.4rem; }
 .truth-list { list-style: none; padding-left: 0; }
 .ranked li::marker { font-family: var(--display); color: var(--muted); }
-.svc-other { font-weight: 650; }
+.svc-other { font-weight: 600; }
 .verdict .good { font-weight: 700; }
 
 .rule, .evidence { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid var(--ink); }
@@ -530,7 +530,7 @@ main > section.every-solver > h2 { border-top: 1px solid var(--hairline); paddin
 .evidence-list li { padding-block: 0.5rem; border-bottom: 1px solid var(--hairline); font-size: 0.9375rem; line-height: 1.45; }
 .evidence-list .claim { display: block; overflow-wrap: anywhere; }
 .badges { display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; margin-top: 0.2rem; }
-.badge { font: 650 0.8125rem/1.3 var(--display); font-stretch: 85%; }
+.badge { font: 600 0.8125rem/1.3 var(--display); }
 .badge.unchecked { color: var(--muted); font-weight: 500; }
 
 /* replay animation */
@@ -572,13 +572,14 @@ body[data-page="index"] main, body[data-page="index"] .masthead, body[data-page=
 
 body.card { width: 1280px; height: 640px; overflow: hidden; }
 body.card main { max-width: none; padding: 44px 64px 0; }
-.card-mark { margin: 0; font: 800 1.25rem/1 var(--display); font-stretch: 75%; color: var(--muted); }
-body.card h1 { margin-top: 16px; font-size: 2.1rem; line-height: 1.1; font-stretch: 92%; font-weight: 650; max-width: 30em; }
+.card-mark { margin: 0; font: 700 1.25rem/1 var(--display); color: var(--muted); }
+body.card h1 { margin-top: 16px; font-family: var(--serif); font-size: 2.4rem; line-height: 1.1; font-weight: 400; font-weight: 600; max-width: 30em; }
 body.card .answer-line { font-size: 4rem; margin-top: 2px; }
 body.card #hero-plot { margin-top: 12px; max-width: none; }
 /* one line per agent, so up to about twelve fit the frame */
 body.card .hero-plot .f-row { padding-block: 0.12rem; }
-body.card .hero-plot .f-name { font-size: 1.125rem; }
+body.card .hero-plot .f-name { font-size: 1.05rem; font-weight: 600; }
+body.card .hero-plot :is(.f-row, .f-axis, .f-scale) { grid-template-columns: 22rem minmax(0, 1fr); }
 body.card .hero-plot .f-sub { display: none; }
 body.card .hero-plot .f-track { height: 1.5rem; }
 body.card .hero-plot .f-label > .dot { top: 0.2rem; }

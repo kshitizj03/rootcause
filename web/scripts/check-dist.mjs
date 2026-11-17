@@ -1,9 +1,10 @@
 // Post-build checks on dist/: JS budget, relative URLs only, old pages and data present, no test files published.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 
-const dist = new URL('../dist/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
+const dist = fileURLToPath(new URL('../dist/', import.meta.url))
 const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]))
 const problems = []
 

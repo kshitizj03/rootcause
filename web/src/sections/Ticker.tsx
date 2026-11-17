@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useReducedMotion } from 'motion/react'
 import type { IndexData } from '../data/types'
-import { availableSolvers, GRID_SOLVERS } from './RunsGrid'
+import { availableSolvers, GRID_SOLVERS } from './gridSolvers'
 import { faultIncidents, overallOf, rightOf } from '../lib/results'
 
 const SHORT: Record<string, string> = {
