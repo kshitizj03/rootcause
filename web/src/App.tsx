@@ -6,6 +6,8 @@ import { Hero } from './sections/Hero'
 import { Story } from './story/Story'
 import { STORY } from './story/valkey-cart'
 import { Results } from './sections/Results'
+import { Ticker } from './sections/Ticker'
+import { RunsGrid } from './sections/RunsGrid'
 import { Footer } from './sections/Footer'
 
 export default function App() {
@@ -23,6 +25,8 @@ export default function App() {
         <Hero data={data} />
         <Story story={STORY} />
         {data && <Results data={data} />}
+        {data && <Ticker data={data} />}
+        {data && <RunsGrid data={data} />}
       </main>
       <Footer />
     </>

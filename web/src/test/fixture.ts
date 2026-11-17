@@ -84,3 +84,18 @@ export function fixtureIndex(): IndexData {
     coverage: {},
   };
 }
+
+export const ULTRA = "agent-v1@nvidia-nemotron-3-ultra-550b-a55b";
+export const GLM = "agent-v1@z-ai-glm-5.3-flash";
+
+/** The fixture plus complete Ultra and GLM batches, copied from the Nemotron one. */
+export function fixtureWithGridSolvers(): IndexData {
+  const d = fixtureIndex();
+  for (const s of [ULTRA, GLM]) {
+    d.solvers.push(s);
+    d.planned_runs[s] = 5;
+    d.summary[s] = d.summary["agent-v1-nemotron"]!.map((r) => ({ ...r }));
+    for (const i of d.incidents) i.results[s] = [...i.results["agent-v1-nemotron"]!];
+  }
+  return d;
+}
