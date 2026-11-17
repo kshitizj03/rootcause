@@ -8,14 +8,15 @@ import { STORY } from './story/valkey-cart'
 import { Results } from './sections/Results'
 import { Ticker } from './sections/Ticker'
 import { RunsGrid } from './sections/RunsGrid'
+import { Method } from './sections/Method'
 import { Footer } from './sections/Footer'
 
 export default function App() {
   const [data, setData] = useState<IndexData | null>(null)
+  const [failed, setFailed] = useState(false)
   useEffect(() => {
     let live = true
-    // Task 9 adds the error state; until then a failed load leaves the hero as is.
-    loadIndex().then((d) => live && setData(d), () => {})
+    loadIndex().then((d) => live && setData(d), () => live && setFailed(true))
     return () => { live = false }
   }, [])
   return (
@@ -23,10 +24,14 @@ export default function App() {
       <Nav />
       <main>
         <Hero data={data} />
+        {failed && (
+          <p role="alert" className="wrap load-error">The results could not be loaded. Try reloading the page.</p>
+        )}
         <Story story={STORY} />
         {data && <Results data={data} />}
         {data && <Ticker data={data} />}
         {data && <RunsGrid data={data} />}
+        <Method />
       </main>
       <Footer />
     </>

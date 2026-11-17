@@ -115,8 +115,9 @@ The two evidence measures are:
 
 ## Replay site
 
-A static site replays every recorded run, failures included:
-- **The scoreboard** shows one mark per run, for every incident and solver.
+The landing page tells the story and links to every recorded run, failures included:
+- **The landing page** walks through one investigation, then shows the result across all 20 incidents and every run as a grid.
+- **The scoreboard** (`results.html`) holds the full table and charts: one mark per run, for every incident and solver.
 - **Each incident page** steps through the agent's investigation: every tool call and what it returned, drawn as tables and sparklines. Next to it is the verdict against the true cause, the simple rule's answer for the same incident, and the cited evidence marked grounded or not. Add `&step=N` to a replay link to open it at step N.
 
 <a href="https://kshitizj03.github.io/rootcause/incident.html?id=valkey-cart-paused&solver=agent-v1-nemotron&run=2"><picture>
@@ -129,10 +130,10 @@ A static site replays every recorded run, failures included:
 ```bash
 python -m rootcause report    # rewrites docs/results/ from your data/runs; `git checkout docs/results` restores the published results
 python -m rootcause site      # builds site/data from data/runs and copies the charts from docs/results/figures
-python -m http.server 8000 -d site   # then open http://localhost:8000
+cd web && npm ci && npm run dev   # then open the URL it prints
 ```
 
-The site is plain HTML, CSS and JS with no build step, and every URL is relative, so it can be served from any sub-path. The `site` workflow (`.github/workflows/site.yml`) publishes it to GitHub Pages on every push to `main`: it fetches the data release, runs `rootcause site` and deploys `site/`. In a fork, enable Pages with "GitHub Actions" as the source.
+The landing page is a Vite, React and TypeScript app in `web/`; `results.html`, `incident.html` and the data in `site/` are plain HTML, CSS and JS that it copies through untouched. To build the published site, run `python -m rootcause site`, then `npm ci && npm run build` in `web/`; the result is `web/dist`, and every URL is relative, so it can be served from any sub-path. The `site` workflow (`.github/workflows/site.yml`) publishes it to GitHub Pages on every push to `main`: it fetches the data release, runs `rootcause site`, tests and builds `web/` and deploys `web/dist`. In a fork, enable Pages with "GitHub Actions" as the source.
 
 The site shows ground truth, so it is built after scoring and is never given to the agent or the MCP server.
 
@@ -210,7 +211,8 @@ Both are scored by the same rules as the built-in solvers, and `summary`, `repor
 | `rootcause/claude_code.py` | the Claude Code solver: `claude -p` with the v1 prompt and only the v1 tools |
 | `rootcause/evidence.py`, `mcp_server.py` | evidence checker and MCP server |
 | `rootcause/report.py`, `tracing.py` | results report and figures; optional OpenTelemetry GenAI spans of agent runs |
-| `rootcause/site.py`, `site/` | data builder and static front end of the replay site |
+| `rootcause/site.py`, `site/` | data builder, and the static results and replay pages of the site |
+| `web/` | the landing page (Vite, React, TypeScript); built into `web/dist` with the pages from `site/` |
 | `tests/` | offline test suite (no Docker, no API key, no recorded data) |
 | `examples/my_agent.py`, `docs/benchmark.md` | a small custom solver for `eval-custom`, and how to benchmark your own model or agent |
 | `experiments/laya/`, `experiments/hunch/` | decision-model entry tests: can a small model beat the heuristic? |

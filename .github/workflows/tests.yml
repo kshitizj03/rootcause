@@ -34,6 +34,9 @@ jobs:
       - run: npm ci
         working-directory: web
         if: runner.os == 'Linux'
+      - run: npm run lint
+        working-directory: web
+        if: runner.os == 'Linux'
       - run: npm run typecheck
         working-directory: web
         if: runner.os == 'Linux'
