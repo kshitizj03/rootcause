@@ -27,7 +27,24 @@ jobs:
         if: runner.os == 'Linux'   # the site's pure logic (site/assets/lib.js) is the same on every OS
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - run: node --test "site/tests/*.test.mjs"   # Node expands the glob
+        if: runner.os == 'Linux'
+      - run: npm ci
+        working-directory: web
+        if: runner.os == 'Linux'
+      - run: npm run lint
+        working-directory: web
+        if: runner.os == 'Linux'
+      - run: npm run typecheck
+        working-directory: web
+        if: runner.os == 'Linux'
+      - run: npm test
+        working-directory: web
+        if: runner.os == 'Linux'
+      - run: npm run build   # a broken build fails the PR, not only main
+        working-directory: web
         if: runner.os == 'Linux'
 
   # The published numbers must follow from the released data and today's code.

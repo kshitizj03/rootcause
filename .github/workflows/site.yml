@@ -1,5 +1,5 @@
 name: site
-# Publishes the replay site to GitHub Pages: the data release, then site/data built from it. Pages needs a public repo
+# Publishes the site to GitHub Pages: the data release, then site/data built from it, then the web/ app built into web/dist. Pages needs a public repo
 # on the free plan, so the job is skipped while the repository is private.
 on:
   push:
@@ -30,9 +30,22 @@ jobs:
       - run: python -m pytest -q   # never publish from a commit whose tests fail
       - run: python -m rootcause fetch-data   # the data release (release.TAG), checked against config.DATA_SHA256
       - run: python -m rootcause site
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm test   # includes the claims test, which reads site/data built above
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+      - run: npm run check
+        working-directory: web
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: web/dist
       - id: deploy
         uses: actions/deploy-pages@v4

@@ -1,0 +1,35 @@
+.map { width: 100%; height: auto; overflow: visible; }
+.edge { stroke: var(--line); stroke-width: 1.5; fill: none; transition: stroke .6s, stroke-width .6s; }
+.node circle.core { fill: var(--paper); stroke: var(--ink); stroke-width: 1.5; transition: fill .6s, stroke .6s, r .6s var(--ease); }
+.node text { font: 500 12px var(--mono); fill: var(--muted); transition: fill .6s; }
+.ring { fill: none; stroke: var(--fault); stroke-width: 1.5; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.mark { opacity: 0; transform: translateY(6px); transition: opacity .5s var(--ease), transform .5s var(--ease); }
+.mark rect { rx: 6; }
+.mark text { font: 600 12px var(--mono); }
+
+[data-step="1"] .n-valkey-cart circle.core, [data-step="2"] .n-valkey-cart circle.core, [data-step="3"] .n-valkey-cart circle.core,
+[data-step="4"] .n-valkey-cart circle.core, [data-step="5"] .n-valkey-cart circle.core, .hero-map .n-valkey-cart circle.core { fill: var(--fault); stroke: var(--fault); }
+[data-step] .n-valkey-cart text, .hero-map .n-valkey-cart text { fill: var(--fault); }
+[data-step="1"] .n-valkey-cart .ring, [data-step="2"] .n-valkey-cart .ring, .hero-map .n-valkey-cart .ring { animation: pulse 2s infinite; }
+/* the symptom: cart and its callers light up from step 2 on */
+.lit circle.core { transition-delay: var(--d, 0s); }
+:is([data-step="2"],[data-step="3"],[data-step="4"],[data-step="5"]) .lit circle.core { fill: var(--lit); stroke: var(--warn); }
+:is([data-step="2"],[data-step="3"],[data-step="4"],[data-step="5"]) .n-cart circle.core { fill: var(--warn); }
+:is([data-step="2"],[data-step="3"],[data-step="4"],[data-step="5"]) .e-cart-valkey-cart { stroke: var(--fault); stroke-dasharray: 5 5; stroke-width: 2; animation: dash 1s linear infinite; }
+[data-step="3"] .m-rule, [data-step="4"] .m-rule, [data-step="5"] .m-rule { opacity: 1; transform: none; }
+:is([data-step="4"],[data-step="5"]) .path { stroke: var(--ink); stroke-width: 2.5; }
+[data-step="5"][data-ok="1"] .ok-mark, [data-step="5"][data-ok="0"] .bad-mark { opacity: 1; transform: none; }
+[data-step="5"][data-ok="0"] .n-valkey-cart circle.core { r: 8; }
+[data-step="5"] .n-valkey-cart circle.core { r: 13; }
+
+@keyframes pulse { 0% { opacity: .9; scale: 1; } 100% { opacity: 0; scale: 3.2; } }
+@keyframes dash { to { stroke-dashoffset: -20; } }
+
+@media (max-width: 860px) {
+  .map-story { overflow: hidden; }
+  .node text { font-size: 17px; }
+  .mark text { font-size: 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map *, .map *::before { animation: none !important; transition: none !important; }
+}

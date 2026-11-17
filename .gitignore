@@ -2,10 +2,12 @@
 .venv/
 .cache/
 vendor/
-data/
+/data/
 __pycache__/
 .pytest_cache/
 site/data/
 site/figures/
 *.orig
 *.egg-info/
+web/node_modules/
+web/dist/
