@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { it, expect, vi, afterEach } from 'vitest'
 import { useReducedMotion } from 'motion/react'
 import { Ticker } from './Ticker'
@@ -41,4 +41,31 @@ it('is static under reduced motion', () => {
 it('animates otherwise', () => {
   render(<Ticker data={fixtureWithGridSolvers()} />)
   expect(screen.getByLabelText('Verdicts from recorded runs')).not.toHaveClass('static')
+})
+
+it('a button pauses and resumes the marquee', () => {
+  render(<Ticker data={fixtureWithGridSolvers()} />)
+  const b = screen.getByRole('button', { name: 'Pause the verdict ticker' })
+  const t = screen.getByLabelText('Verdicts from recorded runs')
+  expect(b).toHaveAttribute('aria-pressed', 'false')
+  fireEvent.click(b)
+  expect(t).toHaveClass('paused')
+  expect(b).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(b)
+  expect(t).not.toHaveClass('paused')
+})
+
+it('has no pause button under reduced motion', () => {
+  vi.mocked(useReducedMotion).mockReturnValue(true)
+  render(<Ticker data={fixtureWithGridSolvers()} />)
+  expect(screen.queryByRole('button')).toBeNull()
+})
+
+it('omits the rule verdict when the release has no heuristic', () => {
+  const d = fixtureWithGridSolvers()
+  d.solvers = d.solvers.filter((s) => s !== 'heuristic')
+  for (const i of d.incidents) delete i.results.heuristic
+  const { container } = render(<Ticker data={d} />)
+  expect(container).not.toHaveTextContent('rule')
+  expect(container).toHaveTextContent('ad-failure · Opus 5/5')
 })

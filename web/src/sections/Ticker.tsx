@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useReducedMotion } from 'motion/react'
 import type { IndexData } from '../data/types'
 import { availableSolvers, GRID_SOLVERS } from './RunsGrid'
@@ -11,13 +12,16 @@ const SHORT: Record<string, string> = {
 
 export function Ticker({ data }: { data: IndexData }) {
   const reduced = useReducedMotion()
+  const [paused, setPaused] = useState(false)
   const agents = availableSolvers(data, overallOf(data), GRID_SOLVERS.slice(1))
   const items = faultIncidents(data).map((i) => {
-    const rule = (i.results.heuristic ?? [])[0] >= 1
+    const ruleRun = (i.results.heuristic ?? [])[0]
+    const rule = ruleRun >= 1
     const counts = agents.map((s) => [SHORT[s], rightOf(i.results[s] ?? [])] as const)
     return (
       <span className="item" key={i.id}>
-        <b>{i.id}</b> · rule <span className={rule ? 'ok' : 'bad'}>{rule ? '✓' : '✗'}</span>
+        <b>{i.id}</b>
+        {ruleRun !== undefined && <> · rule <span className={rule ? 'ok' : 'bad'}>{rule ? '✓' : '✗'}</span></>}
         {counts.length > 0 && counts.every(([, n]) => n === 0)
           ? <> · <span className="bad">every agent 0 of 5</span></>
           : counts.map(([name, n]) => ` · ${name} ${n}/5`)}
@@ -25,7 +29,12 @@ export function Ticker({ data }: { data: IndexData }) {
     )
   })
   return (
-    <div role="region" className={`ticker${reduced ? ' static' : ''}`} aria-label="Verdicts from recorded runs">
+    <div role="region" className={`ticker${reduced ? ' static' : ''}${paused ? ' paused' : ''}`} aria-label="Verdicts from recorded runs">
+      {!reduced && (
+        <button type="button" className="pause" aria-pressed={paused} aria-label="Pause the verdict ticker" onClick={() => setPaused(!paused)}>
+          {paused ? 'Play' : 'Pause'}
+        </button>
+      )}
       <div className="row">
         {items}
         {!reduced && <span className="dup" aria-hidden="true">{items}</span>}
