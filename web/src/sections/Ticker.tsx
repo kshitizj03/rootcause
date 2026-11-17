@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useReducedMotion } from 'motion/react'
 import type { IndexData } from '../data/types'
 import { availableSolvers, GRID_SOLVERS } from './gridSolvers'
-import { faultIncidents, overallOf, rightOf } from '../lib/results'
+import { faultIncidents, mark, overallOf, scoreOf } from '../lib/results'
 
 const SHORT: Record<string, string> = {
   'claude-code-opus-5.5': 'Opus',
@@ -16,15 +16,21 @@ export function Ticker({ data }: { data: IndexData }) {
   const agents = availableSolvers(data, overallOf(data), GRID_SOLVERS.slice(1))
   const items = faultIncidents(data).map((i) => {
     const ruleRun = (i.results.heuristic ?? [])[0]
-    const rule = ruleRun >= 1
-    const counts = agents.map((s) => [SHORT[s], rightOf(i.results[s] ?? [])] as const)
+    const rm = ruleRun === undefined ? null : mark(ruleRun)
+    const counts = agents.map((s) => {
+      const runs = i.results[s] ?? []
+      return { name: SHORT[s], score: scoreOf(runs), of: runs.length }
+    })
+    const none = counts.length > 0 && counts.every((c) => c.score === 0 && c.of > 0)
+    const names = counts.map((c) => c.name)
+    const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]
     return (
       <span className="item" key={i.id}>
         <b>{i.id}</b>
-        {ruleRun !== undefined && <> · rule <span className={rule ? 'ok' : 'bad'}>{rule ? '✓' : '✗'}</span></>}
-        {counts.length > 0 && counts.every(([, n]) => n === 0)
-          ? <> · <span className="bad">every agent 0 of 5</span></>
-          : counts.map(([name, n]) => ` · ${name} ${n}/5`)}
+        {rm && <> · rule <span className={rm.cls === 'hit' ? 'ok' : rm.cls === 'miss' ? 'bad' : undefined}>{rm.glyph}</span></>}
+        {none
+          ? <> · <span className="bad">{list} {names.length > 1 ? 'all ' : ''}0 of {counts[0].of}</span></>
+          : counts.map((c) => ` · ${c.name} ${c.score}/${c.of}`)}
       </span>
     )
   })

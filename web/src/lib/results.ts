@@ -131,6 +131,9 @@ export const investigationCount = (data: IndexData, overall: Overall): number =>
 
 export const faultIncidents = (data: IndexData): IncidentRow[] => data.incidents.filter((i) => i.category !== "control");
 
+/** Total score over the runs, a half-right run counting as a half. */
+export const scoreOf = (results: number[]): number => results.reduce((t, r) => t + r, 0);
+
 /** Runs that scored in full. */
 export const rightOf = (results: number[]): number => results.filter((r) => r >= 1).length;
 

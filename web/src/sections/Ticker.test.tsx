@@ -13,7 +13,7 @@ it('one item per fault incident', () => {
   const { container } = render(<Ticker data={fixtureWithGridSolvers()} />)
   const visible = items(container).filter((i) => !i.closest('[aria-hidden]'))
   expect(visible).toHaveLength(2)
-  expect(visible[0].textContent).toBe('ad-failure · rule ✓ · Opus 5/5 · Ultra 4/5 · GLM 4/5')
+  expect(visible[0].textContent).toBe('ad-failure · rule ✓ · Opus 5/5 · Ultra 4.5/5 · GLM 4.5/5')
   expect(items(container)).toHaveLength(4)
 })
 
@@ -21,7 +21,33 @@ it('says every agent missed when all scored 0', () => {
   const d = fixtureWithGridSolvers()
   for (const s of ['claude-code-opus-5.5', ULTRA, GLM]) d.incidents[1].results[s] = [0, 0, 0, 0, 0]
   const { container } = render(<Ticker data={d} />)
-  expect(items(container)[1]).toHaveTextContent('cart-silent · rule ✗ · every agent 0 of 5')
+  expect(items(container)[1]).toHaveTextContent('cart-silent · rule ✗ · Opus, Ultra and GLM all 0 of 5')
+})
+
+it('does not say every agent when a solver that is not shown scored', () => {
+  const d = fixtureWithGridSolvers()
+  for (const s of ['claude-code-opus-5.5', ULTRA, GLM]) d.incidents[1].results[s] = [0, 0, 0, 0, 0]
+  d.incidents[1].results['agent-v0-nemotron'] = [1, 1, 0, 0, 0]
+  const { container } = render(<Ticker data={d} />)
+  expect(items(container)[1]).not.toHaveTextContent('every agent')
+  expect(items(container)[1]).toHaveTextContent('Opus, Ultra and GLM all 0 of 5')
+})
+
+it('shows half credit as a half, for the rule and for agents', () => {
+  const d = fixtureWithGridSolvers()
+  d.incidents[1].results.heuristic = [0.5]
+  d.incidents[1].results[ULTRA] = [0.5, 1, 1, 0.5, 0.5]
+  const { container } = render(<Ticker data={d} />)
+  expect(items(container)[1]).toHaveTextContent('cart-silent · rule ½')
+  expect(items(container)[1]).toHaveTextContent('Ultra 3.5/5')
+})
+
+it('takes the denominator from the recorded runs', () => {
+  const d = fixtureWithGridSolvers()
+  for (const i of d.incidents) i.results[GLM] = [1, 0, 1]
+  d.planned_runs[GLM] = 3
+  const { container } = render(<Ticker data={d} />)
+  expect(items(container)[0]).toHaveTextContent('GLM 2/3')
 })
 
 it('leaves out a solver the release does not have', () => {
