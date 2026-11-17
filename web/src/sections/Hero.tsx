@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import type { IndexData } from '../data/types'
 import { ServiceMap } from '../map/ServiceMap'
+import { faultIncidents } from '../lib/results'
 
 const ease = [0.2, 0.7, 0.2, 1] as const
 
@@ -34,6 +35,7 @@ function Fade({ tag, className, delay, children }: { tag: 'p' | 'div'; className
 
 export function Hero({ data }: { data: IndexData | null }) {
   const n = data ? data.incidents.length : 20
+  const faults = data ? faultIncidents(data).length : 16
   return (
     <section className="hero">
       <div className="hero-map" aria-hidden="true">
@@ -43,7 +45,7 @@ export function Hero({ data }: { data: IndexData | null }) {
         <a className="pill" href="#runs">
           <b />
           <span>
-            data-v4 · {n} recorded outages<span className="pill-more"> · every run public</span>
+            data-v4 · {n} recorded incidents<span className="pill-more"> · every run public</span>
           </span>
         </a>
         <h1>
@@ -54,7 +56,7 @@ export function Hero({ data }: { data: IndexData | null }) {
           </em>
         </h1>
         <Fade tag="p" className="sub" delay={0.9}>
-          LLM agents get the tools an SRE uses (metrics, traces and logs) on 20 outages recorded from a 28-service shop. A
+          LLM agents get the tools an SRE uses (metrics, traces and logs) on {n} incidents ({faults} outages and {n - faults} no-fault controls) recorded from a 28-service shop. A
           28-line rule gets the same data. Both are scored against the truth.
         </Fade>
         <Fade tag="div" className="ctas" delay={1.1}>

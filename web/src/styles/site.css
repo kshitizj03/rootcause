@@ -163,3 +163,5 @@ section.method { padding-block: 140px 60px; }
 .cols p { color: var(--muted); margin: 0; }
 @media (max-width: 860px) { .cols { grid-template-columns: 1fr; gap: 28px; } }
 .load-error { margin-block: 24px 0; color: var(--fault); font: 500 14px var(--mono); }
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: var(--gutter, 1rem); top: 0.75rem; z-index: 10; padding: 0.5rem 0.75rem; background: var(--ink); color: var(--paper); }

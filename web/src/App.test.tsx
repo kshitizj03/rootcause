@@ -11,5 +11,5 @@ it('renders the hero question', async () => {
   const h1 = screen.getByRole('heading', { level: 1 })
   expect(h1).toHaveTextContent('Something broke.')
   expect(h1).toHaveTextContent('Which service?')
-  expect(await screen.findByText(/data-v4 · 3 recorded outages/)).toBeInTheDocument()
+  expect(await screen.findByText(/data-v4 · 3 recorded incidents/)).toBeInTheDocument()
 })

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { Component, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { IndexData } from './data/types'
 import { loadIndex } from './data/load'
 import { Nav } from './sections/Nav'
@@ -11,6 +12,17 @@ import { RunsGrid } from './sections/RunsGrid'
 import { Method } from './sections/Method'
 import { Footer } from './sections/Footer'
 
+const LoadError = () => (
+  <p role="alert" className="wrap load-error">The results could not be loaded. Try reloading the page.</p>
+)
+
+// A schema drift that throws in a data section must not blank the hero.
+class DataBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  render() { return this.state.failed ? <LoadError /> : this.props.children }
+}
+
 export default function App() {
   const [data, setData] = useState<IndexData | null>(null)
   const [failed, setFailed] = useState(false)
@@ -19,18 +31,25 @@ export default function App() {
     loadIndex().then((d) => live && setData(d), () => live && setFailed(true))
     return () => { live = false }
   }, [])
+  // The browser's fragment scroll ran before these sections mounted, so repeat it once they have.
+  useEffect(() => {
+    if (data || failed) document.getElementById(location.hash.slice(1))?.scrollIntoView()
+  }, [data, failed])
   return (
     <>
+      <a className="skip" href="#story">Skip to the investigation</a>
       <Nav />
       <main>
         <Hero data={data} />
-        {failed && (
-          <p role="alert" className="wrap load-error">The results could not be loaded. Try reloading the page.</p>
-        )}
+        {failed && <LoadError />}
         <Story story={STORY} />
-        {data && <Results data={data} />}
-        {data && <Ticker data={data} />}
-        {data && <RunsGrid data={data} />}
+        {data && (
+          <DataBoundary>
+            <Results data={data} />
+            <Ticker data={data} />
+            <RunsGrid data={data} />
+          </DataBoundary>
+        )}
         <Method />
       </main>
       <Footer />
