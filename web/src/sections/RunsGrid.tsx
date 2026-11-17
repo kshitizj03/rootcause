@@ -29,19 +29,22 @@ export function RunsGrid({ data }: { data: IndexData }) {
   const total = investigationCount(data, overall)
   const cols = availableSolvers(data, overall, GRID_SOLVERS)
   const gridRef = useRef<HTMLDivElement>(null)
+  const headRef = useRef<HTMLHeadingElement>(null)
   const inView = useInView(gridRef, { once: true, margin: '-10% 0px' })
-  const [shown, setShown] = useState(0)
+  const headInView = useInView(headRef, { once: true, amount: 0.6 })
+  // Starts at the real total so no reader ever sees a stuck 0; the count-up replays from 0 once the heading is on screen.
+  const [shown, setShown] = useState(total)
   useEffect(() => {
-    if (reduced || !inView) return
+    if (reduced || !headInView) return
     const c = animate(0, total, { duration: 1.6, ease: [0.22, 1, 0.36, 1], onUpdate: (v) => setShown(Math.round(v)) })
     return () => c.stop()
-  }, [reduced, inView, total])
+  }, [reduced, headInView, total])
   const cascade = reduced || inView
   let k = 0
   return (
     <section className="runs wrap" id="runs">
       <span className="eyebrow">Every run, failures included</span>
-      <h2 className="big" aria-label={`${fmt(total)} investigations. None hidden.`}>
+      <h2 className="big" ref={headRef} aria-label={`${fmt(total)} investigations. None hidden.`}>
         <span className="count">{fmt(reduced ? total : shown)}</span> investigations.<br />None hidden.
       </h2>
       <p className="lede">

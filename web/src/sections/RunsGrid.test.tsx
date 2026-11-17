@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { it, expect, vi, afterEach } from 'vitest'
 import { useReducedMotion } from 'motion/react'
 import { RunsGrid, GRID_SOLVERS, availableSolvers } from './RunsGrid'
+import { MockIntersectionObserver } from '../test/setup'
 import { fixtureWithGridSolvers, ULTRA } from '../test/fixture'
 import { investigationCount, overallOf, faultIncidents } from '../lib/results'
 
@@ -15,11 +16,17 @@ it('heading shows the investigation count', () => {
   expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(`${n} investigations.None hidden.`)
 })
 
-it('the count starts at zero and the tiles hidden when motion is allowed', () => {
+it('never reads zero: the total is there before the heading is in view, and the count ends at it', async () => {
   vi.mocked(useReducedMotion).mockReturnValue(false)
-  const { container } = render(<RunsGrid data={fixtureWithGridSolvers()} />)
-  expect(container.querySelector('.count')).toHaveTextContent('0')
+  const d = fixtureWithGridSolvers()
+  const n = investigationCount(d, overallOf(d)).toLocaleString('en-US')
+  const { container } = render(<RunsGrid data={d} />)
+  expect(screen.getByRole('heading', { level: 2, name: `${n} investigations. None hidden.` })).toBeInTheDocument()
+  expect(container.querySelector('.count')).toHaveTextContent(n)
   expect(container.querySelector('.grid')).not.toHaveClass('in')
+  act(() => MockIntersectionObserver.instances.forEach((o) => o.trigger(true)))
+  await waitFor(() => expect(container.querySelector('.count')).toHaveTextContent(n))
+  expect(container.querySelector('.grid')).toHaveClass('in')
 })
 
 it('under reduced motion the count is final and the tiles are shown', () => {
