@@ -46,7 +46,9 @@ it('the switcher works from the keyboard', async () => {
   expect(opus).toHaveAttribute('aria-pressed', 'true')
 })
 
-it('under reduced motion everything is in its final state', () => {
+// Renders the final state under reduced motion (all lines present and visible, no inline step styles). The missing
+// stagger itself is CSS-only (the global transition: none), which jsdom cannot see.
+it('under reduced motion renders the final state', () => {
   vi.mocked(useReducedMotion).mockReturnValue(true)
   const { container } = render(<Story story={STORY} />)
   reach(4)
@@ -54,6 +56,11 @@ it('under reduced motion everything is in its final state', () => {
   expect(lines).toHaveLength(STORY.runs[0].lines.length)
   lines.forEach((l) => expect(l).not.toHaveAttribute('aria-hidden', 'true'))
   container.querySelectorAll<HTMLElement>('.step').forEach((s) => expect(s.getAttribute('style')).toBeNull())
+})
+
+it('the log header says how many calls are shown', () => {
+  const { container } = render(<Story story={STORY} />)
+  expect(container.querySelector('.log .head')).toHaveTextContent('13 calls, 6 shown')
 })
 
 it('hides the log lines from screen readers until the alert', () => {

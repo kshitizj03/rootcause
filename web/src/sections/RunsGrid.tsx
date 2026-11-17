@@ -29,6 +29,8 @@ export function RunsGrid({ data }: { data: IndexData }) {
     const c = animate(0, total, { duration: 1.6, ease: [0.22, 1, 0.36, 1], onUpdate: (v) => setShown(Math.round(v)) })
     return () => c.stop()
   }, [reduced, headInView, total])
+  const names = cols.map((s) => (s === 'heuristic' ? 'the rule' : HEAD[s]))
+  const shownNames = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]
   const cascade = reduced || inView
   const per = Math.max(1, ...faultIncidents(data).flatMap((i) => cols.map((s) => (i.results[s] ?? []).length)))
   return (
@@ -38,8 +40,8 @@ export function RunsGrid({ data }: { data: IndexData }) {
         <span className="count">{fmt(reduced ? total : shown)}</span> investigations.<br />None hidden.
       </h2>
       <p className="lede">
-        Five runs per agent per incident, and each square opens its replay. Shown here: the rule, the best agent and two of
-        the strongest free ones, on every fault incident.
+        Up to {per} runs per agent per incident, and each square opens its replay. Shown here: {shownNames}, on every fault
+        incident.
       </p>
       <div className={`grid${cascade ? ' in' : ''}`} ref={gridRef} style={{ '--cols': cols.length } as React.CSSProperties}>
         <div className="hd">Incident</div>

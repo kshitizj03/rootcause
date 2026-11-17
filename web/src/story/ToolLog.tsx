@@ -6,7 +6,7 @@ export function ToolLog({ run, visible }: { run: StoryRun; visible: boolean }) {
     <div className="log" data-visible={visible}>
       <div className="head">
         <span>{run.label} of 5</span>
-        <span>{run.calls} calls</span>
+        <span>{run.calls} calls, {run.lines.length} shown</span>
       </div>
       {!visible && <div className="idle">waiting for the alert…</div>}
       {run.lines.map(([call, note, hit], i) => (

@@ -43,6 +43,9 @@ jobs:
       - run: npm test
         working-directory: web
         if: runner.os == 'Linux'
+      - run: npm run build   # a broken build fails the PR, not only main
+        working-directory: web
+        if: runner.os == 'Linux'
 
   # The published numbers must follow from the released data and today's code.
   reproduce:

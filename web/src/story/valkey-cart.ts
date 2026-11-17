@@ -12,7 +12,7 @@ export const STORY: Story = {
     {
       eyebrow: "02 · The symptom spreads",
       title: "The loudest service is not the broken one.",
-      body: "Within a minute cart's p95 latency goes from 2 ms to 9.3 seconds, and errors reach checkout and payment. valkey-cart itself barely changes: a paused service emits almost nothing.",
+      body: "Cart's p95 latency goes from 2 ms to 9.3 seconds, and errors reach checkout and payment. valkey-cart itself barely changes: a paused service emits almost nothing.",
     },
     {
       eyebrow: "03 · The rule guesses",
@@ -42,7 +42,7 @@ export const STORY: Story = {
       topCause: "valkey-cart",
       confidence: 0.95,
       lines: [
-        ["top_changes()", "cart p95_ms", "+1853.5×"],
+        ["top_changes()", "cart p95_ms", "change score +1853.5"],
         ["service_health(cart)", "error_ratio 0 → 0.38", ""],
         ["service_map()", "frontend → cart:", "74 of 74 calls failed"],
         ["search_traces(cart, errors)", "", "“Can't access cart storage”"],
@@ -65,7 +65,7 @@ export const STORY: Story = {
       secondCause: "valkey-cart",
       confidence: 0.9,
       lines: [
-        ["top_changes()", "cart p95_ms", "+1853.5×"],
+        ["top_changes()", "cart p95_ms", "change score +1853.5"],
         ["service_map()", "frontend → cart:", "74 of 74 calls failed"],
         ["search_traces(cart, errors)", "", "“Can't access cart storage”"],
         ["service_health(valkey-cart)", "barely changed", ""],
@@ -87,7 +87,7 @@ export const STORY: Story = {
       topCause: "valkey-cart",
       confidence: 0.75,
       lines: [
-        ["top_changes()", "cart p95_ms", "+1853.5×"],
+        ["top_changes()", "cart p95_ms", "change score +1853.5"],
         ["service_map()", "frontend → cart:", "74 of 74 calls failed"],
         ["search_traces(cart, errors)", "", "“Can't access cart storage”"],
         ["service_health(valkey-cart)", "barely changed", ""],

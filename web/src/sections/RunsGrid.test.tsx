@@ -62,3 +62,11 @@ it('links to the full scoreboard', () => {
   render(<RunsGrid data={fixtureWithGridSolvers()} />)
   expect(screen.getByRole('link', { name: /Open the full scoreboard/ })).toHaveAttribute('href', 'results.html#every-run')
 })
+
+it('names only the columns shown and the run count from the data', () => {
+  const { container } = render(<RunsGrid data={fixtureWithGridSolvers()} />)
+  const lede = container.querySelector('.lede')
+  expect(lede).toHaveTextContent('Up to 5 runs per agent per incident')
+  expect(lede).toHaveTextContent('the rule, Claude Opus 5.5, Nemotron 3 Ultra and GLM 5.3 Flash')
+  expect(lede).not.toHaveTextContent('best agent')
+})

@@ -11,7 +11,7 @@
   --miss-fill: #C8452C;
   --trace: #C47A12;
   --hairline: #E0DBD1;     /* row separators */
-  --wash: #EEEBE4;       /* row hover: lighter than the paper, so muted text keeps AA contrast */
+  --wash: #EEEBE4;       /* row hover and code blocks: a shade off the paper, muted text still passes AA on it */
   /* chart series: hue is the model (the rule is ink); fill is the toolset (v1 filled, v0 hollow) */
   --gemini: #B5620E;
   --nemotron: #6A4BC4;
